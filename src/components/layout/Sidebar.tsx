@@ -11,31 +11,18 @@ import {
   FileBarChart2,
   Settings,
   Building2,
+  ChevronRight,
+  Plus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-const NAV_SECTIONS = [
-  {
-    label: 'Principal',
-    items: [
-      { href: '/',          icon: LayoutDashboard, label: 'Inicio' },
-      { href: '/empleados', icon: Users,            label: 'Empleados' },
-    ],
-  },
-  {
-    label: 'Nómina',
-    items: [
-      { href: '/nomina',          icon: Calculator,   label: 'Procesar Nómina' },
-      { href: '/regalia-pascual', icon: Gift,         label: 'Regalía Pascual' },
-      { href: '/vacaciones',      icon: CalendarDays, label: 'Vacaciones' },
-    ],
-  },
-  {
-    label: 'Informes',
-    items: [
-      { href: '/reportes', icon: FileBarChart2, label: 'Reportes TSS / ISR' },
-    ],
-  },
+const NAV_ITEMS = [
+  { href: '/',                 icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/empleados',        icon: Users,           label: 'Empleados' },
+  { href: '/nomina',           icon: Calculator,      label: 'Procesar Nómina' },
+  { href: '/regalia-pascual',  icon: Gift,            label: 'Regalía Pascual' },
+  { href: '/vacaciones',       icon: CalendarDays,    label: 'Vacaciones' },
+  { href: '/reportes',         icon: FileBarChart2,   label: 'Reportes TSS / ISR' },
 ]
 
 export function Sidebar() {
@@ -45,67 +32,65 @@ export function Sidebar() {
     href === '/' ? pathname === '/' : pathname.startsWith(href)
 
   return (
-    <aside className="hidden md:flex h-screen w-60 flex-col bg-white border-r border-zinc-200 shrink-0">
+    <aside className="hidden md:flex h-screen w-56 flex-col bg-zinc-100 shrink-0 border-r border-zinc-200">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-5 h-14 border-b border-zinc-100">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-600">
-          <Building2 className="h-4 w-4 text-white" />
+      <div className="flex items-center gap-2.5 px-4 h-12 border-b border-zinc-200 bg-zinc-100">
+        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-teal-600">
+          <Building2 className="h-3.5 w-3.5 text-white" />
         </div>
-        <div>
-          <p className="text-sm font-bold text-zinc-900 leading-none">NominaRD</p>
-          <p className="text-[10px] text-zinc-400 mt-0.5">República Dominicana</p>
-        </div>
+        <span className="text-sm font-bold text-zinc-900">NominaRD</span>
+      </div>
+
+      {/* + Nuevo */}
+      <div className="px-3 py-3 border-b border-zinc-200">
+        <button className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-zinc-400 py-1.5 text-sm font-semibold text-zinc-600 hover:border-zinc-500 hover:bg-zinc-200 transition-colors">
+          <Plus className="h-3.5 w-3.5" />
+          Nuevo
+        </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
-        {NAV_SECTIONS.map((section) => (
-          <div key={section.label}>
-            <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-400">
-              {section.label}
-            </p>
-            <ul className="space-y-0.5">
-              {section.items.map((item) => {
-                const active = isActive(item.href)
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all',
-                        active
-                          ? 'bg-teal-50 text-teal-700 font-medium'
-                          : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
-                      )}
-                    >
-                      <item.icon
-                        className={cn(
-                          'h-4 w-4 shrink-0',
-                          active ? 'text-teal-600' : 'text-zinc-400'
-                        )}
-                      />
-                      <span className="flex-1">{item.label}</span>
-                      {active && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-teal-500" />
-                      )}
-                    </Link>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        ))}
+      <nav className="flex-1 overflow-y-auto py-1">
+        {NAV_ITEMS.map((item) => {
+          const active = isActive(item.href)
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                'flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
+                active
+                  ? 'bg-white text-zinc-900 font-semibold border-l-[3px] border-teal-600'
+                  : 'text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 border-l-[3px] border-transparent'
+              )}
+            >
+              <item.icon
+                className={cn(
+                  'h-4 w-4 shrink-0',
+                  active ? 'text-teal-600' : 'text-zinc-400'
+                )}
+              />
+              <span className="flex-1 leading-none">{item.label}</span>
+              <ChevronRight
+                className={cn(
+                  'h-3.5 w-3.5 shrink-0',
+                  active ? 'text-zinc-400' : 'text-zinc-300'
+                )}
+              />
+            </Link>
+          )
+        })}
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-zinc-100 px-3 py-3 space-y-0.5">
+      <div className="border-t border-zinc-200 py-1">
         <Link
           href="/configuracion"
           className={cn(
-            'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-all',
+            'flex items-center gap-3 px-4 py-2.5 text-sm transition-colors',
             isActive('/configuracion')
-              ? 'bg-teal-50 text-teal-700 font-medium'
-              : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
+              ? 'bg-white text-zinc-900 font-semibold border-l-[3px] border-teal-600'
+              : 'text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 border-l-[3px] border-transparent'
           )}
         >
           <Settings
@@ -114,10 +99,13 @@ export function Sidebar() {
               isActive('/configuracion') ? 'text-teal-600' : 'text-zinc-400'
             )}
           />
-          <span>Configuración</span>
+          <span className="flex-1">Ajustes del menú</span>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-300" />
         </Link>
-        <div className="flex items-center gap-2.5 px-3 py-2">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
+
+        {/* User */}
+        <div className="flex items-center gap-2.5 px-4 py-2.5">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-600 text-[10px] font-bold text-white">
             A
           </div>
           <div className="min-w-0">
