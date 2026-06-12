@@ -10,7 +10,7 @@ interface HeaderProps {
 
 export function Header({ title, subtitle, actions }: HeaderProps) {
   return (
-    <header className="flex h-16 shrink-0 items-center border-b border-zinc-200 bg-white px-4">
+    <header className="flex h-20 shrink-0 items-center border-b border-zinc-200 bg-white px-4">
       {/* Left */}
       <div className="flex flex-1 items-center gap-3 min-w-0">
         <button className="md:hidden rounded p-1 hover:bg-zinc-100 text-zinc-500">
