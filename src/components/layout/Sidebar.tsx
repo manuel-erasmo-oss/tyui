@@ -30,16 +30,16 @@ export function Sidebar() {
     href === '/' ? pathname === '/' : pathname.startsWith(href)
 
   return (
-    <aside className="hidden md:flex h-screen w-56 flex-col bg-zinc-100 shrink-0 border-r border-zinc-200">
+    <aside className="hidden md:flex h-screen w-56 flex-col bg-white shrink-0 border-r border-zinc-200">
 
       {/* Logo / Brand */}
-      <div className="flex items-center px-5 h-20 border-b border-zinc-200 bg-white">
+      <div className="flex items-center justify-center px-4 py-4 border-b border-zinc-200">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/tyui/cielo-cloud-logo.png"
           alt="Cielo Cloud"
-          className="h-16 w-auto object-contain"
-          style={{ mixBlendMode: 'multiply' }}
+          className="w-full h-auto object-contain"
+          style={{ mixBlendMode: 'multiply', maxHeight: '72px' }}
         />
       </div>
 
@@ -62,8 +62,8 @@ export function Sidebar() {
               className={cn(
                 'flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-[3px]',
                 active
-                  ? 'bg-white text-[#1B2980] font-semibold border-[#1B2980]'
-                  : 'text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 border-transparent'
+                  ? 'bg-[#eef0fb] text-[#1B2980] font-semibold border-[#1B2980]'
+                  : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 border-transparent'
               )}
             >
               <item.icon className={cn('h-4 w-4 shrink-0', active ? 'text-[#1B2980]' : 'text-zinc-400')} />
@@ -81,8 +81,8 @@ export function Sidebar() {
           className={cn(
             'flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-[3px]',
             isActive('/configuracion')
-              ? 'bg-white text-[#1B2980] font-semibold border-[#1B2980]'
-              : 'text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 border-transparent'
+              ? 'bg-[#eef0fb] text-[#1B2980] font-semibold border-[#1B2980]'
+              : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 border-transparent'
           )}
         >
           <Settings className={cn('h-4 w-4 shrink-0', isActive('/configuracion') ? 'text-[#1B2980]' : 'text-zinc-400')} />
