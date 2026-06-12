@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -26,16 +26,13 @@ jobs:
           node-version: 20
           cache: npm
 
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
       - run: npm ci
 
       - run: npm run build
         env:
           NODE_ENV: production
 
+      # Try the official Pages deploy (requires Pages already enabled in Settings)
       - uses: actions/upload-pages-artifact@v3
         with:
           path: ./out
