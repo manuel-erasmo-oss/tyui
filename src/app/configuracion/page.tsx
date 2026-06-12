@@ -93,7 +93,7 @@ function ParamTable({ rows }: { rows: ParamRow[] }) {
           {rows.map(row => (
             <tr key={row.label} className="hover:bg-zinc-50">
               <td className="px-5 py-3 font-medium text-zinc-900">{row.label}</td>
-              <td className="px-4 py-3 text-right font-bold tabular-nums text-indigo-700">{row.value}</td>
+              <td className="px-4 py-3 text-right font-bold tabular-nums text-teal-700">{row.value}</td>
               <td className="px-4 py-3 text-zinc-600 text-xs">{row.descripcion}</td>
               <td className="px-4 py-3 text-zinc-400 text-xs">{row.fuente}</td>
             </tr>
@@ -110,9 +110,9 @@ export default function ConfiguracionPage() {
       <Header title="Configuración" subtitle="Parámetros fiscales y laborales vigentes" />
       <div className="flex-1 overflow-y-auto p-6 space-y-8">
 
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-5 py-3.5 flex items-center gap-3">
-          <Info className="h-4 w-4 text-indigo-500 shrink-0" />
-          <p className="text-xs text-indigo-700">
+        <div className="rounded-xl border border-teal-100 bg-teal-50 px-5 py-3.5 flex items-center gap-3">
+          <Info className="h-4 w-4 text-teal-500 shrink-0" />
+          <p className="text-xs text-teal-700">
             Los parámetros mostrados reflejan la legislación vigente en la República Dominicana.
             Actualice estos valores cuando la DGII, CNSS o el Comité Nacional de Salarios emitan nuevas resoluciones.
           </p>

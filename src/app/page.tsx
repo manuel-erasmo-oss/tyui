@@ -65,7 +65,7 @@ export default function DashboardPage() {
         actions={
           <Link
             href="/nomina"
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-700 transition-colors"
           >
             Procesar Nómina
             <ArrowRight className="h-4 w-4" />
@@ -79,18 +79,20 @@ export default function DashboardPage() {
           <StatCard
             label="Empleados Activos"
             value={String(EMPLEADOS_ACTIVOS.length)}
-            sub="Personal en planilla"
+            sub="Personal en planilla activa"
             icon={Users}
-            iconColor="bg-indigo-50 text-indigo-600"
+            iconColor="bg-teal-50 text-teal-600"
+            trend="up"
+            trendLabel="+2"
           />
           <StatCard
             label="Nómina Bruta"
             value={formatRD(totalBruto, 0)}
-            sub="Total devengado este mes"
+            sub={`Neto: ${formatRD(totalNeto, 0)}`}
             icon={Wallet}
             iconColor="bg-emerald-50 text-emerald-600"
             trend="up"
-            trendLabel={`Neto ${formatRD(totalNeto, 0)}`}
+            trendLabel="+4%"
           />
           <StatCard
             label="TSS Empleador"
@@ -98,6 +100,8 @@ export default function DashboardPage() {
             sub="AFP + SFS + SRL empresa"
             icon={TrendingUp}
             iconColor="bg-amber-50 text-amber-600"
+            trend="neutral"
+            trendLabel="Estable"
           />
           <StatCard
             label="ISR a Retener"
@@ -105,6 +109,8 @@ export default function DashboardPage() {
             sub="Retención mensual empleados"
             icon={Receipt}
             iconColor="bg-violet-50 text-violet-600"
+            trend="down"
+            trendLabel="-2%"
           />
         </div>
 
@@ -113,7 +119,7 @@ export default function DashboardPage() {
           <div className="col-span-2 rounded-xl border border-zinc-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
               <h2 className="text-sm font-semibold text-zinc-900">Resumen de Costos — {periodo}</h2>
-              <Link href="/reportes" className="text-xs font-medium text-indigo-600 hover:underline">
+              <Link href="/reportes" className="text-xs font-medium text-teal-600 hover:underline">
                 Ver reportes
               </Link>
             </div>
@@ -132,7 +138,7 @@ export default function DashboardPage() {
               ))}
               <div className="flex items-center justify-between bg-zinc-50 px-5 py-3 rounded-b-xl">
                 <span className="text-sm font-semibold text-zinc-900">Costo Total Empresa</span>
-                <span className="text-sm font-bold text-indigo-700 tabular-nums">
+                <span className="text-sm font-bold text-teal-700 tabular-nums">
                   {formatRD(totalBruto + totalTSSEmpleador, 0)}
                 </span>
               </div>
@@ -168,7 +174,7 @@ export default function DashboardPage() {
         <div className="rounded-xl border border-zinc-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
             <h2 className="text-sm font-semibold text-zinc-900">Empleados Activos</h2>
-            <Link href="/empleados" className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:underline">
+            <Link href="/empleados" className="flex items-center gap-1 text-xs font-medium text-teal-600 hover:underline">
               Ver todos <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
@@ -188,7 +194,7 @@ export default function DashboardPage() {
                   <tr key={emp.id} className="hover:bg-zinc-50 transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
                           {emp.nombre[0]}{emp.apellido[0]}
                         </div>
                         <span className="font-medium text-zinc-900">{fullName(emp)}</span>

@@ -47,7 +47,7 @@ export default function RegaliaPage() {
             value={formatRD(totalProyectado, 0)}
             sub="Si todos completan el año"
             icon={Calendar}
-            iconColor="bg-indigo-50 text-indigo-600"
+            iconColor="bg-teal-50 text-teal-600"
           />
           <StatCard
             label="Días para Vencimiento"

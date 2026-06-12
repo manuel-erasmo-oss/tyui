@@ -72,14 +72,14 @@ export default function ReportesPage() {
           <select
             value={mes}
             onChange={e => setMes(Number(e.target.value))}
-            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none"
+            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
           >
             {MESES.map((m, i) => <option key={m} value={i+1}>{m}</option>)}
           </select>
           <select
             value={anio}
             onChange={e => setAnio(Number(e.target.value))}
-            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm focus:border-indigo-400 focus:outline-none"
+            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
           >
             {[anio-1, anio, anio+1].map(a => <option key={a} value={a}>{a}</option>)}
           </select>
@@ -106,7 +106,7 @@ export default function ReportesPage() {
             value={formatRD(totalTSSEmpleador, 0)}
             sub="AFP + SFS + SRL empresa"
             icon={BarChart3}
-            iconColor="bg-indigo-50 text-indigo-600"
+            iconColor="bg-teal-50 text-teal-600"
           />
           <StatCard
             label="ISR Retenido"
@@ -126,7 +126,7 @@ export default function ReportesPage() {
                 onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 px-5 py-3.5 text-sm font-medium transition-colors border-b-2 ${
                   tab === t.id
-                    ? 'border-indigo-600 text-indigo-600'
+                    ? 'border-teal-600 text-teal-600'
                     : 'border-transparent text-zinc-500 hover:text-zinc-800'
                 }`}
               >

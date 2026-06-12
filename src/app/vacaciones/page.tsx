@@ -49,7 +49,7 @@ export default function VacacionesPage() {
             value={formatRD(totalValor, 0)}
             sub="Días acumulados × tarifa diaria"
             icon={Clock}
-            iconColor="bg-indigo-50 text-indigo-600"
+            iconColor="bg-teal-50 text-teal-600"
           />
           <StatCard
             label="Empleados con Derecho"
@@ -98,7 +98,7 @@ export default function VacacionesPage() {
                     <td className="px-4 py-3.5 text-center">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
                         diasAnuales === DIAS_VACACIONES_MAS_5_ANOS
-                          ? 'bg-indigo-50 text-indigo-700'
+                          ? 'bg-teal-50 text-teal-700'
                           : 'bg-zinc-100 text-zinc-700'
                       }`}>
                         {diasAnuales} días
