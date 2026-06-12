@@ -33,14 +33,14 @@ export function Sidebar() {
     <aside className="hidden md:flex h-screen w-56 flex-col bg-zinc-100 shrink-0 border-r border-zinc-200">
 
       {/* Logo / Brand */}
-      <div className="flex items-center gap-2 px-4 h-14 border-b border-zinc-200 bg-white">
+      <div className="flex items-center justify-between px-4 h-16 border-b border-zinc-200 bg-white">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/tyui/cielo-cloud-logo.png"
           alt="Cielo Cloud"
-          className="h-9 w-auto object-contain"
+          className="h-11 w-auto object-contain"
         />
-        <span className="text-[10px] font-semibold text-zinc-400 tracking-widest uppercase border-l border-zinc-200 pl-2">Nómina</span>
+        <span className="text-[9px] font-bold tracking-widest uppercase text-zinc-300 shrink-0">NÓMINA</span>
       </div>
 
       {/* + Nuevo */}
