@@ -33,16 +33,14 @@ export function Sidebar() {
     <aside className="hidden md:flex h-screen w-60 flex-col bg-white dark:bg-[#141722] shrink-0 border-r border-zinc-200 dark:border-[#252840]">
 
       {/* Logo / Brand */}
-      <div className="flex h-14 items-center justify-center px-3 border-b border-zinc-200 dark:border-[#252840]">
-        <div className="w-full rounded-lg dark:bg-white/90 dark:px-2 dark:py-1">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/tyui/cielo-cloud-logo.png"
-            alt="Cielo Cloud"
-            className="w-full h-auto object-contain"
-            style={{ mixBlendMode: 'multiply', maxHeight: '40px' }}
-          />
-        </div>
+      <div className="flex items-center justify-center px-4 py-4 border-b border-zinc-200 dark:border-[#252840]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/tyui/cielo-cloud-logo.png"
+          alt="Cielo Cloud"
+          className="w-full h-auto object-contain mix-blend-multiply dark:mix-blend-normal dark:brightness-0 dark:invert"
+          style={{ maxHeight: '64px' }}
+        />
       </div>
 
       {/* + Nuevo */}
