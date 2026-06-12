@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react'
-import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
@@ -35,13 +34,11 @@ export function Sidebar() {
 
       {/* Logo / Brand */}
       <div className="flex items-center gap-2 px-4 h-14 border-b border-zinc-200 bg-white">
-        <Image
-          src="/cielo-cloud-logo.png"
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/tyui/cielo-cloud-logo.png"
           alt="Cielo Cloud"
-          width={100}
-          height={70}
           className="h-9 w-auto object-contain"
-          priority
         />
         <span className="text-[10px] font-semibold text-zinc-400 tracking-widest uppercase border-l border-zinc-200 pl-2">Nómina</span>
       </div>
