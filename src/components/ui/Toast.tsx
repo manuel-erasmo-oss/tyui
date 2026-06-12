@@ -13,7 +13,7 @@ interface ToastProps {
 const ICONS = {
   success: <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />,
   error:   <AlertCircle  className="h-4 w-4 text-rose-500    shrink-0" />,
-  info:    <Info         className="h-4 w-4 text-[#1B2980]   shrink-0" />,
+  info:    <Info         className="h-4 w-4 text-indigo-400  shrink-0" />,
 }
 
 export function Toast({ message, type = 'success', onClose, duration = 3000 }: ToastProps) {
@@ -23,12 +23,12 @@ export function Toast({ message, type = 'success', onClose, duration = 3000 }: T
   }, [onClose, duration])
 
   return (
-    <div className="fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 shadow-xl animate-toast-in">
+    <div className="fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-4 py-3 shadow-xl dark:shadow-2xl animate-toast-in">
       {ICONS[type]}
-      <p className="text-sm font-medium text-zinc-900">{message}</p>
+      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{message}</p>
       <button
         onClick={onClose}
-        className="ml-1 rounded p-0.5 text-zinc-400 hover:text-zinc-600 transition-colors"
+        className="ml-1 rounded p-0.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
       >
         <X className="h-3.5 w-3.5" />
       </button>

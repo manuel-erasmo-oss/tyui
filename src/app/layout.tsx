@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomNav } from '@/components/layout/BottomNav'
+import { ThemeProvider } from '@/lib/theme'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -18,11 +19,23 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={inter.variable}>
-      <body className="flex h-screen overflow-hidden bg-zinc-50 font-sans">
-        <Sidebar />
-        <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
-        <BottomNav />
+    <html lang="es" className={inter.variable} suppressHydrationWarning>
+      <head>
+        {/* Anti-FOUC: apply saved theme class before first paint */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          try {
+            var t = localStorage.getItem('cielo-theme');
+            var p = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (t === 'dark' || (!t && p)) document.documentElement.classList.add('dark');
+          } catch(e) {}
+        `}} />
+      </head>
+      <body className="flex h-screen overflow-hidden bg-zinc-50 dark:bg-[#0d0f1a] font-sans transition-colors duration-200">
+        <ThemeProvider>
+          <Sidebar />
+          <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
+          <BottomNav />
+        </ThemeProvider>
       </body>
     </html>
   )
