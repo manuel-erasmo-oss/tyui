@@ -9,6 +9,7 @@ import {
   Mail,
   Phone,
   CreditCard,
+  X,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -28,7 +29,223 @@ import {
   contratoBadgeClass,
   contratoLabel,
 } from '@/lib/utils'
-import type { Empleado } from '@/types'
+import type { Empleado, TipoContrato, Banco } from '@/types'
+
+const BANCOS: Banco[] = ['Banco Popular', 'BanReservas', 'Scotiabank', 'BHD León', 'Banistmo', 'Otro']
+
+const inputCls = 'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10'
+const labelCls = 'block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1'
+
+interface NuevoEmpleadoForm {
+  nombre: string
+  apellido: string
+  cedula: string
+  cargo: string
+  departamento: string
+  fechaIngreso: string
+  salarioBase: string
+  tipoContrato: TipoContrato
+  email: string
+  telefono: string
+  banco: Banco | ''
+  numeroCuenta: string
+}
+
+const FORM_EMPTY: NuevoEmpleadoForm = {
+  nombre: '', apellido: '', cedula: '', cargo: '', departamento: '',
+  fechaIngreso: '', salarioBase: '', tipoContrato: 'indefinido',
+  email: '', telefono: '', banco: '', numeroCuenta: '',
+}
+
+function NuevoEmpleadoDrawer({
+  departamentos,
+  onClose,
+  onGuardar,
+}: {
+  departamentos: string[]
+  onClose: () => void
+  onGuardar: (data: NuevoEmpleadoForm) => void
+}) {
+  const [form, setForm] = useState<NuevoEmpleadoForm>(FORM_EMPTY)
+  const [errors, setErrors] = useState<Partial<Record<keyof NuevoEmpleadoForm, string>>>({})
+
+  function set(field: keyof NuevoEmpleadoForm, value: string) {
+    setForm(prev => ({ ...prev, [field]: value }))
+    if (errors[field]) setErrors(prev => ({ ...prev, [field]: undefined }))
+  }
+
+  function validate() {
+    const e: typeof errors = {}
+    if (!form.nombre.trim())         e.nombre       = 'Requerido'
+    if (!form.apellido.trim())       e.apellido     = 'Requerido'
+    if (!form.cedula.trim())         e.cedula       = 'Requerido'
+    if (!form.cargo.trim())          e.cargo        = 'Requerido'
+    if (!form.departamento.trim())   e.departamento = 'Requerido'
+    if (!form.fechaIngreso)          e.fechaIngreso = 'Requerido'
+    if (!form.salarioBase || isNaN(Number(form.salarioBase)) || Number(form.salarioBase) <= 0)
+                                     e.salarioBase  = 'Monto válido requerido'
+    setErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  function handleSubmit(ev: React.FormEvent) {
+    ev.preventDefault()
+    if (!validate()) return
+    onGuardar(form)
+  }
+
+  const deptoOpts = departamentos.filter(d => d !== 'Todos')
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div
+        className="relative h-full w-full max-w-md overflow-y-auto bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none animate-slide-in"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="sticky top-0 flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4 z-10">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Nuevo Empleado</h2>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">Complete los datos del nuevo colaborador</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-[#1f2235] transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} noValidate>
+          <div className="p-6 space-y-6">
+
+            {/* Datos personales */}
+            <section>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Datos Personales</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Nombre <span className="text-rose-500">*</span></label>
+                  <input className={inputCls} value={form.nombre} onChange={e => set('nombre', e.target.value)} placeholder="Juan" />
+                  {errors.nombre && <p className="mt-1 text-xs text-rose-500">{errors.nombre}</p>}
+                </div>
+                <div>
+                  <label className={labelCls}>Apellido <span className="text-rose-500">*</span></label>
+                  <input className={inputCls} value={form.apellido} onChange={e => set('apellido', e.target.value)} placeholder="Pérez" />
+                  {errors.apellido && <p className="mt-1 text-xs text-rose-500">{errors.apellido}</p>}
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className={labelCls}>Cédula <span className="text-rose-500">*</span></label>
+                <input className={inputCls} value={form.cedula} onChange={e => set('cedula', e.target.value)} placeholder="001-1234567-8" />
+                {errors.cedula && <p className="mt-1 text-xs text-rose-500">{errors.cedula}</p>}
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Correo electrónico</label>
+                  <input type="email" className={inputCls} value={form.email} onChange={e => set('email', e.target.value)} placeholder="juan@empresa.com" />
+                </div>
+                <div>
+                  <label className={labelCls}>Teléfono</label>
+                  <input className={inputCls} value={form.telefono} onChange={e => set('telefono', e.target.value)} placeholder="809-000-0000" />
+                </div>
+              </div>
+            </section>
+
+            {/* Datos laborales */}
+            <section>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Datos Laborales</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Cargo <span className="text-rose-500">*</span></label>
+                  <input className={inputCls} value={form.cargo} onChange={e => set('cargo', e.target.value)} placeholder="Gerente" />
+                  {errors.cargo && <p className="mt-1 text-xs text-rose-500">{errors.cargo}</p>}
+                </div>
+                <div>
+                  <label className={labelCls}>Departamento <span className="text-rose-500">*</span></label>
+                  <input
+                    list="deptos-list"
+                    className={inputCls}
+                    value={form.departamento}
+                    onChange={e => set('departamento', e.target.value)}
+                    placeholder="Seleccionar o escribir"
+                  />
+                  <datalist id="deptos-list">
+                    {deptoOpts.map(d => <option key={d} value={d} />)}
+                  </datalist>
+                  {errors.departamento && <p className="mt-1 text-xs text-rose-500">{errors.departamento}</p>}
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Fecha de Ingreso <span className="text-rose-500">*</span></label>
+                  <input type="date" className={inputCls} value={form.fechaIngreso} onChange={e => set('fechaIngreso', e.target.value)} />
+                  {errors.fechaIngreso && <p className="mt-1 text-xs text-rose-500">{errors.fechaIngreso}</p>}
+                </div>
+                <div>
+                  <label className={labelCls}>Salario Base (RD$) <span className="text-rose-500">*</span></label>
+                  <input type="number" min="0" className={inputCls} value={form.salarioBase} onChange={e => set('salarioBase', e.target.value)} placeholder="25000" />
+                  {errors.salarioBase && <p className="mt-1 text-xs text-rose-500">{errors.salarioBase}</p>}
+                </div>
+              </div>
+              <div className="mt-3">
+                <label className={labelCls}>Tipo de Contrato <span className="text-rose-500">*</span></label>
+                <select
+                  className={inputCls}
+                  value={form.tipoContrato}
+                  onChange={e => set('tipoContrato', e.target.value as TipoContrato)}
+                >
+                  <option value="indefinido">Indefinido</option>
+                  <option value="tiempo_determinado">Tiempo Determinado</option>
+                  <option value="obra_servicio">Obra o Servicio</option>
+                </select>
+              </div>
+            </section>
+
+            {/* Datos bancarios */}
+            <section>
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Datos Bancarios</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Banco</label>
+                  <select
+                    className={inputCls}
+                    value={form.banco}
+                    onChange={e => set('banco', e.target.value)}
+                  >
+                    <option value="">— Seleccionar —</option>
+                    {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>N° de Cuenta</label>
+                  <input className={inputCls} value={form.numeroCuenta} onChange={e => set('numeroCuenta', e.target.value)} placeholder="0000000000" />
+                </div>
+              </div>
+            </section>
+          </div>
+
+          {/* Footer actions */}
+          <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors"
+            >
+              Guardar Empleado
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 function EmpleadoDrawer({
   empleado,
@@ -161,6 +378,7 @@ export default function EmpleadosPage() {
   const [departamento, setDepartamento] = useState('Todos')
   const [mostrarInactivos, setMostrarInactivos] = useState(false)
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<Empleado | null>(null)
+  const [mostrarNuevo, setMostrarNuevo] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   const departamentos = ['Todos', ...new Set(EMPLEADOS.map(e => e.departamento))]
@@ -184,7 +402,7 @@ export default function EmpleadosPage() {
         subtitle={`${EMPLEADOS.filter(e => e.activo).length} activos · ${EMPLEADOS.filter(e => !e.activo).length} inactivos`}
         actions={
           <button
-            onClick={() => setToast('Abriendo formulario de nuevo empleado…')}
+            onClick={() => setMostrarNuevo(true)}
             className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors"
           >
             <Plus className="h-4 w-4" />
@@ -309,6 +527,20 @@ export default function EmpleadosPage() {
           <EmpleadoDrawer
             empleado={empleadoSeleccionado}
             onClose={() => setEmpleadoSeleccionado(null)}
+          />
+        </>
+      )}
+
+      {mostrarNuevo && (
+        <>
+          <div className="fixed inset-0 z-40 bg-zinc-900/30 dark:bg-black/60 backdrop-blur-sm" />
+          <NuevoEmpleadoDrawer
+            departamentos={departamentos}
+            onClose={() => setMostrarNuevo(false)}
+            onGuardar={() => {
+              setMostrarNuevo(false)
+              setToast('Empleado registrado exitosamente ✓')
+            }}
           />
         </>
       )}
