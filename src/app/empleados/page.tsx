@@ -10,6 +10,7 @@ import {
   Phone,
   CreditCard,
 } from 'lucide-react'
+import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { EMPLEADOS } from '@/lib/mock-data'
@@ -160,6 +161,7 @@ export default function EmpleadosPage() {
   const [departamento, setDepartamento] = useState('Todos')
   const [mostrarInactivos, setMostrarInactivos] = useState(false)
   const [empleadoSeleccionado, setEmpleadoSeleccionado] = useState<Empleado | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   const departamentos = ['Todos', ...new Set(EMPLEADOS.map(e => e.departamento))]
 
@@ -181,7 +183,10 @@ export default function EmpleadosPage() {
         title="Empleados"
         subtitle={`${EMPLEADOS.filter(e => e.activo).length} activos · ${EMPLEADOS.filter(e => !e.activo).length} inactivos`}
         actions={
-          <button className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors">
+          <button
+            onClick={() => setToast('Abriendo formulario de nuevo empleado…')}
+            className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors"
+          >
             <Plus className="h-4 w-4" />
             Nuevo Empleado
           </button>
@@ -295,6 +300,8 @@ export default function EmpleadosPage() {
           </p>
         </div>
       </div>
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
       {empleadoSeleccionado && (
         <>

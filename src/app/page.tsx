@@ -35,12 +35,14 @@ function ChartCard({
   label,
   value,
   subtitle,
+  delta,
   period = 'Este mes',
   children,
 }: {
   label: string
   value: string
   subtitle: string
+  delta?: { pct: number; positive: boolean }
   period?: string
   children: React.ReactNode
 }) {
@@ -55,6 +57,11 @@ function ChartCard({
       <div>
         <p className="text-3xl font-bold text-zinc-900 leading-none">{value}</p>
         <p className="mt-1 text-xs text-zinc-400">{subtitle}</p>
+        {delta && (
+          <p className={`mt-1.5 text-xs font-semibold ${delta.positive ? 'text-emerald-600' : 'text-rose-600'}`}>
+            {delta.positive ? '↑' : '↓'} {Math.abs(delta.pct).toFixed(1)}% vs mes anterior
+          </p>
+        )}
       </div>
       {children}
     </div>
@@ -73,6 +80,7 @@ export default function DashboardPage() {
   const srlEmpleador      = EMPLEADOS_ACTIVOS.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0110, 0)
 
   const periodo = `${MES_LARGO[hoy.getMonth()]} ${hoy.getFullYear()}`
+  const costoTotal = totalBruto + totalTSSEmpleador
 
   // Simulated 5-month payroll trend
   const BAR_DATA = [
@@ -84,6 +92,10 @@ export default function DashboardPage() {
   ]
 
   const LINE_DATA = BAR_DATA.map(d => ({ mes: d.mes, valor: Math.round(d.nomina * (totalNeto / totalBruto)) }))
+
+  const deltaBruto = ((BAR_DATA[4].nomina - BAR_DATA[3].nomina) / BAR_DATA[3].nomina) * 100
+  const deltaCosto = ((costoTotal - (BAR_DATA[3].nomina + BAR_DATA[3].tss)) / (BAR_DATA[3].nomina + BAR_DATA[3].tss)) * 100
+  const deltaNeto  = ((LINE_DATA[4].valor - LINE_DATA[3].valor) / LINE_DATA[3].valor) * 100
 
   const DONUT_DATA = [
     { name: 'Salario neto',  value: totalNeto,   color: '#1B2980' },
@@ -144,19 +156,21 @@ export default function DashboardPage() {
               label="Nómina mensual"
               value={formatK(totalBruto)}
               subtitle="Salario bruto planilla activa"
+              delta={{ pct: deltaBruto, positive: deltaBruto >= 0 }}
             >
               <PayrollBarChart data={BAR_DATA} />
               <div className="flex items-center gap-4 text-[10px] text-zinc-400">
                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#1B2980] inline-block" /> Bruto</span>
-                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#00E676] inline-block" /> TSS empl.</span>
+                <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-[#10b981] inline-block" /> TSS empl.</span>
               </div>
             </ChartCard>
 
             {/* Composición de costos — Donut */}
             <ChartCard
               label="Composición de costos"
-              value={formatK(totalBruto + totalTSSEmpleador)}
+              value={formatK(costoTotal)}
               subtitle="Costo total empresa este mes"
+              delta={{ pct: deltaCosto, positive: deltaCosto >= 0 }}
             >
               <CostDonutChart data={DONUT_DATA} />
             </ChartCard>
@@ -166,6 +180,7 @@ export default function DashboardPage() {
               label="Nómina neta"
               value={formatK(totalNeto)}
               subtitle="Total a pagar a empleados"
+              delta={{ pct: deltaNeto, positive: deltaNeto >= 0 }}
             >
               <TrendLineChart data={LINE_DATA} />
             </ChartCard>

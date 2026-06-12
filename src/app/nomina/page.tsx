@@ -9,6 +9,7 @@ import {
   Info,
   CheckCircle2,
 } from 'lucide-react'
+import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
@@ -152,6 +153,7 @@ export default function NominaPage() {
   const [mes, setMes]   = useState(hoy.getMonth() + 1)
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [detalle, setDetalle] = useState<{ emp: Empleado; nom: ResultadoNomina } | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   const nominas = EMPLEADOS_ACTIVOS.map(e => ({
     empleado: e,
@@ -177,11 +179,17 @@ export default function NominaPage() {
         subtitle={`Período: ${periodo}`}
         actions={
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
+            <button
+              onClick={() => setToast('Preparando documento para imprimir…')}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
               <Printer className="h-4 w-4" />
               Imprimir
             </button>
-            <button className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
+            <button
+              onClick={() => setToast('Nómina exportada correctamente')}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
               <Download className="h-4 w-4" />
               Exportar
             </button>
@@ -367,6 +375,8 @@ export default function NominaPage() {
           </div>
         </div>
       </div>
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
       {/* Modal detalle */}
       {detalle && (

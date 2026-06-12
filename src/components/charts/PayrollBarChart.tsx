@@ -34,7 +34,7 @@ export function PayrollBarChart({ data }: Props) {
           cursor={{ fill: '#f4f4f5' }}
         />
         <Bar dataKey="nomina" fill="#1B2980" radius={[3, 3, 0, 0]} />
-        <Bar dataKey="tss"    fill="#00E676" radius={[3, 3, 0, 0]} />
+        <Bar dataKey="tss"    fill="#10b981" radius={[3, 3, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   )

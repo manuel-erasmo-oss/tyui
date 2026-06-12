@@ -30,16 +30,16 @@ export function Sidebar() {
     href === '/' ? pathname === '/' : pathname.startsWith(href)
 
   return (
-    <aside className="hidden md:flex h-screen w-56 flex-col bg-white shrink-0 border-r border-zinc-200">
+    <aside className="hidden md:flex h-screen w-60 flex-col bg-white shrink-0 border-r border-zinc-200">
 
       {/* Logo / Brand */}
-      <div className="flex items-center justify-center px-4 py-4 border-b border-zinc-200">
+      <div className="flex h-14 items-center justify-center px-4 border-b border-zinc-200">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/tyui/cielo-cloud-logo.png"
           alt="Cielo Cloud"
           className="w-full h-auto object-contain"
-          style={{ mixBlendMode: 'multiply', maxHeight: '72px' }}
+          style={{ mixBlendMode: 'multiply', maxHeight: '44px' }}
         />
       </div>
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Download, FileText, Info } from 'lucide-react'
+import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { StatCard } from '@/components/ui/StatCard'
@@ -22,6 +23,7 @@ export default function ReportesPage() {
   const [mes, setMes]   = useState(hoy.getMonth() + 1)
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [tab, setTab]   = useState<ReporteTab>('tss')
+  const [toast, setToast] = useState<string | null>(null)
 
   const nominas = EMPLEADOS_ACTIVOS.map(e => ({
     empleado: e,
@@ -58,7 +60,10 @@ export default function ReportesPage() {
         title="Reportes"
         subtitle={`Período: ${periodo}`}
         actions={
-          <button className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors">
+          <button
+            onClick={() => setToast('Reporte exportado correctamente')}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50 transition-colors"
+          >
             <Download className="h-4 w-4" />
             Exportar
           </button>
@@ -396,6 +401,8 @@ export default function ReportesPage() {
           )}
         </div>
       </div>
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   )
 }
