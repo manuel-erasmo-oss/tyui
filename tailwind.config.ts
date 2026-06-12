@@ -12,14 +12,16 @@ const config: Config = {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
       },
       colors: {
-        brand: {
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          800: '#3730a3',
-          900: '#312e81',
+        // Cielo Cloud brand
+        cielo: {
+          navy:  '#1B2980',
+          green: '#00E676',
+          50:    '#eef0fb',
+          100:   '#d5d9f4',
+          200:   '#aab4ea',
+          700:   '#1B2980',
+          800:   '#151f66',
+          900:   '#0d1449',
         },
       },
       animation: {

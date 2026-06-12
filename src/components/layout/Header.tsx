@@ -41,7 +41,7 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
         <button className="rounded p-2 text-zinc-500 hover:bg-zinc-100 transition-colors">
           <Settings className="h-4 w-4" />
         </button>
-        <div className="ml-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
+        <div className="ml-1.5 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#1B2980' }}>
           A
         </div>
       </div>

@@ -110,7 +110,7 @@ function DetalleNomina({
         <div className="grid grid-cols-2 gap-4 border-t border-zinc-100 bg-zinc-50 p-6 rounded-b-2xl">
           <div className="rounded-xl bg-white border border-zinc-200 p-4">
             <p className="text-xs text-zinc-500 uppercase font-semibold tracking-wide">Salario Neto a Pagar</p>
-            <p className="mt-1 text-2xl font-bold text-teal-700 tabular-nums">{formatRD(nomina.salarioNeto, 0)}</p>
+            <p className="mt-1 text-2xl font-bold text-[#151f66] tabular-nums">{formatRD(nomina.salarioNeto, 0)}</p>
           </div>
           <div className="rounded-xl bg-white border border-zinc-200 p-4 space-y-1.5">
             <p className="text-xs text-zinc-500 uppercase font-semibold tracking-wide mb-2">Aportes Empresa (TSS)</p>
@@ -196,7 +196,7 @@ export default function NominaPage() {
           <select
             value={mes}
             onChange={e => setMes(Number(e.target.value))}
-            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
+            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
           >
             {MESES.map((m, i) => (
               <option key={m} value={i + 1}>{m}</option>
@@ -205,7 +205,7 @@ export default function NominaPage() {
           <select
             value={anio}
             onChange={e => setAnio(Number(e.target.value))}
-            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm focus:border-teal-400 focus:outline-none"
+            className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
           >
             {anios.map(a => (
               <option key={a} value={a}>{a}</option>
@@ -231,7 +231,7 @@ export default function NominaPage() {
             value={formatRD(totales.neto, 0)}
             sub="A transferir empleados"
             icon={BarChart3}
-            iconColor="bg-teal-50 text-teal-600"
+            iconColor="bg-[#eef0fb] text-[#1B2980]"
           />
           <StatCard
             label="Aportes TSS Empresa"
@@ -270,7 +270,7 @@ export default function NominaPage() {
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">SFS Emp</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">ISR</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">T. Desc.</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-teal-50">S. Neto</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 bg-[#eef0fb]">S. Neto</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500">Costo Emp.</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -279,12 +279,12 @@ export default function NominaPage() {
                 {nominas.map(({ empleado, resultado }) => (
                   <tr
                     key={empleado.id}
-                    className="hover:bg-teal-50/30 transition-colors cursor-pointer"
+                    className="hover:bg-[#eef0fb]/30 transition-colors cursor-pointer"
                     onClick={() => setDetalle({ emp: empleado, nom: resultado })}
                   >
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#d5d9f4] text-xs font-bold text-[#151f66]">
                           {empleado.nombre[0]}{empleado.apellido[0]}
                         </div>
                         <div>
@@ -308,7 +308,7 @@ export default function NominaPage() {
                     <td className="px-4 py-3.5 text-right tabular-nums text-rose-800 font-medium">
                       {formatRD(resultado.totalDescuentos, 0)}
                     </td>
-                    <td className="px-4 py-3.5 text-right tabular-nums font-bold text-teal-700 bg-teal-50/60">
+                    <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#151f66] bg-[#eef0fb]/60">
                       {formatRD(resultado.salarioNeto, 0)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-amber-700">
@@ -355,10 +355,10 @@ export default function NominaPage() {
         </div>
 
         {/* Nota legal */}
-        <div className="rounded-xl border border-teal-100 bg-teal-50 px-5 py-3.5">
+        <div className="rounded-xl border border-teal-100 bg-[#eef0fb] px-5 py-3.5">
           <div className="flex items-start gap-3">
-            <Info className="mt-0.5 h-4 w-4 text-teal-500 shrink-0" />
-            <div className="text-xs text-teal-700 space-y-0.5">
+            <Info className="mt-0.5 h-4 w-4 text-[#1B2980] shrink-0" />
+            <div className="text-xs text-[#151f66] space-y-0.5">
               <p className="font-semibold">Normativa aplicada en este cálculo</p>
               <p>AFP 2.87% empleado / 7.10% empleador · SFS 3.04% empleado / 7.09% empleador · SRL 1.10% empleador (riesgo bajo)</p>
               <p>ISR retención según tramos DGII vigentes · Tope TSS: RD$ 420,000 (20 × salario mínimo grandes empresas)</p>

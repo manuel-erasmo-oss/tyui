@@ -7,7 +7,7 @@ interface BadgeProps {
 }
 
 const VARIANTS = {
-  default: 'bg-teal-50 text-teal-700 ring-teal-200',
+  default: 'bg-[#eef0fb] text-[#151f66] ring-[#1B2980]-200',
   success: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   warning: 'bg-amber-50 text-amber-700 ring-amber-200',
   danger:  'bg-rose-50 text-rose-700 ring-rose-200',

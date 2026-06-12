@@ -63,7 +63,7 @@ function EmpleadoDrawer({
         <div className="p-6 space-y-6">
           {/* Avatar + nombre */}
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-teal-600 text-lg font-bold text-white">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#1B2980] text-lg font-bold text-white">
               {empleado.nombre[0]}{empleado.apellido[0]}
             </div>
             <div>
@@ -181,7 +181,7 @@ export default function EmpleadosPage() {
         title="Empleados"
         subtitle={`${EMPLEADOS.filter(e => e.activo).length} activos · ${EMPLEADOS.filter(e => !e.activo).length} inactivos`}
         actions={
-          <button className="flex items-center gap-2 rounded-lg bg-teal-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-700 transition-colors">
+          <button className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors">
             <Plus className="h-4 w-4" />
             Nuevo Empleado
           </button>
@@ -198,13 +198,13 @@ export default function EmpleadosPage() {
               placeholder="Buscar por nombre, cédula o cargo…"
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
-              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-100"
+              className="w-full rounded-lg border border-zinc-200 bg-zinc-50 py-2 pl-9 pr-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-[#1B2980] focus:outline-none focus:ring-2 focus:ring-[#1B2980]-100"
             />
           </div>
           <select
             value={departamento}
             onChange={e => setDepartamento(e.target.value)}
-            className="rounded-lg border border-zinc-200 bg-white py-2 pl-3 pr-8 text-sm text-zinc-700 focus:border-teal-400 focus:outline-none"
+            className="rounded-lg border border-zinc-200 bg-white py-2 pl-3 pr-8 text-sm text-zinc-700 focus:border-[#1B2980] focus:outline-none"
           >
             {departamentos.map(d => (
               <option key={d}>{d}</option>
@@ -215,7 +215,7 @@ export default function EmpleadosPage() {
               type="checkbox"
               checked={mostrarInactivos}
               onChange={e => setMostrarInactivos(e.target.checked)}
-              className="rounded border-zinc-300 text-teal-600"
+              className="rounded border-zinc-300 text-[#1B2980]"
             />
             Mostrar inactivos
           </label>
@@ -247,7 +247,7 @@ export default function EmpleadosPage() {
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div
-                          className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${emp.activo ? 'bg-teal-100 text-teal-700' : 'bg-zinc-100 text-zinc-500'}`}
+                          className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold ${emp.activo ? 'bg-[#d5d9f4] text-[#151f66]' : 'bg-zinc-100 text-zinc-500'}`}
                         >
                           {emp.nombre[0]}{emp.apellido[0]}
                         </div>

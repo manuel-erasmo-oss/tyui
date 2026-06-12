@@ -11,7 +11,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'NominaRD — Gestión de Nómina',
+  title: 'Cielo Cloud — Gestión de Nómina',
   description:
     'Sistema de nómina para pymes dominicanas. Cálculo automático de TSS, ISR, regalía pascual y vacaciones según legislación dominicana.',
 }
