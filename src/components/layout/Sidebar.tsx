@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react'
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
@@ -33,21 +34,16 @@ export function Sidebar() {
     <aside className="hidden md:flex h-screen w-56 flex-col bg-zinc-100 shrink-0 border-r border-zinc-200">
 
       {/* Logo / Brand */}
-      <div className="flex items-center gap-3 px-4 h-12 border-b border-zinc-200 bg-white">
-        {/* Cloud SVG logo mark */}
-        <svg width="28" height="20" viewBox="0 0 28 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M22 16H6C3.2 16 1 13.8 1 11c0-2.4 1.7-4.4 4-4.9C5.4 3.7 8.4 1.5 12 1.5c3 0 5.6 1.6 7 4 .3 0 .7-.1 1-.1 2.8 0 5 2.2 5 5s-2.2 5.5-3 5.6z"
-            stroke="#1B2980" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"
-          />
-          <circle cx="7"  cy="14" r="1.8" fill="#00E676" />
-          <circle cx="14" cy="10" r="1.8" fill="#00E676" />
-          <circle cx="21" cy="14" r="1.8" fill="#00E676" />
-        </svg>
-        <div>
-          <p className="text-xs font-bold text-[#1B2980] leading-none tracking-tight">cielo cloud</p>
-          <p className="text-[9px] text-zinc-400 mt-0.5 tracking-wide uppercase">Nómina</p>
-        </div>
+      <div className="flex items-center gap-2 px-4 h-14 border-b border-zinc-200 bg-white">
+        <Image
+          src="/cielo-cloud-logo.png"
+          alt="Cielo Cloud"
+          width={100}
+          height={70}
+          className="h-9 w-auto object-contain"
+          priority
+        />
+        <span className="text-[10px] font-semibold text-zinc-400 tracking-widest uppercase border-l border-zinc-200 pl-2">Nómina</span>
       </div>
 
       {/* + Nuevo */}
