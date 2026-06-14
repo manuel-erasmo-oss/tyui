@@ -29,3 +29,6 @@ yarn-error.log*
 # debug
 .vercel
 .turbo
+
+# Claude Code internal
+.claude/
