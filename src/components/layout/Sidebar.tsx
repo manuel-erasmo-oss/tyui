@@ -12,6 +12,7 @@ import {
   Settings,
   Building2,
   ChevronRight,
+  TrendingUp,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +30,7 @@ const NAV_SECTIONS = [
       { href: '/nomina',          icon: Calculator,   label: 'Procesar Nómina' },
       { href: '/regalia-pascual', icon: Gift,         label: 'Regalía Pascual' },
       { href: '/vacaciones',      icon: CalendarDays, label: 'Vacaciones' },
+      { href: '/aumentos',        icon: TrendingUp,   label: 'Aumentos Salariales' },
     ],
   },
   {
