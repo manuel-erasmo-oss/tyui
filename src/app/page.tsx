@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import { calcularNomina } from '@/lib/dominican-labor'
 import { formatRD, formatDate, fullName } from '@/lib/utils'
+import { useEmpresa } from '@/lib/empresa-context'
+import { usePeriodos } from '@/lib/periodos-context'
 
 const PayrollBarChart = dynamic(
   () => import('@/components/charts/PayrollBarChart').then(m => m.PayrollBarChart),
@@ -69,6 +71,11 @@ function ChartCard({
 }
 
 export default function DashboardPage() {
+  const { empresa } = useEmpresa()
+  const { periodos } = usePeriodos()
+  const nombreEmpresa = empresa.nombre || 'Mi Empresa'
+  const rncEmpresa = empresa.rnc ? `RNC ${empresa.rnc}` : 'República Dominicana'
+
   const { empleadosActivos } = useEmpleados()
   const nominas = empleadosActivos.map(e => calcularNomina(e))
   const totalBruto        = nominas.reduce((s, n) => s + n.totalBruto, 0)
@@ -83,13 +90,25 @@ export default function DashboardPage() {
 
   const periodo = `${MES_LARGO[hoy.getMonth()]} ${hoy.getFullYear()}`
 
-  const BAR_DATA = [
-    { mes: MESES[(hoy.getMonth() - 4 + 12) % 12], nomina: Math.round(totalBruto * 0.88), tss: Math.round(totalTSSEmpleador * 0.88) },
-    { mes: MESES[(hoy.getMonth() - 3 + 12) % 12], nomina: Math.round(totalBruto * 0.91), tss: Math.round(totalTSSEmpleador * 0.91) },
-    { mes: MESES[(hoy.getMonth() - 2 + 12) % 12], nomina: Math.round(totalBruto * 0.95), tss: Math.round(totalTSSEmpleador * 0.95) },
-    { mes: MESES[(hoy.getMonth() - 1 + 12) % 12], nomina: Math.round(totalBruto * 0.98), tss: Math.round(totalTSSEmpleador * 0.98) },
-    { mes: MESES[hoy.getMonth()],                  nomina: totalBruto,                    tss: totalTSSEmpleador },
-  ]
+  // Build chart from real processed periods (monthly only, last 5)
+  const periodosReales = [...periodos]
+    .filter(p => p.tipo === 'mensual')
+    .sort((a, b) => a.anio !== b.anio ? a.anio - b.anio : a.mes - b.mes)
+    .slice(-5)
+
+  const BAR_DATA = periodosReales.length >= 2
+    ? periodosReales.map(p => ({
+        mes: MESES[p.mes - 1],
+        nomina: p.totales.bruto,
+        tss: p.totales.aportes,
+      }))
+    : [
+        { mes: MESES[(hoy.getMonth() - 4 + 12) % 12], nomina: Math.round(totalBruto * 0.88), tss: Math.round(totalTSSEmpleador * 0.88) },
+        { mes: MESES[(hoy.getMonth() - 3 + 12) % 12], nomina: Math.round(totalBruto * 0.91), tss: Math.round(totalTSSEmpleador * 0.91) },
+        { mes: MESES[(hoy.getMonth() - 2 + 12) % 12], nomina: Math.round(totalBruto * 0.95), tss: Math.round(totalTSSEmpleador * 0.95) },
+        { mes: MESES[(hoy.getMonth() - 1 + 12) % 12], nomina: Math.round(totalBruto * 0.98), tss: Math.round(totalTSSEmpleador * 0.98) },
+        { mes: MESES[hoy.getMonth()],                  nomina: totalBruto,                    tss: totalTSSEmpleador },
+      ]
 
   const LINE_DATA = BAR_DATA.map(d => ({ mes: d.mes, valor: Math.round(d.nomina * (totalNeto / totalBruto)) }))
 
@@ -107,17 +126,56 @@ export default function DashboardPage() {
 
   const maxBar = Math.max(...[afpEmpleador, sfsEmpleador, srlEmpleador, totalISR, totalRegalia])
 
+  // Days until fiscal deadlines
+  function diasHasta(fecha: Date): number {
+    return Math.ceil((fecha.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+  }
+  const dia10ProxMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 10)
+  const diasTSS = diasHasta(dia10ProxMes)
+  const diasISR = diasTSS
+  const dic20 = new Date(hoy.getFullYear(), 11, 20)
+  const diasRegalia = diasHasta(dic20) > 0 ? diasHasta(dic20) : diasHasta(new Date(hoy.getFullYear() + 1, 11, 20))
+
+  function urgencyClass(dias: number) {
+    if (dias <= 5) return 'text-rose-600 dark:text-rose-400'
+    if (dias <= 15) return 'text-amber-600 dark:text-amber-400'
+    return 'text-emerald-600 dark:text-emerald-400'
+  }
+  function urgencyIcon(dias: number) {
+    if (dias <= 5) return 'warning' as const
+    return 'info' as const
+  }
+
   const tareas = [
     ...empleadosActivos
       .filter(e => e.tipoContrato === 'tiempo_determinado')
-      .map(e => ({ tipo: 'warning' as const, titulo: `Renovar contrato — ${fullName(e)}`, sub: `Contrato a término determinado · ${e.cargo}` })),
-    { tipo: 'info' as const, titulo: `ISR a retener: ${formatRD(totalISR)}`, sub: 'Vence día 10 del próximo mes · DGII' },
-    { tipo: 'info' as const, titulo: `TSS empleador: ${formatRD(totalTSSEmpleador)}`, sub: 'Vence día 10 del próximo mes · CNSS' },
-  ] as { tipo: 'warning' | 'info'; titulo: string; sub: string }[]
+      .map(e => ({ tipo: 'warning' as const, titulo: `Renovar contrato — ${fullName(e)}`, sub: `Contrato a término determinado · ${e.cargo}`, dias: null, href: '/empleados' })),
+    {
+      tipo: urgencyIcon(diasISR),
+      titulo: `ISR a remitir: ${formatRD(totalISR)}`,
+      sub: `Vence en ${diasISR} días · día 10 · DGII`,
+      dias: diasISR,
+      href: '/reportes',
+    },
+    {
+      tipo: urgencyIcon(diasTSS),
+      titulo: `TSS empleador: ${formatRD(totalTSSEmpleador)}`,
+      sub: `Vence en ${diasTSS} días · día 10 · CNSS`,
+      dias: diasTSS,
+      href: '/reportes',
+    },
+    {
+      tipo: urgencyIcon(diasRegalia),
+      titulo: `Regalía Pascual: ${formatRD(totalRegalia)}`,
+      sub: `Vence en ${diasRegalia} días · 20 dic · Art. 219`,
+      href: '/regalia-pascual',
+      dias: diasRegalia,
+    },
+  ] as { tipo: 'warning' | 'info'; titulo: string; sub: string; dias: number | null; href: string }[]
 
   return (
     <div className="flex flex-col overflow-hidden h-full">
-      <Header title="Demo Empresa S.R.L." subtitle={periodo} />
+      <Header title={nombreEmpresa} subtitle={periodo} />
 
       <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-[#0d0f1a]">
 
@@ -129,8 +187,8 @@ export default function DashboardPage() {
               <span className="text-[8px] text-zinc-300 dark:text-zinc-600 font-medium tracking-wide">LOGO</span>
             </div>
             <div>
-              <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 leading-none">Demo Empresa S.R.L.</h1>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">República Dominicana · RNC 1-01-12345-6</p>
+              <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 leading-none">{nombreEmpresa}</h1>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">República Dominicana · {rncEmpresa}</p>
             </div>
           </div>
           <div className="flex gap-6 -mb-px">
@@ -241,10 +299,17 @@ export default function DashboardPage() {
                     }
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-snug">{t.titulo}</p>
-                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 leading-snug">{t.sub}</p>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 leading-snug flex items-center gap-1.5">
+                        {t.sub}
+                        {t.dias !== null && (
+                          <span className={`font-semibold ${urgencyClass(t.dias)}`}>
+                            {t.dias <= 5 ? '⚠ urgente' : t.dias <= 15 ? '● pronto' : '✓'}
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <Link
-                      href={t.tipo === 'warning' ? '/empleados' : '/reportes'}
+                      href={t.href}
                       className="shrink-0 rounded border border-zinc-200 dark:border-[#252840] px-3 py-1 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
                     >
                       Ir
