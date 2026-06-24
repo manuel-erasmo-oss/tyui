@@ -17,6 +17,23 @@ const MESES = [
 ]
 const hoy = new Date()
 
+// ── CSV export ────────────────────────────────────────────────────────────────
+function exportarCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const bom = '﻿'
+  const csv = [headers, ...rows]
+    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    .join('\r\n')
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 type ReporteTab = 'tss' | 'isr' | 'resumen'
 
 export default function ReportesPage() {
@@ -49,6 +66,55 @@ export default function ReportesPage() {
 
   const periodo = formatPeriodo(anio, mes)
 
+  function handleExportar() {
+    const slug = periodo.replace(/[^a-zA-Z0-9]/g, '-')
+    if (tab === 'tss') {
+      const headers = ['Empleado', 'Cédula', 'S. Cotizable', 'AFP Emp', 'AFP Empr', 'SFS Emp', 'SFS Empr', 'SRL', 'Total TSS']
+      const rows = nominas.map(({ empleado, resultado }) => {
+        const totalTSSFila = resultado.afpEmpleado + resultado.sfsEmpleado +
+          resultado.afpEmpleador + resultado.sfsEmpleador + resultado.srlEmpleador
+        return [
+          fullName(empleado), empleado.cedula,
+          resultado.salarioCotizable.toFixed(2),
+          resultado.afpEmpleado.toFixed(2), resultado.afpEmpleador.toFixed(2),
+          resultado.sfsEmpleado.toFixed(2), resultado.sfsEmpleador.toFixed(2),
+          resultado.srlEmpleador.toFixed(2), totalTSSFila.toFixed(2),
+        ]
+      })
+      exportarCSV(`reporte-tss-${slug}.csv`, headers, rows)
+    } else if (tab === 'isr') {
+      const headers = ['Empleado', 'Cédula', 'S. Bruto', 'AFP+SFS Ded.', 'Base Gravable', 'Base Anual', 'Tramo ISR', 'ISR Mensual']
+      const rows = nominas.map(({ empleado, resultado }) => {
+        const afpSfs = resultado.afpEmpleado + resultado.sfsEmpleado
+        const baseGravable = resultado.totalBruto - afpSfs
+        const baseAnual = baseGravable * 12
+        const tramo = baseAnual <= 416_220 ? 'Exento (0%)' :
+          baseAnual <= 624_329 ? 'Tramo II (15%)' :
+          baseAnual <= 867_123 ? 'Tramo III (20%)' : 'Tramo IV (25%)'
+        return [
+          fullName(empleado), empleado.cedula,
+          resultado.totalBruto.toFixed(2), afpSfs.toFixed(2),
+          baseGravable.toFixed(2), baseAnual.toFixed(2),
+          tramo, resultado.isrMensual.toFixed(2),
+        ]
+      })
+      exportarCSV(`reporte-isr-${slug}.csv`, headers, rows)
+    } else {
+      const headers = ['Concepto', 'Monto (RD$)']
+      const rows = [
+        ['Salarios Brutos', totales.bruto.toFixed(2)],
+        ['AFP Empleador', totales.afpEmpleador.toFixed(2)],
+        ['SFS Empleador', totales.sfsEmpleador.toFixed(2)],
+        ['SRL Empleador', totales.srl.toFixed(2)],
+        ['ISR Retenido', totales.isr.toFixed(2)],
+        ['Provisión Regalía', totales.regalia.toFixed(2)],
+        ['Costo Total Empresa', totales.costoTotal.toFixed(2)],
+      ]
+      exportarCSV(`reporte-resumen-${slug}.csv`, headers, rows)
+    }
+    setToast('Reporte exportado correctamente')
+  }
+
   const TABS: { id: ReporteTab; label: string }[] = [
     { id: 'tss',     label: 'Reporte TSS (CNSS)' },
     { id: 'isr',     label: 'Retención ISR (DGII)' },
@@ -62,7 +128,7 @@ export default function ReportesPage() {
         subtitle={`Período: ${periodo}`}
         actions={
           <button
-            onClick={() => setToast('Reporte exportado correctamente')}
+            onClick={handleExportar}
             className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1f2235] transition-colors"
           >
             <Download className="h-4 w-4" />

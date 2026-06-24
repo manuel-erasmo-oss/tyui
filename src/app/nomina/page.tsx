@@ -30,6 +30,23 @@ const MESES = [
 
 const hoy = new Date()
 
+// ── CSV export ────────────────────────────────────────────────────────────────
+function exportarCSV(filename: string, headers: string[], rows: (string | number)[][]) {
+  const bom = '﻿'
+  const csv = [headers, ...rows]
+    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    .join('\r\n')
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 // ── Label helper ──────────────────────────────────────────────────────────────
 function labelPeriodo(p: PeriodoNomina): string {
   const mes = MESES[p.mes - 1]
@@ -288,6 +305,28 @@ export default function NominaPage() {
     ? `${quincena === 1 ? '1ª' : '2ª'} Quincena — ${formatPeriodo(anio, mes)}`
     : formatPeriodo(anio, mes)
 
+  function handleExportar() {
+    const headers = ['Empleado', 'Cargo', 'Departamento', 'S. Bruto', 'AFP Emp', 'SFS Emp', 'ISR', 'Total Desc.', 'S. Neto', 'AFP Empr', 'SFS Empr', 'SRL', 'Costo Total']
+    const rows = nominas.map(({ empleado, resultado }) => [
+      fullName(empleado),
+      empleado.cargo,
+      empleado.departamento,
+      resultado.totalBruto.toFixed(2),
+      resultado.afpEmpleado.toFixed(2),
+      resultado.sfsEmpleado.toFixed(2),
+      resultado.isrMensual.toFixed(2),
+      resultado.totalDescuentos.toFixed(2),
+      resultado.salarioNeto.toFixed(2),
+      resultado.afpEmpleador.toFixed(2),
+      resultado.sfsEmpleador.toFixed(2),
+      resultado.srlEmpleador.toFixed(2),
+      resultado.totalCostoEmpleador.toFixed(2),
+    ])
+    const slug = periodoLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
+    exportarCSV(`nomina-${slug}.csv`, headers, rows)
+    setToast('Nómina exportada correctamente')
+  }
+
   function handleGenerar() {
     generar({
       tipo,
@@ -317,7 +356,7 @@ export default function NominaPage() {
               Imprimir
             </button>
             <button
-              onClick={() => setToast('Nómina exportada correctamente')}
+              onClick={handleExportar}
               className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
             >
               <Download className="h-4 w-4" />

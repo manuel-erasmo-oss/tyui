@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
@@ -26,6 +26,7 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const isActive = (href: string) =>
     href === '/' ? pathname === '/' : pathname.startsWith(href)
 
@@ -47,7 +48,10 @@ export function Sidebar() {
 
       {/* + Nuevo */}
       <div className="px-3 py-3 border-b border-zinc-200 dark:border-[#252840]">
-        <button className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-zinc-300 dark:border-[#2e3355] py-1.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:border-[#1B2980] hover:text-[#1B2980] dark:hover:border-indigo-500 dark:hover:text-indigo-400 transition-colors">
+        <button
+          onClick={() => router.push('/empleados?nuevo=1')}
+          className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-zinc-300 dark:border-[#2e3355] py-1.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:border-[#1B2980] hover:text-[#1B2980] dark:hover:border-indigo-500 dark:hover:text-indigo-400 transition-colors"
+        >
           <Plus className="h-3.5 w-3.5" />
           Nuevo
         </button>
