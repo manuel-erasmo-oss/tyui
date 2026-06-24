@@ -7,7 +7,7 @@ import {
   Users,
   Calculator,
   FileBarChart2,
-  MoreHorizontal,
+  UserMinus,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -16,7 +16,7 @@ const BOTTOM_ITEMS = [
   { href: '/empleados', icon: Users,            label: 'Empleados' },
   { href: '/nomina',    icon: Calculator,       label: 'Nómina' },
   { href: '/reportes',  icon: FileBarChart2,    label: 'Reportes' },
-  { href: '/vacaciones', icon: MoreHorizontal,  label: 'Más' },
+  { href: '/liquidacion', icon: UserMinus,       label: 'Liquidar' },
 ]
 
 export function BottomNav() {

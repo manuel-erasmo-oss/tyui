@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
+  UserMinus,
   Users,
   Calculator,
   Gift,
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: '/nomina',          icon: Calculator,      label: 'Procesar Nómina' },
   { href: '/regalia-pascual', icon: Gift,            label: 'Regalía Pascual' },
   { href: '/vacaciones',      icon: CalendarDays,    label: 'Vacaciones' },
+  { href: '/liquidacion',    icon: UserMinus,       label: 'Liquidación' },
   { href: '/reportes',        icon: FileBarChart2,   label: 'Reportes TSS / ISR' },
 ]
 
