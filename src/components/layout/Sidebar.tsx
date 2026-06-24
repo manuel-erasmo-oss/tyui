@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   UserMinus,
+  TrendingUp,
   Users,
   Calculator,
   Gift,
@@ -22,7 +23,8 @@ const NAV_ITEMS = [
   { href: '/nomina',          icon: Calculator,      label: 'Procesar Nómina' },
   { href: '/regalia-pascual', icon: Gift,            label: 'Regalía Pascual' },
   { href: '/vacaciones',      icon: CalendarDays,    label: 'Vacaciones' },
-  { href: '/liquidacion',    icon: UserMinus,       label: 'Liquidación' },
+  { href: '/liquidacion',     icon: UserMinus,       label: 'Liquidación' },
+  { href: '/aumentos',        icon: TrendingUp,      label: 'Aumentos Salariales' },
   { href: '/reportes',        icon: FileBarChart2,   label: 'Reportes TSS / ISR' },
 ]
 
