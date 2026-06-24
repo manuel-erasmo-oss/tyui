@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { ThemeProvider } from '@/lib/theme'
 import { EmpleadosProvider } from '@/lib/empleados-context'
+import { PeriodosProvider } from '@/lib/periodos-context'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -34,9 +35,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex h-screen overflow-hidden bg-zinc-50 dark:bg-[#0d0f1a] font-sans transition-colors duration-200">
         <ThemeProvider>
           <EmpleadosProvider>
-            <Sidebar />
-            <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
-            <BottomNav />
+            <PeriodosProvider>
+              <Sidebar />
+              <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
+              <BottomNav />
+            </PeriodosProvider>
           </EmpleadosProvider>
         </ThemeProvider>
       </body>

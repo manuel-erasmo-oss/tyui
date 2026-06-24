@@ -146,6 +146,49 @@ export function calcularNomina(
   }
 }
 
+// ─── Cálculo quincenal ────────────────────────────────────────────────────────
+// 1ra quincena: anticipo (bruto/2, TSS/2, sin ISR — práctica estándar pymes DR)
+// 2da quincena: bruto/2, TSS/2, ISR mensual completo (liquidación)
+export function calcularNominaQuincenal(
+  empleado: Empleado,
+  quincena: 1 | 2,
+  params: ParametrosNomina = {}
+): ResultadoNomina {
+  const m = calcularNomina(empleado, params)
+  const bruto    = m.totalBruto / 2
+  const afpEmp   = m.afpEmpleado / 2
+  const sfsEmp   = m.sfsEmpleado / 2
+  const isr      = quincena === 2 ? m.isrMensual : 0
+  const otros    = m.otrosDescuentos / 2
+  const totalDesc = afpEmp + sfsEmp + isr + otros
+
+  return {
+    ...m,
+    salarioBruto:             m.salarioBruto / 2,
+    importeHE35:              m.importeHE35 / 2,
+    importeHE100:             m.importeHE100 / 2,
+    totalHorasExtras:         m.totalHorasExtras / 2,
+    bonificaciones:           m.bonificaciones / 2,
+    comisiones:               m.comisiones / 2,
+    totalBruto:               bruto,
+    salarioCotizable:         m.salarioCotizable / 2,
+    afpEmpleado:              afpEmp,
+    sfsEmpleado:              sfsEmp,
+    isrMensual:               isr,
+    otrosDescuentos:          otros,
+    totalDescuentos:          totalDesc,
+    salarioNeto:              bruto - totalDesc,
+    afpEmpleador:             m.afpEmpleador / 2,
+    sfsEmpleador:             m.sfsEmpleador / 2,
+    srlEmpleador:             m.srlEmpleador / 2,
+    totalAportesEmpleador:    m.totalAportesEmpleador / 2,
+    totalCostoEmpleador:      bruto + m.totalAportesEmpleador / 2,
+    regaliaPascual:           m.regaliaPascual / 2,
+    vacacionesMensualesDias:  m.vacacionesMensualesDias / 2,
+    vacacionesMensualesValor: m.vacacionesMensualesValor / 2,
+  }
+}
+
 // ─── Cesantía (Art. 80, Código de Trabajo Ley 16-92) ─────────────────────────
 export function calcularCesantia(salarioMensual: number, anosServicio: number): number {
   const salarioDiario = salarioMensual / 30

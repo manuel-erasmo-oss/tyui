@@ -8,6 +8,9 @@ export type Banco =
   | 'Banistmo'
   | 'Otro'
 
+export type TipoPeriodo = 'mensual' | 'quincenal'
+export type EstadoPeriodo = 'procesada' | 'cerrada'
+
 export interface Empleado {
   id: string
   nombre: string
@@ -78,6 +81,25 @@ export interface ParametrosNomina {
   comisiones?: number
   otrosDescuentos?: number
   categoriaRiesgo?: CategoriaRiesgoSRL
+}
+
+export interface PeriodoNomina {
+  id: string
+  tipo: TipoPeriodo
+  quincena?: 1 | 2
+  mes: number
+  anio: number
+  estado: EstadoPeriodo
+  fechaGeneracion: string
+  totalEmpleados: number
+  totales: {
+    bruto: number
+    descuentos: number
+    neto: number
+    aportes: number
+    isr: number
+    costoTotal: number
+  }
 }
 
 export interface ResumenNomina {
