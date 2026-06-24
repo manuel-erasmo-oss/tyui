@@ -3,6 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
+      - main
       - 'claude/accounting-app-sme-design-wqfazv'
   workflow_dispatch:
 
