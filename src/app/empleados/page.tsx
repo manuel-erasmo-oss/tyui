@@ -14,7 +14,7 @@ import {
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
-import { EMPLEADOS } from '@/lib/mock-data'
+import { useEmpleados } from '@/lib/empleados-context'
 import {
   calcularCesantia,
   calcularPreaviso,
@@ -250,9 +250,13 @@ function NuevoEmpleadoDrawer({
 function EmpleadoDrawer({
   empleado,
   onClose,
+  onToggleActivo,
+  onEliminar,
 }: {
   empleado: Empleado
   onClose: () => void
+  onToggleActivo: () => void
+  onEliminar: () => void
 }) {
   const anos = getAnosServicio(empleado.fechaIngreso)
   const cesantia = calcularCesantia(empleado.salarioBase, anos)
@@ -268,13 +272,13 @@ function EmpleadoDrawer({
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4">
+        <div className="sticky top-0 flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4 z-10">
           <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Ficha del Empleado</h2>
           <button
             onClick={onClose}
             className="rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:bg-zinc-100 dark:hover:bg-[#1f2235] transition-colors"
           >
-            ✕
+            <X className="h-4 w-4" />
           </button>
         </div>
 
@@ -368,12 +372,33 @@ function EmpleadoDrawer({
             </div>
           </section>
         </div>
+
+        {/* Acciones */}
+        <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4">
+          <button
+            onClick={onEliminar}
+            className="rounded-lg border border-rose-200 dark:border-rose-800/50 px-3 py-2 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+          >
+            Eliminar
+          </button>
+          <button
+            onClick={onToggleActivo}
+            className={`rounded-lg px-4 py-2 text-xs font-medium transition-colors ${
+              empleado.activo
+                ? 'border border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
+                : 'bg-emerald-600 text-white hover:bg-emerald-700'
+            }`}
+          >
+            {empleado.activo ? 'Dar de baja' : 'Reactivar'}
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
 export default function EmpleadosPage() {
+  const { empleados, add, update, remove } = useEmpleados()
   const [busqueda, setBusqueda] = useState('')
   const [departamento, setDepartamento] = useState('Todos')
   const [mostrarInactivos, setMostrarInactivos] = useState(false)
@@ -381,9 +406,9 @@ export default function EmpleadosPage() {
   const [mostrarNuevo, setMostrarNuevo] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
-  const departamentos = ['Todos', ...new Set(EMPLEADOS.map(e => e.departamento))]
+  const departamentos = ['Todos', ...new Set(empleados.map(e => e.departamento))]
 
-  const filtrados = EMPLEADOS.filter(e => {
+  const filtrados = empleados.filter(e => {
     const nombre = fullName(e).toLowerCase()
     const cedula = e.cedula
     const matchBusqueda =
@@ -399,7 +424,7 @@ export default function EmpleadosPage() {
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Empleados"
-        subtitle={`${EMPLEADOS.filter(e => e.activo).length} activos · ${EMPLEADOS.filter(e => !e.activo).length} inactivos`}
+        subtitle={`${empleados.filter(e => e.activo).length} activos · ${empleados.filter(e => !e.activo).length} inactivos`}
         actions={
           <button
             onClick={() => setMostrarNuevo(true)}
@@ -514,7 +539,7 @@ export default function EmpleadosPage() {
             </table>
           </div>
           <p className="mt-3 text-xs text-zinc-400 dark:text-zinc-500">
-            Mostrando {filtrados.length} de {EMPLEADOS.length} empleados
+            Mostrando {filtrados.length} de {empleados.length} empleados
           </p>
         </div>
       </div>
@@ -527,6 +552,17 @@ export default function EmpleadosPage() {
           <EmpleadoDrawer
             empleado={empleadoSeleccionado}
             onClose={() => setEmpleadoSeleccionado(null)}
+            onToggleActivo={() => {
+              update(empleadoSeleccionado.id, { activo: !empleadoSeleccionado.activo })
+              setEmpleadoSeleccionado(null)
+              setToast(empleadoSeleccionado.activo ? 'Empleado dado de baja' : 'Empleado reactivado')
+            }}
+            onEliminar={() => {
+              if (!confirm(`¿Eliminar a ${fullName(empleadoSeleccionado)}? Esta acción no se puede deshacer.`)) return
+              remove(empleadoSeleccionado.id)
+              setEmpleadoSeleccionado(null)
+              setToast('Empleado eliminado')
+            }}
           />
         </>
       )}
@@ -537,7 +573,23 @@ export default function EmpleadosPage() {
           <NuevoEmpleadoDrawer
             departamentos={departamentos}
             onClose={() => setMostrarNuevo(false)}
-            onGuardar={() => {
+            onGuardar={(form) => {
+              add({
+                nombre: form.nombre.trim(),
+                apellido: form.apellido.trim(),
+                cedula: form.cedula.trim().replace(/\D/g, ''),
+                cargo: form.cargo.trim(),
+                departamento: form.departamento.trim(),
+                fechaIngreso: form.fechaIngreso,
+                salarioBase: Number(form.salarioBase),
+                tipoContrato: form.tipoContrato,
+                activo: true,
+                email: form.email.trim() || undefined,
+                telefono: form.telefono.trim() || undefined,
+                banco: form.banco || undefined,
+                numeroCuenta: form.numeroCuenta.trim() || undefined,
+                categoriaRiesgo: 'bajo',
+              })
               setMostrarNuevo(false)
               setToast('Empleado registrado exitosamente ✓')
             }}

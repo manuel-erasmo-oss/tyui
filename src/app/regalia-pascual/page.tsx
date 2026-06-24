@@ -2,8 +2,8 @@
 
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
-import { EMPLEADOS_ACTIVOS } from '@/lib/mock-data'
-import { calcularNomina, getMesesServicio } from '@/lib/dominican-labor'
+import { useEmpleados } from '@/lib/empleados-context'
+import { getMesesServicio } from '@/lib/dominican-labor'
 import { formatRD, formatDate, fullName } from '@/lib/utils'
 import { Gift, Calendar, AlertTriangle } from 'lucide-react'
 
@@ -11,7 +11,8 @@ const hoy = new Date()
 const mesActual = hoy.getMonth() + 1  // 1-based
 
 export default function RegaliaPage() {
-  const filas = EMPLEADOS_ACTIVOS.map(e => {
+  const { empleadosActivos } = useEmpleados()
+  const filas = empleadosActivos.map(e => {
     const mesesServicio      = Math.min(getMesesServicio(e.fechaIngreso), mesActual)
     const mesesAcumulados    = Math.min(mesesServicio, 12)
     const acumulado          = (e.salarioBase / 12) * mesesAcumulados

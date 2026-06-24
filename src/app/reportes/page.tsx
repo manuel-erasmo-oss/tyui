@@ -6,7 +6,7 @@ import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { StatCard } from '@/components/ui/StatCard'
-import { EMPLEADOS_ACTIVOS } from '@/lib/mock-data'
+import { useEmpleados } from '@/lib/empleados-context'
 import { calcularNomina } from '@/lib/dominican-labor'
 import { formatRD, formatPeriodo, formatCedula, fullName } from '@/lib/utils'
 import { Receipt, TrendingUp, Wallet, BarChart3 } from 'lucide-react'
@@ -24,8 +24,9 @@ export default function ReportesPage() {
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [tab, setTab]   = useState<ReporteTab>('tss')
   const [toast, setToast] = useState<string | null>(null)
+  const { empleadosActivos } = useEmpleados()
 
-  const nominas = EMPLEADOS_ACTIVOS.map(e => ({
+  const nominas = empleadosActivos.map(e => ({
     empleado: e,
     resultado: calcularNomina(e),
   }))
@@ -367,7 +368,7 @@ export default function ReportesPage() {
                         <p className="text-lg font-bold text-violet-900 dark:text-violet-200 tabular-nums">{formatRD(totales.isr, 0)}</p>
                       </div>
                       <p className="mt-2 text-[11px] text-violet-600 dark:text-violet-500">
-                        Empleados gravados: {nominas.filter(n => n.resultado.isrMensual > 0).length} de {nominas.length}
+                        Empleados gravados: {nominas.filter(n => n.resultado.isrMensual > 0).length} de {empleadosActivos.length}
                       </p>
                     </div>
 

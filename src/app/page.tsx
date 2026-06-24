@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, AlertTriangle, CheckCircle2, MoreHorizontal, Building2 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
-import { EMPLEADOS_ACTIVOS } from '@/lib/mock-data'
+import { useEmpleados } from '@/lib/empleados-context'
 import { calcularNomina } from '@/lib/dominican-labor'
 import { formatRD, formatDate, fullName } from '@/lib/utils'
 
@@ -69,15 +69,16 @@ function ChartCard({
 }
 
 export default function DashboardPage() {
-  const nominas = EMPLEADOS_ACTIVOS.map(e => calcularNomina(e))
+  const { empleadosActivos } = useEmpleados()
+  const nominas = empleadosActivos.map(e => calcularNomina(e))
   const totalBruto        = nominas.reduce((s, n) => s + n.totalBruto, 0)
   const totalNeto         = nominas.reduce((s, n) => s + n.salarioNeto, 0)
   const totalISR          = nominas.reduce((s, n) => s + n.isrMensual, 0)
   const totalTSSEmpleador = nominas.reduce((s, n) => s + n.totalAportesEmpleador, 0)
   const totalRegalia      = nominas.reduce((s, n) => s + n.regaliaPascual, 0)
-  const afpEmpleador      = EMPLEADOS_ACTIVOS.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0710, 0)
-  const sfsEmpleador      = EMPLEADOS_ACTIVOS.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0709, 0)
-  const srlEmpleador      = EMPLEADOS_ACTIVOS.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0110, 0)
+  const afpEmpleador      = empleadosActivos.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0710, 0)
+  const sfsEmpleador      = empleadosActivos.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0709, 0)
+  const srlEmpleador      = empleadosActivos.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0110, 0)
   const costoTotal        = totalBruto + totalTSSEmpleador
 
   const periodo = `${MES_LARGO[hoy.getMonth()]} ${hoy.getFullYear()}`
@@ -107,7 +108,7 @@ export default function DashboardPage() {
   const maxBar = Math.max(...[afpEmpleador, sfsEmpleador, srlEmpleador, totalISR, totalRegalia])
 
   const tareas = [
-    ...EMPLEADOS_ACTIVOS
+    ...empleadosActivos
       .filter(e => e.tipoContrato === 'tiempo_determinado')
       .map(e => ({ tipo: 'warning' as const, titulo: `Renovar contrato — ${fullName(e)}`, sub: `Contrato a término determinado · ${e.cargo}` })),
     { tipo: 'info' as const, titulo: `ISR a retener: ${formatRD(totalISR)}`, sub: 'Vence día 10 del próximo mes · DGII' },
@@ -262,8 +263,8 @@ export default function DashboardPage() {
                 </Link>
               </div>
               <div className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
-                {EMPLEADOS_ACTIVOS.slice(0, 5).map((emp) => {
-                  const n = nominas[EMPLEADOS_ACTIVOS.indexOf(emp)]
+                {empleadosActivos.slice(0, 5).map((emp) => {
+                  const n = nominas[empleadosActivos.indexOf(emp)]
                   return (
                     <div key={emp.id} className="flex items-center gap-3 px-5 py-3">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-[#1a1d2e] text-xs font-bold text-zinc-600 dark:text-zinc-400">

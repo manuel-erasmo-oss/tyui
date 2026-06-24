@@ -3,7 +3,7 @@
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
-import { EMPLEADOS_ACTIVOS } from '@/lib/mock-data'
+import { useEmpleados } from '@/lib/empleados-context'
 import {
   getAnosServicio,
   DIAS_VACACIONES_HASTA_5_ANOS,
@@ -13,7 +13,8 @@ import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
 import { CalendarDays, Users, Clock, AlertCircle } from 'lucide-react'
 
 export default function VacacionesPage() {
-  const filas = EMPLEADOS_ACTIVOS.map(e => {
+  const { empleadosActivos } = useEmpleados()
+  const filas = empleadosActivos.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
     const mesesServicio   = Math.min(Math.floor(anos * 12), 12)

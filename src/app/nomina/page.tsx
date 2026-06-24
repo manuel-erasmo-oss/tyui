@@ -13,7 +13,7 @@ import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
-import { EMPLEADOS_ACTIVOS } from '@/lib/mock-data'
+import { useEmpleados } from '@/lib/empleados-context'
 import { calcularNomina } from '@/lib/dominican-labor'
 import {
   formatRD,
@@ -154,8 +154,9 @@ export default function NominaPage() {
   const [anio, setAnio] = useState(hoy.getFullYear())
   const [detalle, setDetalle] = useState<{ emp: Empleado; nom: ResultadoNomina } | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const { empleadosActivos } = useEmpleados()
 
-  const nominas = EMPLEADOS_ACTIVOS.map(e => ({
+  const nominas = empleadosActivos.map(e => ({
     empleado: e,
     resultado: calcularNomina(e),
   }))
@@ -332,7 +333,7 @@ export default function NominaPage() {
               <tfoot>
                 <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white">
                   <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide">
-                    TOTALES — {nominas.length} empleados
+                    TOTALES — {empleadosActivos.length} empleados
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-bold">
                     {formatRD(totales.bruto, 0)}
