@@ -115,3 +115,13 @@ export interface ResumenNomina {
   totalCostoEmpresa: number
   totalRegaliaPascual: number
 }
+
+export interface Empresa {
+  nombre: string
+  rnc: string
+  direccion: string
+  ciudad: string
+  telefono: string
+  email: string
+  representanteLegal: string
+}
