@@ -11,6 +11,7 @@ interface PeriodosCtx {
   cerrar: (id: string) => void
   eliminar: (id: string) => void
   actualizarAjustes: (periodoId: string, empleadoId: string, ajustes: AjusteLinea[]) => void
+  marcarProcesados: (periodoId: string, empleadoIds: string[]) => void
 }
 
 const Ctx = createContext<PeriodosCtx>({
@@ -19,6 +20,7 @@ const Ctx = createContext<PeriodosCtx>({
   cerrar: () => {},
   eliminar: () => {},
   actualizarAjustes: () => {},
+  marcarProcesados: () => {},
 })
 
 export function PeriodosProvider({ children }: { children: ReactNode }) {
@@ -74,8 +76,27 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  function marcarProcesados(periodoId: string, empleadoIds: string[]) {
+    setPeriodos(prev => {
+      const next = prev.map(p => {
+        if (p.id !== periodoId) return p
+        const ya = new Set(p.empleadosProcesados ?? [])
+        empleadoIds.forEach(id => ya.add(id))
+        const procesados = [...ya]
+        const todosProcesados = procesados.length >= p.totalEmpleados
+        return {
+          ...p,
+          empleadosProcesados: procesados,
+          estado: todosProcesados ? 'procesada' as const : p.estado,
+        }
+      })
+      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
+
   return (
-    <Ctx.Provider value={{ periodos, generar, cerrar, eliminar, actualizarAjustes }}>
+    <Ctx.Provider value={{ periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados }}>
       {children}
     </Ctx.Provider>
   )

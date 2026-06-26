@@ -10,7 +10,7 @@ export type Banco =
   | 'Otro'
 
 export type TipoPeriodo = 'mensual' | 'quincenal'
-export type EstadoPeriodo = 'procesada' | 'cerrada'
+export type EstadoPeriodo = 'en_proceso' | 'procesada' | 'cerrada'
 
 export type ConceptoAjuste =
   | 'horas_extras_35'
@@ -130,6 +130,7 @@ export interface PeriodoNomina {
     costoTotal: number
   }
   ajustesPorEmpleado?: Record<string, AjusteLinea[]>
+  empleadosProcesados?: string[]
 }
 
 export interface ResumenNomina {

@@ -10,6 +10,11 @@ import {
   Plus,
   X,
   Info,
+  CheckCircle2,
+  Circle,
+  CheckSquare,
+  Square,
+  PlayCircle,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -220,7 +225,7 @@ function DetalleNomina({
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function NominaPage() {
   const { empleadosActivos } = useEmpleados()
-  const { periodos, generar, cerrar, eliminar, actualizarAjustes } = usePeriodos()
+  const { periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados } = usePeriodos()
   const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago } = usePrestamos()
 
@@ -239,6 +244,9 @@ export default function NominaPage() {
   const [newConcepto, setNewConcepto]     = useState<ConceptoAjuste>('bono')
   const [newValor, setNewValor]           = useState('')
   const [newDesc, setNewDesc]             = useState('')
+
+  // Selección para procesamiento masivo
+  const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set())
 
   // Modal + toast
   const [detalleModal, setDetalleModal] = useState<{ emp: Empleado; nom: ResultadoNomina } | null>(null)
@@ -264,6 +272,18 @@ export default function NominaPage() {
   }
 
   function handleCrearPeriodo() {
+    // Block duplicate period (same tipo/mes/anio/quincena)
+    const duplicado = periodos.some(p =>
+      p.tipo === nuevoTipo &&
+      p.mes  === nuevoMes  &&
+      p.anio === nuevoAnio &&
+      (nuevoTipo === 'mensual' || p.quincena === nuevaQuincena)
+    )
+    if (duplicado) {
+      setToast('Ya existe un período con ese tipo, mes y año')
+      return
+    }
+
     // Pre-load active loan installments as deductions per employee
     const ajustesIniciales: Record<string, AjusteLinea[]> = {}
     for (const emp of empleadosActivos) {
@@ -284,12 +304,13 @@ export default function NominaPage() {
       quincena:           nuevoTipo === 'quincenal' ? nuevaQuincena : undefined,
       mes:                nuevoMes,
       anio:               nuevoAnio,
-      estado:             'procesada',
+      estado:             'en_proceso',
       totalEmpleados:     empleadosActivos.length,
       totales:            calcularTotalesRapido(),
       ajustesPorEmpleado: ajustesIniciales,
     })
     setPeriodoAbierto(nuevo.id)
+    setSelectedEmps(new Set())
     setToast('Período creado · Cuotas de préstamos pre-cargadas')
   }
 
@@ -368,6 +389,41 @@ export default function NominaPage() {
     setNewConcepto('bono')
     setNewValor('')
     setNewDesc('')
+  }
+
+  function handleProcesarEmpleado(empId: string) {
+    if (!periodoActual) return
+    marcarProcesados(periodoActual.id, [empId])
+    setSelectedEmps(prev => { const s = new Set(prev); s.delete(empId); return s })
+  }
+
+  function handleProcesarSeleccionados() {
+    if (!periodoActual) return
+    const ids = selectedEmps.size > 0
+      ? [...selectedEmps]
+      : empleadosActivos.map(e => e.id)
+    marcarProcesados(periodoActual.id, ids)
+    setSelectedEmps(new Set())
+    setToast(selectedEmps.size > 0 ? `${ids.length} empleado(s) procesado(s)` : 'Todos los empleados procesados')
+  }
+
+  function toggleSeleccionEmp(empId: string) {
+    setSelectedEmps(prev => {
+      const s = new Set(prev)
+      if (s.has(empId)) s.delete(empId); else s.add(empId)
+      return s
+    })
+  }
+
+  function toggleSeleccionTodos() {
+    const noProcessados = empleadosActivos
+      .filter(e => !(periodoActual?.empleadosProcesados ?? []).includes(e.id))
+      .map(e => e.id)
+    if (selectedEmps.size === noProcessados.length && noProcessados.length > 0) {
+      setSelectedEmps(new Set())
+    } else {
+      setSelectedEmps(new Set(noProcessados))
+    }
   }
 
   const anios = [nuevoAnio - 1, nuevoAnio, nuevoAnio + 1]
@@ -487,8 +543,10 @@ export default function NominaPage() {
                     </div>
                     {p.estado === 'cerrada' ? (
                       <Badge variant="neutral"><Lock className="mr-1 h-3 w-3" />Cerrada</Badge>
-                    ) : (
+                    ) : p.estado === 'procesada' ? (
                       <Badge variant="success">Procesada</Badge>
+                    ) : (
+                      <Badge variant="warning">En Proceso</Badge>
                     )}
                   </div>
 
@@ -553,7 +611,11 @@ export default function NominaPage() {
 
   const ajustesPorEmp  = periodoActual.ajustesPorEmpleado ?? {}
   const quincenaActual: 1 | 2 = periodoActual.quincena ?? 1
-  const esProcesada   = periodoActual.estado === 'procesada'
+  const esEnProceso    = periodoActual.estado === 'en_proceso'
+  const esProcesada    = periodoActual.estado === 'procesada'
+  const procesados     = new Set(periodoActual.empleadosProcesados ?? [])
+  const noProcessados  = empleadosActivos.filter(e => !procesados.has(e.id))
+  const todosSeleccionados = noProcessados.length > 0 && noProcessados.every(e => selectedEmps.has(e.id))
 
   const nominas = empleadosActivos.map(e => ({
     empleado: e,
@@ -573,16 +635,25 @@ export default function NominaPage() {
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title={periodoActualLabel}
-        subtitle={esProcesada ? 'Período procesado' : 'Período cerrado'}
+        subtitle={esEnProceso ? 'En proceso' : esProcesada ? 'Período procesado' : 'Período cerrado'}
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setPeriodoAbierto(null)}
+              onClick={() => { setPeriodoAbierto(null); setSelectedEmps(new Set()) }}
               className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
             >
               <ArrowLeft className="h-4 w-4" />
               Períodos
             </button>
+            {esEnProceso && (
+              <button
+                onClick={handleProcesarSeleccionados}
+                className="flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 px-3 py-2 text-sm font-semibold text-white transition-colors"
+              >
+                <PlayCircle className="h-4 w-4" />
+                {selectedEmps.size > 0 ? `Procesar (${selectedEmps.size})` : 'Procesar Todo'}
+              </button>
+            )}
             {esProcesada && (
               <button
                 onClick={handleCerrarPeriodo}
@@ -645,13 +716,30 @@ export default function NominaPage() {
             </h2>
             <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
               <Info className="h-3.5 w-3.5" />
-              {esProcesada ? 'Puedes agregar ajustes por empleado' : 'Período cerrado (solo lectura)'}
+              {esEnProceso
+                ? `${procesados.size}/${empleadosActivos.length} empleados procesados`
+                : esProcesada
+                  ? 'Período procesado — solo lectura'
+                  : 'Período cerrado — solo lectura'}
             </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
+                  {esEnProceso && (
+                    <th className="pl-4 pr-2 py-3 w-8">
+                      <button
+                        onClick={toggleSeleccionTodos}
+                        className="text-zinc-400 hover:text-[#1B2980] dark:hover:text-indigo-400 transition-colors"
+                        title={todosSeleccionados ? 'Deseleccionar todos' : 'Seleccionar pendientes'}
+                      >
+                        {todosSeleccionados
+                          ? <CheckSquare className="h-4 w-4" />
+                          : <Square className="h-4 w-4" />}
+                      </button>
+                    </th>
+                  )}
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Ajustes</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">S. Bruto</th>
@@ -664,18 +752,47 @@ export default function NominaPage() {
               </thead>
               <tbody>
                 {nominas.map(({ empleado, resultado }) => {
-                  const ajustes    = ajustesPorEmp[empleado.id] ?? []
-                  const isExpanded = expandedEmpId === empleado.id
+                  const ajustes      = ajustesPorEmp[empleado.id] ?? []
+                  const isExpanded   = expandedEmpId === empleado.id
+                  const isProcesado  = procesados.has(empleado.id)
+                  const isSelected   = selectedEmps.has(empleado.id)
+                  const colSpanTotal = esEnProceso ? 9 : 8
 
                   return (
                     <>
                       <tr
                         key={empleado.id}
-                        className="border-b border-zinc-50 dark:border-[#1d2035] hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors"
+                        className={`border-b border-zinc-50 dark:border-[#1d2035] transition-colors ${
+                          isProcesado
+                            ? 'bg-emerald-50/40 dark:bg-emerald-950/10'
+                            : 'hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20'
+                        }`}
                       >
+                        {/* Checkbox column */}
+                        {esEnProceso && (
+                          <td className="pl-4 pr-2 py-3.5 w-8">
+                            {isProcesado ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
+                            ) : (
+                              <button
+                                onClick={() => toggleSeleccionEmp(empleado.id)}
+                                className="text-zinc-400 hover:text-[#1B2980] dark:hover:text-indigo-400 transition-colors"
+                              >
+                                {isSelected
+                                  ? <CheckSquare className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
+                                  : <Square className="h-4 w-4" />}
+                              </button>
+                            )}
+                          </td>
+                        )}
+
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#d5d9f4] dark:bg-indigo-900/40 text-xs font-bold text-[#151f66] dark:text-indigo-300">
+                            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                              isProcesado
+                                ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-[#d5d9f4] dark:bg-indigo-900/40 text-[#151f66] dark:text-indigo-300'
+                            }`}>
                               {empleado.nombre[0]}{empleado.apellido[0]}
                             </div>
                             <div>
@@ -699,7 +816,7 @@ export default function NominaPage() {
                               >
                                 {labelConcepto(a.concepto)}{' '}
                                 {isHorasConcepto(a.concepto) ? `${a.valor}h` : formatRD(a.valor, 0)}
-                                {esProcesada && (
+                                {esEnProceso && (
                                   <button
                                     onClick={() => handleRemoveAjuste(empleado.id, a.id)}
                                     className="ml-0.5 rounded-full hover:opacity-70 transition-opacity"
@@ -710,7 +827,7 @@ export default function NominaPage() {
                                 )}
                               </span>
                             ))}
-                            {esProcesada && (
+                            {esEnProceso && (
                               <button
                                 onClick={() => isExpanded ? setExpandedEmpId(null) : openAjusteForm(empleado.id)}
                                 className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-zinc-100 dark:bg-[#252840] text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-[#2d3152] transition-colors"
@@ -740,13 +857,24 @@ export default function NominaPage() {
                           {formatRD(resultado.totalCostoEmpleador, 0)}
                         </td>
                         <td className="px-4 py-3.5">
-                          <button
-                            onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
-                            className="rounded-lg p-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] transition-colors"
-                            title="Ver comprobante"
-                          >
-                            <ChevronRight className="h-4 w-4" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {esEnProceso && !isProcesado && (
+                              <button
+                                onClick={() => handleProcesarEmpleado(empleado.id)}
+                                className="rounded-lg px-2 py-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                                title="Procesar este empleado"
+                              >
+                                Procesar
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
+                              className="rounded-lg p-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] transition-colors"
+                              title="Ver comprobante"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
 
@@ -756,7 +884,7 @@ export default function NominaPage() {
                           key={`${empleado.id}-form`}
                           className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]"
                         >
-                          <td colSpan={8} className="px-5 py-4">
+                          <td colSpan={colSpanTotal} className="px-5 py-4">
                             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4">
                               <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-3">
                                 Agregar ajuste — {fullName(empleado)}
@@ -846,7 +974,7 @@ export default function NominaPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white">
-                  <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" colSpan={2}>
+                  <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" colSpan={esEnProceso ? 3 : 2}>
                     TOTALES — {empleadosActivos.length} empleados
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-bold">{formatRD(totales.bruto, 0)}</td>
