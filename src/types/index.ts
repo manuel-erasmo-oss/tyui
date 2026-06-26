@@ -36,6 +36,7 @@ export interface Empleado {
   apellido: string
   cedula: string               // document number (cédula, pasaporte, residencia, permiso)
   tipoDocumento?: TipoDocumento  // default 'cedula' for backward compat
+  nacionalidad?: string        // ISO 3166-1 alpha-2 (e.g. 'DO', 'US')
   fechaNacimiento?: string     // ISO date string
   supervisorId?: string        // employee ID of direct supervisor
   fotoPerfil?: string          // full data URL (data:image/...;base64,...) for <img src>
