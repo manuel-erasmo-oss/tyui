@@ -101,7 +101,7 @@ export default function VacacionesPage() {
                   </tr>
                 )}
                 {filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, puedeGozar }) => (
-                  <tr key={empleado.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                  <tr key={empleado.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
                         <div className="flex h-7 w-7 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-900/40 text-xs font-bold text-sky-700 dark:text-sky-300">

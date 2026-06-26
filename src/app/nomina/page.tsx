@@ -120,10 +120,10 @@ function DetalleNomina({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none animate-modal-in"
+        className="relative w-full max-w-2xl rounded-xl bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between rounded-t-2xl bg-zinc-950 dark:bg-[#080a12] px-6 py-5 text-white">
+        <div className="flex items-start justify-between rounded-t-xl bg-zinc-950 dark:bg-[#080a12] px-6 py-5 text-white">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
               Comprobante · {periodoLabel}
@@ -158,7 +158,7 @@ function DetalleNomina({
           </div>
 
           <div className="p-6">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-rose-600">Descuentos</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-rose-600 dark:text-rose-400">Descuentos</p>
             <div className="space-y-2">
               {[
                 { label: 'AFP Empleado (2.87%)',  value: nomina.afpEmpleado },
@@ -184,7 +184,7 @@ function DetalleNomina({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 border-t border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] p-6 rounded-b-2xl">
+        <div className="grid grid-cols-2 gap-4 border-t border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] p-6 rounded-b-xl">
           <div className="rounded-xl bg-white dark:bg-[#141722] border border-zinc-200 dark:border-[#252840] p-4">
             <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-semibold tracking-wide">Salario Neto a Pagar</p>
             <p className="mt-1 text-2xl font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">{formatRD(nomina.salarioNeto, 0)}</p>
@@ -493,7 +493,7 @@ export default function NominaPage() {
                     <select
                       value={nuevaQuincena}
                       onChange={e => setNuevaQuincena(Number(e.target.value) as 1 | 2)}
-                      className="rounded-lg border border-violet-300 dark:border-violet-700/60 bg-violet-50 dark:bg-violet-950/30 text-violet-800 dark:text-violet-300 px-3 py-1.5 text-sm focus:border-violet-500 focus:outline-none"
+                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
                     >
                       <option value={1}>1ª Quincena (1–15)</option>
                       <option value={2}>2ª Quincena (16–fin)</option>
@@ -577,7 +577,7 @@ export default function NominaPage() {
                   <div className="flex items-center gap-2 px-5 py-3 border-t border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
                     <button
                       onClick={() => setPeriodoAbierto(p.id)}
-                      className="flex-1 rounded-lg bg-[#1B2980] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#151f66] transition-colors text-center"
+                      className="flex-1 rounded-lg bg-[#1B2980] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors text-center"
                     >
                       Abrir
                     </button>
@@ -961,7 +961,7 @@ export default function NominaPage() {
                                   <button
                                     onClick={() => handleAgregarAjuste(empleado.id)}
                                     disabled={!newValor || parseFloat(newValor) <= 0}
-                                    className="rounded-lg bg-[#1B2980] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#151f66] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="rounded-lg bg-[#1B2980] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                   >
                                     Agregar
                                   </button>

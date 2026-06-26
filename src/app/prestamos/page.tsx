@@ -71,7 +71,7 @@ function StatCard({
           {sub && <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">{sub}</p>}
         </div>
         <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${iconColor}`}>
-          <Icon className="h-4.5 w-4.5" />
+          <Icon className="h-5 w-5" />
         </div>
       </div>
     </div>
@@ -428,7 +428,7 @@ function VistaDetalle({
                 <button
                   type="submit"
                   disabled={!pagoMonto || parseFloat(pagoMonto) <= 0}
-                  className="rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Registrar Pago
                 </button>
@@ -656,7 +656,7 @@ export default function PrestamosPage() {
         actions={
           <button
             onClick={() => setShowForm(prev => !prev)}
-            className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
           >
             {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
             {showForm ? 'Cerrar' : 'Nuevo Préstamo'}
@@ -916,7 +916,7 @@ export default function PrestamosPage() {
                 <button
                   type="submit"
                   disabled={!fEmpleado || previewMonto <= 0 || previewCuotas <= 0}
-                  className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus className="h-4 w-4" />
                   Otorgar Préstamo

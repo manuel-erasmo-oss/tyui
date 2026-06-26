@@ -997,7 +997,7 @@ function EmpleadoFormModal({
                 Cancelar
               </button>
               <button type="submit"
-                className="rounded-lg bg-[#1B2980] px-5 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors">
+                className="rounded-lg bg-[#1B2980] px-5 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors">
                 {mode === 'editar' ? 'Guardar Cambios' : 'Registrar Empleado'}
               </button>
             </div>
@@ -1395,7 +1395,7 @@ export default function EmpleadosPage() {
         actions={
           <button
             onClick={() => setMostrarNuevo(true)}
-            className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors"
+            className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
           >
             <Plus className="h-4 w-4" />
             Nuevo Empleado

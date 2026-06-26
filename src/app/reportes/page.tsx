@@ -351,7 +351,7 @@ function ReporteGerencial({
           )}
 
           {/* Histórico con Δ% */}
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-4">
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Histórico</p>
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mt-0.5">Últimos 6 Períodos</p>
@@ -362,7 +362,7 @@ function ReporteGerencial({
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-100 dark:border-[#1d2035] text-left">
+                    <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
                       {['Período','Empleados','Bruto','Descuentos','Neto','Δ Neto','Costo Total'].map(h => (
                         <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 last:text-right first:text-left text-right">{h}</th>
                       ))}
@@ -404,7 +404,7 @@ function ReporteGerencial({
 
           {/* Desglose por departamento — último período */}
           {desglose.length > 0 && (
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
               <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-4">
                 <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Costo por Departamento</p>
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mt-0.5">{periodoLabel(ultimoPeriodo!)}</p>
@@ -412,7 +412,7 @@ function ReporteGerencial({
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-zinc-100 dark:border-[#1d2035] text-left">
+                    <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
                       {['Departamento','Empleados','Sal. Bruto','Sal. Neto','Costo Total','% del Total'].map(h => (
                         <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 last:text-right first:text-left text-right">{h}</th>
                       ))}
@@ -621,7 +621,7 @@ function ReporteNomina({
       ) : filas.length === 0 ? (
         <EmptyState message="No hay empleados activos para este período." />
       ) : (
-        <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+        <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
           <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
             <Search className="h-4 w-4 text-zinc-400 shrink-0" />
             <input type="text" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar por nombre, cargo o departamento…" className="flex-1 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none" />
@@ -666,7 +666,7 @@ function ReporteNomina({
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-zinc-300 dark:border-[#252840] bg-[#1B2980] text-white font-bold text-right">
+                <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold text-right">
                   <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
                   <td className="px-4 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.bruto, 0)}</td>
                   <td className="px-4 py-3 tabular-nums text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp, 0)}</td>
@@ -822,7 +822,7 @@ function ReporteEmpleados({
       ) : filas.length === 0 ? (
         <EmptyState message="No hay empleados que coincidan con los filtros seleccionados." />
       ) : (
-        <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+        <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
           <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
             <Search className="h-4 w-4 text-zinc-400 shrink-0" />
             <input type="text" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar por nombre, cédula, cargo o departamento…" className="flex-1 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none" />
@@ -831,7 +831,7 @@ function ReporteEmpleados({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-100 dark:border-[#1d2035] text-left">
+                <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
                   {['Nombre','Cédula/Doc','Cargo','Departamento','Contrato','Ingreso','Antigüedad','Salario Base','Banco'].map(h => (
                     <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{h}</th>
                   ))}
@@ -1015,21 +1015,21 @@ function ReportePrestamos({
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Montos Otorgados</p>
               <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">{formatRD(summary.totalMonto, 0)}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Saldo Pendiente</p>
               <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{formatRD(summary.totalSaldo, 0)}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Cuotas Mensuales Activas</p>
               <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(summary.totalCuotas, 0)}</p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-400 shrink-0" />
               <input type="text" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar por nombre de empleado…" className="flex-1 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none" />
@@ -1282,29 +1282,29 @@ function ReporteTSS({
         <>
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total TSS</p>
               <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">{formatRD(totales.totalTSS, 0)}</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">Empleado + Empleador</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">TSS Empleado</p>
               <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{formatRD(totales.afpEmp + totales.sfsEmp, 0)}</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">AFP + SFS descontado</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">TSS Empleador</p>
               <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(totales.afpEmpl + totales.sfsEmpl + totales.srl, 0)}</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">AFP + SFS + SRL empresa</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">ISR Retenido</p>
               <p className="mt-1 text-xl font-bold text-violet-700 dark:text-violet-400 tabular-nums">{formatRD(totales.isr, 0)}</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">Para remitir DGII día 10</p>
             </div>
           </div>
 
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-400 shrink-0" />
               <input type="text" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar por nombre, cargo o departamento…" className="flex-1 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none" />
@@ -1346,7 +1346,7 @@ function ReporteTSS({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-300 dark:border-[#252840] bg-[#1B2980] text-white font-bold text-right">
+                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold text-right">
                     <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
                     <td className="px-4 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.cotizable, 0)}</td>
                     <td className="px-4 py-3 tabular-nums text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp, 0)}</td>
@@ -1505,20 +1505,20 @@ function ReporteCostoPorDepto({
       {!generado ? <EmptyState message="Selecciona un período y haz clic en Generar." /> : deptos.length === 0 ? <EmptyState message="No hay empleados activos en este período." /> : (
         <>
           <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Departamentos</p>
               <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">{deptos.length}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Empleados</p>
               <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{totales.headcount}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Costo Total</p>
               <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(totales.costo, 0)}</p>
             </div>
           </div>
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-400 shrink-0" />
               <input type="text" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar departamento…" className="flex-1 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none" />
@@ -1527,7 +1527,7 @@ function ReporteCostoPorDepto({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] text-left">
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
                     {['Departamento','Empleados','Sal. Bruto','Sal. Neto','TSS Empl.','Costo Total','% del Total'].map(h => (
                       <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 last:text-right first:text-left text-right">{h}</th>
                     ))}
@@ -1554,7 +1554,7 @@ function ReporteCostoPorDepto({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-300 dark:border-[#252840] bg-[#1B2980] text-white font-bold text-right">
+                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold text-right">
                     <td className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES</td>
                     <td className="px-5 py-3 tabular-nums">{totales.headcount}</td>
                     <td className="px-5 py-3 tabular-nums">{formatRD(totales.bruto, 0)}</td>
@@ -1675,11 +1675,11 @@ function ReportePlanillaACH({
       {!generado ? <EmptyState message="Selecciona un período y haz clic en Generar." /> : filas.length === 0 ? <EmptyState message="No hay empleados con cuenta bancaria registrada para este filtro." /> : (
         <>
           <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Transferencias</p>
               <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">{filas.length}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total a Transferir</p>
               <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatRD(totalNeto, 0)}</p>
             </div>
@@ -1690,7 +1690,7 @@ function ReportePlanillaACH({
               </div>
             )}
           </div>
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-400 shrink-0" />
               <input type="text" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar por nombre o departamento…" className="flex-1 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none" />
@@ -1699,7 +1699,7 @@ function ReportePlanillaACH({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] text-left">
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
                     {['Empleado','Departamento','Banco','# Cuenta','Sal. Neto'].map(h => (
                       <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{h}</th>
                     ))}
@@ -1717,7 +1717,7 @@ function ReportePlanillaACH({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-300 dark:border-[#252840] bg-[#1B2980] text-white font-bold">
+                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold">
                     <td colSpan={4} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTAL TRANSFERIR ({filasVisible.length} cuentas)</td>
                     <td className="px-5 py-3 text-right tabular-nums text-emerald-300">{formatRD(totalNeto, 0)}</td>
                   </tr>
@@ -1836,22 +1836,22 @@ function ReporteHorasExtras({
       {!generado ? <EmptyState message="Selecciona un año y haz clic en Generar." /> : filas.length === 0 ? <EmptyState message="No se registraron horas extras en este año." /> : (
         <>
           <div className="grid grid-cols-3 gap-4">
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Horas Extras 35%</p>
               <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{resumen.he35.toFixed(1)} hrs</p>
-              <p className="text-[11px] text-zinc-400 mt-0.5">{formatRD(resumen.imp35, 0)}</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.imp35, 0)}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Horas Extras 100%</p>
               <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{resumen.he100.toFixed(1)} hrs</p>
-              <p className="text-[11px] text-zinc-400 mt-0.5">{formatRD(resumen.imp100, 0)}</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.imp100, 0)}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Importe HE</p>
               <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(resumen.total, 0)}</p>
             </div>
           </div>
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-400 shrink-0" />
               <input type="text" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar por nombre…" className="flex-1 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none" />
@@ -1860,7 +1860,7 @@ function ReporteHorasExtras({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] text-left">
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
                     {['Empleado','Período','Hrs 35%','Importe 35%','Hrs 100%','Importe 100%','Total HE'].map(h => (
                       <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{h}</th>
                     ))}
@@ -1883,7 +1883,7 @@ function ReporteHorasExtras({
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-300 dark:border-[#252840] bg-[#1B2980] text-white font-bold">
+                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold">
                     <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} registros)</td>
                     <td className="px-5 py-3 tabular-nums text-center text-amber-300">{resumen.he35.toFixed(1)}</td>
                     <td className="px-5 py-3 tabular-nums text-right text-amber-300 whitespace-nowrap">{formatRD(resumen.imp35, 0)}</td>
@@ -2010,26 +2010,26 @@ function ReporteProyeccionAnual({
       {!generado ? <EmptyState message="Haz clic en Generar para calcular la proyección del año en curso." /> : filas.length === 0 ? <EmptyState message="No hay empleados activos." /> : (
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Empleados en Proyección</p>
               <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">{filas.length}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Costo Total Proyectado</p>
               <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(totales.totalProyectado, 0)}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Ejecutado YTD</p>
               <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatRD(totales.ytdReal, 0)}</p>
             </div>
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm">
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">% Ejecutado</p>
               <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">
                 {totales.totalProyectado > 0 ? (totales.ytdReal / totales.totalProyectado * 100).toFixed(1) : '0.0'}%
               </p>
             </div>
           </div>
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-400 shrink-0" />
               <input type="text" value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Buscar por nombre, cargo o departamento…" className="flex-1 bg-transparent text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none" />
@@ -2038,7 +2038,7 @@ function ReporteProyeccionAnual({
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] text-left">
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
                     {['Empleado','Cargo','Sal. Base','Bruto × 12','Regalía','Vacaciones','Total Proyectado','YTD Real','% Ejec.'].map(h => (
                       <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 whitespace-nowrap last:text-center text-right first:text-left">{h}</th>
                     ))}
@@ -2070,7 +2070,7 @@ function ReporteProyeccionAnual({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-300 dark:border-[#252840] bg-[#1B2980] text-white font-bold text-right">
+                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold text-right">
                     <td colSpan={3} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
                     <td className="px-5 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.brutoAnual, 0)}</td>
                     <td className="px-5 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.regalia, 0)}</td>
@@ -2093,7 +2093,7 @@ function ReporteProyeccionAnual({
 
 // ─── Shared UI components ─────────────────────────────────────────────────────
 const selectCls = 'rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-1.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none'
-const primaryBtn = 'flex items-center gap-1.5 rounded-lg bg-[#1B2980] hover:bg-[#1a2a8a] disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white transition-colors'
+const primaryBtn = 'flex items-center gap-1.5 rounded-lg bg-[#1B2980] hover:bg-[#151f66] disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white transition-colors'
 
 function FilterBar({ children }: { children: React.ReactNode }) {
   return (
@@ -2227,7 +2227,7 @@ export default function ReportesPage() {
                     className={`w-full flex items-start gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
                       active
                         ? 'bg-[#1B2980] text-white'
-                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] hover:text-zinc-900 dark:hover:text-zinc-200'
+                        : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:text-zinc-900 dark:hover:text-zinc-200'
                     }`}
                   >
                     <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${active ? 'text-indigo-200' : 'text-zinc-400 dark:text-zinc-500'}`} />
