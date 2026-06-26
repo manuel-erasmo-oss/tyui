@@ -11,14 +11,19 @@
   "dependencies": {
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.400.0",
     "next": "14.2.5",
     "react": "^18",
     "react-dom": "^18",
-    "recharts": "^3.8.1"
+    "recharts": "^3.8.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pako": "^2.0.4",
+    "@types/raf": "^3.4.3",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",

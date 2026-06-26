@@ -151,6 +151,19 @@ const PAISES: Pais[] = [
 const inputCls = 'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10'
 const labelCls = 'block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1'
 
+// ── Flag image component ──────────────────────────────────────────────────────
+function FlagImg({ code, className = '' }: { code: string; className?: string }) {
+  return (
+    <img
+      src={`https://flagcdn.com/w20/${code.toLowerCase()}.png`}
+      srcSet={`https://flagcdn.com/w40/${code.toLowerCase()}.png 2x`}
+      alt={code}
+      className={`h-4 w-6 rounded-sm object-cover shrink-0 ${className}`}
+      onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
+    />
+  )
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getPais(code: string): Pais | undefined {
   return PAISES.find(p => p.code === code)
@@ -348,7 +361,7 @@ function NacionalidadSelect({
       >
         {selected ? (
           <>
-            <span className="text-lg leading-none">{selected.bandera}</span>
+            <FlagImg code={selected.code} />
             <span className="flex-1">{selected.nombre}</span>
           </>
         ) : (
@@ -381,7 +394,7 @@ function NacionalidadSelect({
                     value === p.code ? 'bg-indigo-50 dark:bg-indigo-950/30 text-[#1B2980] dark:text-indigo-300 font-medium' : 'text-zinc-800 dark:text-zinc-200'
                   }`}
                 >
-                  <span className="text-xl leading-none w-7 text-center">{p.bandera}</span>
+                  <FlagImg code={p.code} className="w-7" />
                   <span className="flex-1 text-left">{p.nombre}</span>
                   {p.code === 'DO' && (
                     <span className="text-[10px] text-indigo-400 dark:text-indigo-500 font-medium">Cédula</span>
@@ -1095,7 +1108,7 @@ function EmpleadoDrawer({
               </Badge>
               {pais && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                  <span className="text-sm">{pais.bandera}</span> {pais.nombre}
+                  <FlagImg code={pais.code} className="h-3.5 w-5" /> {pais.nombre}
                 </span>
               )}
             </div>
@@ -1118,6 +1131,15 @@ function EmpleadoDrawer({
               <section>
                 <h3 className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Datos Personales</h3>
                 <div className="space-y-2.5">
+                  {pais && (
+                    <div className="flex items-center gap-3">
+                      <Globe className="h-4 w-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400 w-28">Nacionalidad</span>
+                      <span className="flex items-center gap-1.5 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                        <FlagImg code={pais.code} /> {pais.nombre}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <CreditCard className="h-4 w-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
                     <span className="text-xs text-zinc-500 dark:text-zinc-400 w-28">{labelTipoDoc(empleado.tipoDocumento)}</span>
@@ -1440,7 +1462,7 @@ export default function EmpleadosPage() {
                       <td className="px-4 py-3.5">
                         {pais ? (
                           <span className="flex items-center gap-1.5 text-sm" title={pais.nombre}>
-                            <span className="text-base">{pais.bandera}</span>
+                            <FlagImg code={pais.code} />
                             <span className="text-xs text-zinc-500 dark:text-zinc-400 hidden lg:inline">{pais.nombre}</span>
                           </span>
                         ) : (
