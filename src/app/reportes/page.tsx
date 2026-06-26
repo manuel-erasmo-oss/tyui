@@ -297,8 +297,8 @@ function ReporteGerencial({
         <>
           {/* KPI Grid — último período */}
           <div>
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-              Último período — {periodoLabel(ultimoPeriodo!)}
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">
+              Indicadores — {periodoLabel(ultimoPeriodo!)}
             </p>
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
               <StatCard label="Empleados Activos"   value={`${kpis.empleados}`}       icon={Users}       iconColor="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400" />
@@ -312,13 +312,15 @@ function ReporteGerencial({
 
           {/* YTD — Acumulado año en curso */}
           {ytd.periodos > 0 && (
-            <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50 dark:bg-indigo-950/20 p-5">
+            <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-[#eef0fb]/40 dark:bg-indigo-950/20 p-5">
               <div className="flex items-center gap-2 mb-4">
-                <TrendingUp className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
-                  Acumulado Año en Curso {currentYear}
-                  <span className="ml-2 font-normal text-indigo-600 dark:text-indigo-400">{ytd.periodos} período{ytd.periodos !== 1 ? 's' : ''}</span>
-                </p>
+                <TrendingUp className="h-4 w-4 text-[#1B2980] dark:text-indigo-400 shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">
+                    Acumulado YTD — {currentYear}
+                  </p>
+                  <p className="text-[11px] text-indigo-600 dark:text-indigo-500 mt-0.5">{ytd.periodos} período{ytd.periodos !== 1 ? 's' : ''} procesados</p>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
                 {([
@@ -329,8 +331,8 @@ function ReporteGerencial({
                   { label: 'Costo Total YTD',  value: ytd.costo,   cls: 'text-indigo-700 dark:text-indigo-400 font-bold' },
                 ] as const).map(({ label, value, cls }) => (
                   <div key={label} className="rounded-lg bg-white dark:bg-[#141722] border border-indigo-100 dark:border-indigo-900/40 p-3">
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{label}</p>
-                    <p className={`text-sm font-bold tabular-nums mt-0.5 ${cls}`}>{formatRD(value, 0)}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</p>
+                    <p className={`text-sm font-bold tabular-nums mt-1 ${cls}`}>{formatRD(value, 0)}</p>
                   </div>
                 ))}
               </div>
@@ -350,8 +352,9 @@ function ReporteGerencial({
 
           {/* Histórico con Δ% */}
           <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
-            <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3">
-              <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Histórico — Últimos 6 Períodos</p>
+            <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-4">
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Histórico</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mt-0.5">Últimos 6 Períodos</p>
             </div>
             {ultimos6.length === 0 ? (
               <div className="px-5 py-8 text-center text-sm text-zinc-400">Sin períodos registrados</div>
@@ -402,10 +405,9 @@ function ReporteGerencial({
           {/* Desglose por departamento — último período */}
           {desglose.length > 0 && (
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm">
-              <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3">
-                <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                  Costo por Departamento — {periodoLabel(ultimoPeriodo!)}
-                </p>
+              <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-4">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Costo por Departamento</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mt-0.5">{periodoLabel(ultimoPeriodo!)}</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -1363,7 +1365,7 @@ function ReporteTSS({
           {/* ISR bracket distribution */}
           {isrTramos.some(t => t.count > 0) && (
             <div className="rounded-xl border border-violet-200 dark:border-violet-800/40 bg-violet-50 dark:bg-violet-950/20 p-5">
-              <p className="text-sm font-semibold text-violet-800 dark:text-violet-300 mb-4">Distribución por Tramo ISR (Ley 11-92)</p>
+              <p className="text-xs font-semibold uppercase tracking-widest text-violet-700 dark:text-violet-400 mb-4">Distribución por Tramo ISR — Ley 11-92</p>
               <div className="flex h-3 rounded-full overflow-hidden mb-4">
                 {isrTramos.map(t => t.pct > 0 && (
                   <div key={t.label} className={`${t.color} opacity-80`} style={{ width: `${t.pct}%` }} title={`${t.label}: ${t.count} empleado(s)`} />
@@ -2112,7 +2114,7 @@ function ReportHeader({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">{title}</h2>
+        <h2 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{title}</h2>
         <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{desc}</p>
       </div>
       {(onPDF || onExcel) && (
@@ -2213,7 +2215,7 @@ export default function ReportesPage() {
         {/* Sidebar */}
         <aside className="w-60 shrink-0 border-r border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-y-auto">
           <div className="p-3">
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Tipos de Reporte</p>
+            <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Tipos de Reporte</p>
             <nav className="space-y-0.5">
               {SIDEBAR_ITEMS.map(item => {
                 const Icon = item.icon
@@ -2228,10 +2230,10 @@ export default function ReportesPage() {
                         : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] hover:text-zinc-900 dark:hover:text-zinc-200'
                     }`}
                   >
-                    <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${active ? 'text-indigo-200' : ''}`} />
+                    <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${active ? 'text-indigo-200' : 'text-zinc-400 dark:text-zinc-500'}`} />
                     <div className="min-w-0">
-                      <p className={`text-sm font-medium leading-tight ${active ? 'text-white' : ''}`}>{item.label}</p>
-                      <p className={`text-[10px] leading-tight mt-0.5 ${active ? 'text-indigo-200' : 'text-zinc-400 dark:text-zinc-500'}`}>{item.desc}</p>
+                      <p className={`text-sm leading-tight tracking-tight ${active ? 'font-semibold text-white' : 'font-medium text-zinc-700 dark:text-zinc-300'}`}>{item.label}</p>
+                      <p className={`text-[10px] leading-tight mt-0.5 tracking-wide ${active ? 'text-indigo-200' : 'text-zinc-400 dark:text-zinc-500'}`}>{item.desc}</p>
                     </div>
                   </button>
                 )

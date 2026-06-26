@@ -40,15 +40,29 @@ export function Sidebar() {
     <aside className="hidden md:flex h-screen w-60 flex-col bg-white dark:bg-[#141722] shrink-0 border-r border-zinc-200 dark:border-[#252840]">
 
       {/* Logo / Brand */}
-      <div className="flex h-16 items-center justify-center px-4 border-b border-zinc-200 dark:border-[#252840]">
-        <div className="w-full rounded-lg dark:bg-white/90 dark:px-2 dark:py-1">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/tyui/cielo-cloud-logo.png"
-            alt="Cielo Cloud"
-            className="w-full h-auto object-contain"
-            style={{ mixBlendMode: 'multiply', maxHeight: '52px' }}
-          />
+      <div className="flex h-16 items-center px-4 border-b border-zinc-200 dark:border-[#252840]">
+        <div className="flex items-center gap-2.5">
+          <svg viewBox="0 0 32 32" className="h-8 w-8 shrink-0" fill="none" aria-hidden="true">
+            <path
+              d="M9 22a5 5 0 01-.9-9.9 7 7 0 0113.4-1.1H22a4 4 0 010 8H9z"
+              className="fill-[#1B2980] dark:fill-white"
+            />
+            <path
+              d="M14 15.5a2.5 2.5 0 015 0"
+              stroke="white"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              className="dark:stroke-[#1B2980]"
+            />
+          </svg>
+          <div className="flex flex-col leading-tight">
+            <span className="text-sm font-bold tracking-tight text-[#1B2980] dark:text-white">
+              Cielo <span className="font-normal">Cloud</span>
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+              Nómina
+            </span>
+          </div>
         </div>
       </div>
 
