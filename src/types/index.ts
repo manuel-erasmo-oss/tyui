@@ -166,7 +166,10 @@ export interface Prestamo {
   cuotaBase: number
   frecuencia: 'mensual' | 'quincenal'
   fechaOtorgamiento: string
+  fechaFin?: string
   estado: EstadoPrestamo
   pagos: CuotaPago[]
   notas?: string
+  documentoSolicitud?: string  // base64-encoded PDF
+  documentoNombre?: string     // original filename
 }

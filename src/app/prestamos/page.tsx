@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Plus, ArrowLeft, X, DollarSign, Users, CheckCircle2, ChevronRight,
   AlertTriangle, CreditCard, Calendar, TrendingDown, FileText,
+  Upload, Download, Search,
 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
@@ -38,6 +39,17 @@ function estadoLabel(estado: EstadoPrestamo): string {
 
 function frecuenciaLabel(f: 'mensual' | 'quincenal'): string {
   return f === 'mensual' ? 'Mensual' : 'Quincenal'
+}
+
+// ── Cuotas from date range ────────────────────────────────────────────────────
+function cuotasFromDates(inicio: string, fin: string, frecuencia: 'mensual' | 'quincenal'): number {
+  const s = new Date(inicio)
+  const e = new Date(fin)
+  if (e <= s) return 1
+  if (frecuencia === 'mensual') {
+    return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()))
+  }
+  return Math.max(1, Math.ceil((e.getTime() - s.getTime()) / (15 * 24 * 3600 * 1000)))
 }
 
 // ── Stat Card ─────────────────────────────────────────────────────────────────
@@ -127,13 +139,13 @@ function VistaDetalle({
   nombreEmpleado: string
   initials: string
   onBack: () => void
-  onRegistrarPago: (prestamoId: string, monto: number, descripcion: string) => void
+  onRegistrarPago: (prestamoId: string, monto: number) => void
 }) {
   const [pagoMonto, setPagoMonto] = useState('')
   const [pagoDesc, setPagoDesc]   = useState('')
 
   // Build amortization table
-  const cuotaBase  = prestamo.cuotaBase
+  const cuotaBase   = prestamo.cuotaBase
   const tasaMensual = prestamo.tasaInteres / 100
   const rows: {
     num: number
@@ -175,9 +187,24 @@ function VistaDetalle({
     e.preventDefault()
     const monto = parseFloat(pagoMonto)
     if (!monto || monto <= 0) return
-    onRegistrarPago(prestamo.id, monto, pagoDesc)
+    onRegistrarPago(prestamo.id, monto)
     setPagoMonto('')
     setPagoDesc('')
+  }
+
+  function handleDescargarDocumento() {
+    if (!prestamo.documentoSolicitud || !prestamo.documentoNombre) return
+    const byteStr = atob(prestamo.documentoSolicitud)
+    const ab = new ArrayBuffer(byteStr.length)
+    const ia = new Uint8Array(ab)
+    for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i)
+    const blob = new Blob([ab], { type: 'application/pdf' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = prestamo.documentoNombre
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -214,9 +241,21 @@ function VistaDetalle({
               </div>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                 Otorgado el {formatDate(prestamo.fechaOtorgamiento)}
+                {prestamo.fechaFin && ` · Vence ${formatDate(prestamo.fechaFin)}`}
                 {prestamo.notas && ` · ${prestamo.notas}`}
               </p>
             </div>
+            {/* Document download */}
+            {prestamo.documentoSolicitud && (
+              <button
+                onClick={handleDescargarDocumento}
+                title={`Descargar: ${prestamo.documentoNombre}`}
+                className="flex items-center gap-1.5 rounded-lg border border-[#1B2980]/30 dark:border-indigo-600/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-3 py-1.5 text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:bg-[#1B2980]/10 transition-colors shrink-0"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Solicitud PDF
+              </button>
+            )}
           </div>
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -404,25 +443,34 @@ function VistaDetalle({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PrestamosPage() {
-  const { empleadosActivos } = useEmpleados()
-  const { empresa }          = useEmpresa()
+  const { empleadosActivos, empleados } = useEmpleados()
+  const { empresa }                     = useEmpresa()
   const { prestamos, otorgar, registrarPago, cancelar } = usePrestamos()
 
   // ── View state ──────────────────────────────────────────────────────────────
   const [vista, setVista]                               = useState<'lista' | 'detalle'>('lista')
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState<Prestamo | null>(null)
-  const [filtro, setFiltro]                             = useState<EstadoPrestamo | 'todos'>('activo')
+  const [filtroEstado, setFiltroEstado]                 = useState<EstadoPrestamo | 'todos'>('activo')
   const [showForm, setShowForm]                         = useState(false)
   const [toast, setToast]                               = useState<string | null>(null)
   const [confirmId, setConfirmId]                       = useState<string | null>(null)
 
+  // ── List filter state ───────────────────────────────────────────────────────
+  const [busqueda, setBusqueda] = useState('')
+
   // ── Form state ──────────────────────────────────────────────────────────────
-  const [fEmpleado,   setFEmpleado]   = useState('')
-  const [fMonto,      setFMonto]      = useState('')
-  const [fTasa,       setFTasa]       = useState('0')
-  const [fCuotas,     setFCuotas]     = useState('12')
-  const [fFrecuencia, setFFrecuencia] = useState<'mensual' | 'quincenal'>('mensual')
-  const [fNotas,      setFNotas]      = useState('')
+  const [fEmpleado,    setFEmpleado]    = useState('')
+  const [fMonto,       setFMonto]       = useState('')
+  const [fTasa,        setFTasa]        = useState('0')
+  const [fCuotas,      setFCuotas]      = useState('12')
+  const [fFrecuencia,  setFFrecuencia]  = useState<'mensual' | 'quincenal'>('mensual')
+  const [fFechaInicio, setFFechaInicio] = useState('')
+  const [fFechaFin,    setFFechaFin]    = useState('')
+  const [fUsarFechas,  setFUsarFechas]  = useState(false)
+  const [fNotas,       setFNotas]       = useState('')
+  const [fDocBase64,   setFDocBase64]   = useState<string | null>(null)
+  const [fDocNombre,   setFDocNombre]   = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Init frequency from company settings
   useEffect(() => {
@@ -431,12 +479,20 @@ export default function PrestamosPage() {
     }
   }, [empresa.modalidadNomina])
 
+  // Auto-calculate cuotas from date range when dates change
+  useEffect(() => {
+    if (fUsarFechas && fFechaInicio && fFechaFin) {
+      const n = cuotasFromDates(fFechaInicio, fFechaFin, fFrecuencia)
+      setFCuotas(String(n))
+    }
+  }, [fFechaInicio, fFechaFin, fFrecuencia, fUsarFechas])
+
   // ── Derived data ────────────────────────────────────────────────────────────
-  const prestamosActivos  = prestamos.filter(p => p.estado === 'activo')
-  const now               = new Date()
-  const thisMonth         = now.getMonth()
-  const thisYear          = now.getFullYear()
-  const pagadosEsteMes    = prestamos.filter(p => {
+  const prestamosActivos    = prestamos.filter(p => p.estado === 'activo')
+  const now                 = new Date()
+  const thisMonth           = now.getMonth()
+  const thisYear            = now.getFullYear()
+  const pagadosEsteMes      = prestamos.filter(p => {
     if (p.estado !== 'pagado') return false
     const d = new Date(p.fechaOtorgamiento)
     return d.getMonth() === thisMonth && d.getFullYear() === thisYear
@@ -444,10 +500,40 @@ export default function PrestamosPage() {
 
   const saldoTotalPendiente = prestamosActivos.reduce((s, p) => s + p.saldoPendiente, 0)
 
-  // Filter by tab
-  const prestamosFiltrados = filtro === 'todos'
+  // All employees (including inactive) for name lookup
+  const todosEmpleados = empleados
+
+  function getEmpleado(empleadoId: string) {
+    return todosEmpleados.find(e => e.id === empleadoId)
+  }
+
+  function getEmpleadoName(empleadoId: string): string {
+    const emp = getEmpleado(empleadoId)
+    return emp ? fullName(emp) : 'Empleado desconocido'
+  }
+
+  function getEmpleadoInitials(empleadoId: string): string {
+    const emp = getEmpleado(empleadoId)
+    if (!emp) return '?'
+    return `${emp.nombre[0]}${emp.apellido[0]}`
+  }
+
+  // Filter by estado tab + name/dept search
+  const prestamosBase = filtroEstado === 'todos'
     ? prestamos
-    : prestamos.filter(p => p.estado === filtro)
+    : prestamos.filter(p => p.estado === filtroEstado)
+
+  const prestamosFiltrados = busqueda.trim()
+    ? prestamosBase.filter(p => {
+        const emp = getEmpleado(p.empleadoId)
+        if (!emp) return false
+        const q = busqueda.toLowerCase()
+        return (
+          fullName(emp).toLowerCase().includes(q) ||
+          emp.departamento.toLowerCase().includes(q)
+        )
+      })
+    : prestamosBase
 
   // Live cuota preview
   const previewMonto  = parseFloat(fMonto) || 0
@@ -455,16 +541,25 @@ export default function PrestamosPage() {
   const previewCuotas = parseInt(fCuotas)  || 0
   const previewCuota  = calcularCuotaBase(previewMonto, previewTasa, previewCuotas)
 
-  // ── Helpers ─────────────────────────────────────────────────────────────────
-  function getEmpleadoName(empleadoId: string): string {
-    const emp = empleadosActivos.find(e => e.id === empleadoId)
-    return emp ? fullName(emp) : 'Empleado desconocido'
+  // ── File upload handler ──────────────────────────────────────────────────────
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      // Strip data URL prefix to store only the base64 payload
+      const base64 = result.split(',')[1]
+      setFDocBase64(base64)
+      setFDocNombre(file.name)
+    }
+    reader.readAsDataURL(file)
   }
 
-  function getEmpleadoInitials(empleadoId: string): string {
-    const emp = empleadosActivos.find(e => e.id === empleadoId)
-    if (!emp) return '?'
-    return `${emp.nombre[0]}${emp.apellido[0]}`
+  function clearFile() {
+    setFDocBase64(null)
+    setFDocNombre(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -472,14 +567,17 @@ export default function PrestamosPage() {
     e.preventDefault()
     if (!fEmpleado || previewMonto <= 0 || previewCuotas <= 0) return
     otorgar({
-      empleadoId:        fEmpleado,
-      monto:             previewMonto,
-      tasaInteres:       previewTasa,
-      cuotas:            previewCuotas,
-      cuotaBase:         previewCuota,
-      frecuencia:        fFrecuencia,
-      fechaOtorgamiento: new Date().toISOString().split('T')[0],
-      notas:             fNotas.trim() || undefined,
+      empleadoId:          fEmpleado,
+      monto:               previewMonto,
+      tasaInteres:         previewTasa,
+      cuotas:              previewCuotas,
+      cuotaBase:           previewCuota,
+      frecuencia:          fFrecuencia,
+      fechaOtorgamiento:   new Date().toISOString().split('T')[0],
+      fechaFin:            fFechaFin || undefined,
+      notas:               fNotas.trim() || undefined,
+      documentoSolicitud:  fDocBase64 ?? undefined,
+      documentoNombre:     fDocNombre ?? undefined,
     })
     // Reset form
     setFEmpleado('')
@@ -487,6 +585,10 @@ export default function PrestamosPage() {
     setFTasa('0')
     setFCuotas('12')
     setFNotas('')
+    setFFechaInicio('')
+    setFFechaFin('')
+    setFUsarFechas(false)
+    clearFile()
     setShowForm(false)
     setToast('Préstamo otorgado exitosamente')
   }
@@ -503,6 +605,7 @@ export default function PrestamosPage() {
       montoPagado: monto,
       esLiquidacion: false,
     })
+    // Refresh selected loan from updated list
     const updated = prestamos.find(p => p.id === prestamoId)
     if (updated) setPrestamoSeleccionado(updated)
     setToast('Pago registrado exitosamente')
@@ -512,6 +615,14 @@ export default function PrestamosPage() {
     setPrestamoSeleccionado(prestamo)
     setVista('detalle')
   }
+
+  // Keep prestamoSeleccionado in sync with latest data from context
+  useEffect(() => {
+    if (prestamoSeleccionado) {
+      const fresh = prestamos.find(p => p.id === prestamoSeleccionado.id)
+      if (fresh) setPrestamoSeleccionado(fresh)
+    }
+  }, [prestamos]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Detalle view ─────────────────────────────────────────────────────────────
   if (vista === 'detalle' && prestamoSeleccionado) {
@@ -589,7 +700,9 @@ export default function PrestamosPage() {
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Complete los datos del préstamo a otorgar</p>
               </div>
             </div>
-            <form onSubmit={handleOtorgar} className="p-5">
+            <form onSubmit={handleOtorgar} className="p-5 space-y-5">
+
+              {/* Row 1: employee, amount, tasa */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="sm:col-span-2 lg:col-span-1">
                   <label className={labelCls}>Empleado <span className="text-rose-500">*</span></label>
@@ -601,7 +714,7 @@ export default function PrestamosPage() {
                   >
                     <option value="">— Seleccionar empleado —</option>
                     {empleadosActivos.map(emp => (
-                      <option key={emp.id} value={emp.id}>{fullName(emp)}</option>
+                      <option key={emp.id} value={emp.id}>{fullName(emp)} · {emp.departamento}</option>
                     ))}
                   </select>
                 </div>
@@ -633,8 +746,65 @@ export default function PrestamosPage() {
                     <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">Sin interés (beneficio laboral)</p>
                   )}
                 </div>
+              </div>
+
+              {/* Row 2: dates toggle + cuotas + frecuencia */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {/* Date range toggle */}
+                <div className="sm:col-span-2 lg:col-span-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={labelCls + ' mb-0'}>Período del Préstamo</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFUsarFechas(v => !v)
+                        if (fUsarFechas) {
+                          setFFechaInicio('')
+                          setFFechaFin('')
+                        }
+                      }}
+                      className="text-[11px] text-[#1B2980] dark:text-indigo-400 hover:underline"
+                    >
+                      {fUsarFechas ? 'Usar número de cuotas' : 'Usar fechas inicio/fin'}
+                    </button>
+                  </div>
+                  {fUsarFechas ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelCls}>Inicio</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={fFechaInicio}
+                          onChange={e => setFFechaInicio(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Fin</label>
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={fFechaFin}
+                          onChange={e => setFFechaFin(e.target.value)}
+                          min={fFechaInicio}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1 italic">
+                      Define directamente el número de cuotas a continuación.
+                    </p>
+                  )}
+                </div>
+
                 <div>
-                  <label className={labelCls}>Cuotas <span className="text-rose-500">*</span></label>
+                  <label className={labelCls}>
+                    Cuotas
+                    {fUsarFechas && fFechaInicio && fFechaFin && (
+                      <span className="ml-1 text-emerald-600 dark:text-emerald-400">(calculado automáticamente)</span>
+                    )}
+                    <span className="text-rose-500"> *</span>
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -643,9 +813,11 @@ export default function PrestamosPage() {
                     value={fCuotas}
                     onChange={e => setFCuotas(e.target.value)}
                     placeholder="12"
+                    readOnly={fUsarFechas && !!fFechaInicio && !!fFechaFin}
                     required
                   />
                 </div>
+
                 <div>
                   <label className={labelCls}>Frecuencia</label>
                   <div className="flex gap-2">
@@ -665,8 +837,12 @@ export default function PrestamosPage() {
                     ))}
                   </div>
                 </div>
+              </div>
+
+              {/* Row 3: notas + PDF upload */}
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className={labelCls}>Notas</label>
+                  <label className={labelCls}>Notas / Motivo</label>
                   <input
                     type="text"
                     className={inputCls}
@@ -675,11 +851,44 @@ export default function PrestamosPage() {
                     placeholder="Motivo del préstamo…"
                   />
                 </div>
+
+                {/* PDF Upload */}
+                <div>
+                  <label className={labelCls}>Solicitud Aprobada (PDF)</label>
+                  {fDocNombre ? (
+                    <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2">
+                      <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span className="flex-1 truncate text-xs text-emerald-700 dark:text-emerald-300">{fDocNombre}</span>
+                      <button
+                        type="button"
+                        onClick={clearFile}
+                        className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-300"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-300 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400 hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors">
+                      <Upload className="h-4 w-4 shrink-0" />
+                      <span>Adjuntar PDF escaneado…</span>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        className="sr-only"
+                        onChange={handleFileUpload}
+                      />
+                    </label>
+                  )}
+                  <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+                    El documento se almacena localmente junto con el préstamo.
+                  </p>
+                </div>
               </div>
 
               {/* Live cuota preview */}
               {previewMonto > 0 && previewCuotas > 0 && (
-                <div className="mt-4 flex items-center gap-3 rounded-lg border border-[#1B2980]/20 dark:border-indigo-600/30 bg-[#eef0fb] dark:bg-indigo-950/30 px-4 py-3">
+                <div className="flex items-center gap-3 rounded-lg border border-[#1B2980]/20 dark:border-indigo-600/30 bg-[#eef0fb] dark:bg-indigo-950/30 px-4 py-3">
                   <DollarSign className="h-4 w-4 text-[#1B2980] dark:text-indigo-400 shrink-0" />
                   <div>
                     <p className="text-xs font-medium text-[#1B2980] dark:text-indigo-300">Cuota calculada</p>
@@ -687,11 +896,16 @@ export default function PrestamosPage() {
                       {formatRD(previewCuota)}
                       <span className="ml-1 text-xs font-normal opacity-70">/ {frecuenciaLabel(fFrecuencia).toLowerCase()}</span>
                     </p>
+                    {fUsarFechas && fFechaInicio && fFechaFin && (
+                      <p className="text-[11px] text-[#1B2980]/70 dark:text-indigo-400/70 mt-0.5">
+                        {previewCuotas} cuotas · {formatDate(fFechaInicio)} → {formatDate(fFechaFin)}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
 
-              <div className="mt-4 flex items-center justify-end gap-3">
+              <div className="flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
@@ -712,24 +926,45 @@ export default function PrestamosPage() {
           </div>
         )}
 
-        {/* Filter tabs */}
-        <div className="flex items-center gap-2 px-6 mb-4">
-          {FILTER_TABS.map(tab => (
-            <button
-              key={tab.value}
-              onClick={() => setFiltro(tab.value)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                filtro === tab.value
-                  ? 'bg-[#1B2980] text-white dark:bg-indigo-600'
-                  : 'border border-zinc-200 dark:border-[#252840] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e]'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-          <span className="ml-2 text-xs text-zinc-400 dark:text-zinc-500">
-            {prestamosFiltrados.length} resultado{prestamosFiltrados.length !== 1 ? 's' : ''}
-          </span>
+        {/* Filter tabs + search */}
+        <div className="px-6 mb-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {FILTER_TABS.map(tab => (
+              <button
+                key={tab.value}
+                onClick={() => setFiltroEstado(tab.value)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                  filtroEstado === tab.value
+                    ? 'bg-[#1B2980] text-white dark:bg-indigo-600'
+                    : 'border border-zinc-200 dark:border-[#252840] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e]'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+            <span className="ml-1 text-xs text-zinc-400 dark:text-zinc-500">
+              {prestamosFiltrados.length} resultado{prestamosFiltrados.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+          {/* Name / department search */}
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+            <input
+              type="text"
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              placeholder="Buscar por nombre o departamento…"
+              className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] py-1.5 pl-8 pr-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10"
+            />
+            {busqueda && (
+              <button
+                onClick={() => setBusqueda('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Loan table */}
@@ -737,9 +972,11 @@ export default function PrestamosPage() {
           {prestamosFiltrados.length === 0 ? (
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] py-16 text-center shadow-sm dark:shadow-none">
               <FileText className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600 mb-3" />
-              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">No hay préstamos en esta categoría</p>
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+                {busqueda ? 'Ningún préstamo coincide con la búsqueda' : 'No hay préstamos en esta categoría'}
+              </p>
               <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-                {filtro === 'activo' ? 'Usa el botón "Nuevo Préstamo" para registrar uno.' : 'Cambia el filtro para ver otros registros.'}
+                {filtroEstado === 'activo' && !busqueda ? 'Usa el botón "Nuevo Préstamo" para registrar uno.' : 'Cambia el filtro o la búsqueda.'}
               </p>
             </div>
           ) : (
@@ -748,7 +985,7 @@ export default function PrestamosPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
-                      {['Empleado', 'Monto Original', 'Saldo Pendiente', 'Cuota', 'Cuotas', 'Tasa', 'Frecuencia', 'Fecha', 'Estado', ''].map(h => (
+                      {['Empleado', 'Monto Original', 'Saldo Pendiente', 'Cuota', 'Cuotas', 'Tasa', 'Frecuencia', 'Fecha', 'Doc', 'Estado', ''].map(h => (
                         <th
                           key={h || 'actions'}
                           className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 whitespace-nowrap"
@@ -760,9 +997,10 @@ export default function PrestamosPage() {
                   </thead>
                   <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
                     {prestamosFiltrados.map(prestamo => {
-                      const pct     = (prestamo.monto - prestamo.saldoPendiente) / prestamo.monto * 100
-                      const empName = getEmpleadoName(prestamo.empleadoId)
+                      const pct      = (prestamo.monto - prestamo.saldoPendiente) / prestamo.monto * 100
+                      const empName  = getEmpleadoName(prestamo.empleadoId)
                       const initials = getEmpleadoInitials(prestamo.empleadoId)
+                      const emp      = getEmpleado(prestamo.empleadoId)
 
                       return (
                         <tr
@@ -778,7 +1016,10 @@ export default function PrestamosPage() {
                               >
                                 {initials}
                               </div>
-                              <span className="font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{empName}</span>
+                              <div>
+                                <span className="block font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{empName}</span>
+                                {emp && <span className="block text-[11px] text-zinc-400 dark:text-zinc-500">{emp.departamento}</span>}
+                              </div>
                             </div>
                           </td>
 
@@ -829,6 +1070,17 @@ export default function PrestamosPage() {
                           {/* Fecha */}
                           <td className="px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
                             {formatDate(prestamo.fechaOtorgamiento)}
+                          </td>
+
+                          {/* Document indicator */}
+                          <td className="px-4 py-3 text-center">
+                            {prestamo.documentoSolicitud ? (
+                              <span title={prestamo.documentoNombre}>
+                                <FileText className="h-4 w-4 text-[#1B2980] dark:text-indigo-400 mx-auto" />
+                              </span>
+                            ) : (
+                              <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                            )}
                           </td>
 
                           {/* Estado */}
