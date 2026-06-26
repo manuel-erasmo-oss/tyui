@@ -1,5 +1,6 @@
 export type TipoContrato = 'indefinido' | 'tiempo_determinado' | 'obra_servicio'
 export type CategoriaRiesgoSRL = 'bajo' | 'medio' | 'alto'
+export type TipoDocumento = 'cedula' | 'pasaporte' | 'residencia' | 'permiso_trabajo'
 export type Banco =
   | 'Banco Popular'
   | 'BanReservas'
@@ -33,11 +34,20 @@ export interface Empleado {
   id: string
   nombre: string
   apellido: string
-  cedula: string          // Dominican cédula: 001-1234567-8
+  cedula: string               // document number (cédula, pasaporte, residencia, permiso)
+  tipoDocumento?: TipoDocumento  // default 'cedula' for backward compat
+  fechaNacimiento?: string     // ISO date string
+  supervisorId?: string        // employee ID of direct supervisor
+  fotoPerfil?: string          // full data URL (data:image/...;base64,...) for <img src>
+  avatarColor?: string         // hex color for initials avatar background
+  documentoIdentidad?: string  // base64-encoded identity document scan (PDF or image)
+  documentoIdentidadNombre?: string
+  contratoLaboral?: string     // base64-encoded signed contract (PDF)
+  contratoLaboralNombre?: string
   cargo: string
   departamento: string
-  fechaIngreso: string    // ISO date string
-  salarioBase: number     // Monthly salary in RD$
+  fechaIngreso: string         // ISO date string
+  salarioBase: number          // Monthly salary in RD$
   tipoContrato: TipoContrato
   activo: boolean
   email?: string
