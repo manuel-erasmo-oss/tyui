@@ -8,6 +8,7 @@ const KEY = 'cielo-empresa'
 const DEFAULT: Empresa = {
   nombre: '', rnc: '', direccion: '', ciudad: '',
   telefono: '', email: '', representanteLegal: '',
+  modalidadNomina: 'mensual' as const,
 }
 
 interface EmpresaCtx {
@@ -23,7 +24,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY)
-      if (raw) setEmpresa(JSON.parse(raw) as Empresa)
+      if (raw) setEmpresa({ ...DEFAULT, ...JSON.parse(raw) as Empresa })
     } catch { /* ignore */ }
   }, [])
 

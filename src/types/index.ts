@@ -11,6 +11,23 @@ export type Banco =
 export type TipoPeriodo = 'mensual' | 'quincenal'
 export type EstadoPeriodo = 'procesada' | 'cerrada'
 
+export type ConceptoAjuste =
+  | 'horas_extras_35'
+  | 'horas_extras_100'
+  | 'comision'
+  | 'bono'
+  | 'prestamo'
+  | 'otro_ingreso'
+  | 'otro_descuento'
+
+export interface AjusteLinea {
+  id: string
+  tipo: 'ingreso' | 'deduccion'
+  concepto: ConceptoAjuste
+  descripcion: string
+  valor: number
+}
+
 export interface Empleado {
   id: string
   nombre: string
@@ -100,6 +117,7 @@ export interface PeriodoNomina {
     isr: number
     costoTotal: number
   }
+  ajustesPorEmpleado?: Record<string, AjusteLinea[]>
 }
 
 export interface ResumenNomina {
@@ -124,4 +142,5 @@ export interface Empresa {
   telefono: string
   email: string
   representanteLegal: string
+  modalidadNomina?: 'mensual' | 'quincenal'
 }

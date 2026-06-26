@@ -246,6 +246,30 @@ export default function ConfiguracionPage() {
                 />
               </div>
 
+              {/* Modalidad de Nómina */}
+              <div>
+                <label className={LABEL_CLASS}>Modalidad de pago de nómina</label>
+                <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840] w-fit">
+                  {(['mensual', 'quincenal'] as const).map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, modalidadNomina: m }))}
+                      className={`px-5 py-2 text-sm font-medium capitalize transition-colors ${
+                        (form.modalidadNomina ?? 'mensual') === m
+                          ? 'bg-[#1B2980] text-white'
+                          : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                      }`}
+                    >
+                      {m === 'mensual' ? 'Mensual' : 'Quincenal'}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  Esta configuración define el tipo de período predeterminado al crear nóminas.
+                </p>
+              </div>
+
               <div className="flex justify-end pt-2">
                 <button
                   type="submit"
