@@ -647,7 +647,7 @@ function EmpleadoFormModal({
     >
       {/* Window */}
       <div
-        className={`flex flex-col overflow-hidden shadow-2xl transition-all duration-200 ${
+        className={`flex flex-col overflow-hidden shadow-2xl transition-all duration-200 animate-modal-in ${
           isMax
             ? 'w-full h-full rounded-none'
             : 'w-full max-w-2xl max-h-[92vh] rounded-xl'
@@ -1055,7 +1055,7 @@ function EmpleadoDrawer({
       onClick={isMax ? undefined : onClose}
     >
       <div
-        className={`flex flex-col overflow-hidden shadow-2xl transition-all duration-200 bg-white dark:bg-[#141722] ${
+        className={`flex flex-col overflow-hidden shadow-2xl transition-all duration-200 animate-modal-in bg-white dark:bg-[#141722] ${
           isMax ? 'w-full h-full rounded-none' : 'w-full max-w-2xl max-h-[92vh] rounded-xl'
         }`}
         onClick={e => e.stopPropagation()}
@@ -1491,9 +1491,22 @@ export default function EmpleadosPage() {
                   )
                 })}
                 {filtrados.length === 0 && (
-                  <tr><td colSpan={9} className="px-5 py-12 text-center text-sm text-zinc-400 dark:text-zinc-500">
-                    No se encontraron empleados con los filtros aplicados
-                  </td></tr>
+                  <tr>
+                    <td colSpan={9}>
+                      <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <circle cx="12" cy="8" r="4" strokeLinecap="round" strokeLinejoin="round" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                          </svg>
+                        </div>
+                        <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">Sin resultados</p>
+                        <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+                          No se encontraron empleados con los filtros aplicados. Intenta ajustar la búsqueda.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
@@ -1509,7 +1522,7 @@ export default function EmpleadosPage() {
       {/* Ver ficha */}
       {empleadoSeleccionado && !editando && (
         <>
-          <div className="fixed inset-0 z-40 bg-zinc-900/30 dark:bg-black/60 backdrop-blur-sm" />
+          <div className="fixed inset-0 z-40 bg-zinc-900/30 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in" />
           <EmpleadoDrawer
             empleado={empleadoSeleccionado}
             todosEmpleados={empleados}
@@ -1533,7 +1546,7 @@ export default function EmpleadosPage() {
       {/* Crear — floating modal */}
       {mostrarNuevo && (
         <>
-          <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm" />
+          <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in" />
           <EmpleadoFormModal
             mode="crear"
             departamentos={departamentos}
@@ -1547,7 +1560,7 @@ export default function EmpleadosPage() {
       {/* Editar — floating modal */}
       {editando && (
         <>
-          <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm" />
+          <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in" />
           <EmpleadoFormModal
             mode="editar"
             inicial={editando}

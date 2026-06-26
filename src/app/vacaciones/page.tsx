@@ -82,6 +82,24 @@ export default function VacacionesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                {filas.length === 0 && (
+                  <tr>
+                    <td colSpan={7}>
+                      <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 13v4M10 15h4" />
+                          </svg>
+                        </div>
+                        <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">Sin empleados activos</p>
+                        <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+                          Registra empleados en la sección de Empleados para ver sus vacaciones acumuladas.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
                 {filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, puedeGozar }) => (
                   <tr key={empleado.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                     <td className="px-5 py-3.5">

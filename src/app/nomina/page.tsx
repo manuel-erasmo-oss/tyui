@@ -120,7 +120,7 @@ function DetalleNomina({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none"
+        className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none animate-modal-in"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between rounded-t-2xl bg-zinc-950 dark:bg-[#080a12] px-6 py-5 text-white">
@@ -521,11 +521,20 @@ export default function NominaPage() {
 
           {/* Period cards */}
           {periodos.length === 0 ? (
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-12 text-center">
-              <p className="text-base font-semibold text-zinc-700 dark:text-zinc-300">No hay períodos creados</p>
-              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-500">
-                Crea tu primer período de nómina usando el formulario de arriba.
-              </p>
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <rect x="3" y="4" width="18" height="18" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 2v4M8 2v4M3 10h18" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" />
+                  </svg>
+                </div>
+                <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">Sin períodos de nómina</p>
+                <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+                  Crea tu primer período usando el formulario de arriba para comenzar a procesar pagos.
+                </p>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -1012,7 +1021,7 @@ export default function NominaPage() {
 
       {detalleModal && (
         <>
-          <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm" />
+          <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in" />
           <DetalleNomina
             empleado={detalleModal.emp}
             nomina={detalleModal.nom}

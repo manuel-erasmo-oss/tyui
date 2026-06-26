@@ -100,8 +100,8 @@ function ConfirmDialog({
   onCancel: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-backdrop-in">
+      <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-2xl animate-modal-in">
         <div className="flex items-start gap-3">
           <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
           <div>
@@ -970,14 +970,24 @@ export default function PrestamosPage() {
         {/* Loan table */}
         <div className="px-6 pb-6">
           {prestamosFiltrados.length === 0 ? (
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] py-16 text-center shadow-sm dark:shadow-none">
-              <FileText className="mx-auto h-8 w-8 text-zinc-300 dark:text-zinc-600 mb-3" />
-              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-                {busqueda ? 'Ningún préstamo coincide con la búsqueda' : 'No hay préstamos en esta categoría'}
-              </p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-                {filtroEstado === 'activo' && !busqueda ? 'Usa el botón "Nuevo Préstamo" para registrar uno.' : 'Cambia el filtro o la búsqueda.'}
-              </p>
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 14v8M9 19h6" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 8h5M9.5 10.5h3" />
+                  </svg>
+                </div>
+                <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
+                  {busqueda ? 'Sin coincidencias' : 'Sin préstamos en esta categoría'}
+                </p>
+                <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+                  {filtroEstado === 'activo' && !busqueda
+                    ? 'Registra un nuevo préstamo usando el botón superior.'
+                    : 'Ajusta el filtro o la búsqueda para ver resultados.'}
+                </p>
+              </div>
             </div>
           ) : (
             <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
