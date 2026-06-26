@@ -14,6 +14,7 @@ import {
   Settings,
   ChevronRight,
   Plus,
+  HandCoins,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '/nomina',          icon: Calculator,      label: 'Procesar Nómina' },
   { href: '/regalia-pascual', icon: Gift,            label: 'Regalía Pascual' },
   { href: '/vacaciones',      icon: CalendarDays,    label: 'Vacaciones' },
+  { href: '/prestamos',       icon: HandCoins,       label: 'Préstamos' },
   { href: '/liquidacion',     icon: UserMinus,       label: 'Liquidación' },
   { href: '/aumentos',        icon: TrendingUp,      label: 'Aumentos Salariales' },
   { href: '/reportes',        icon: FileBarChart2,   label: 'Reportes TSS / ISR' },

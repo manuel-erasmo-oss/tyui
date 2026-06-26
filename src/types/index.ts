@@ -26,6 +26,7 @@ export interface AjusteLinea {
   concepto: ConceptoAjuste
   descripcion: string
   valor: number
+  prestamoId?: string
 }
 
 export interface Empleado {
@@ -143,4 +144,29 @@ export interface Empresa {
   email: string
   representanteLegal: string
   modalidadNomina?: 'mensual' | 'quincenal'
+}
+
+export type EstadoPrestamo = 'activo' | 'pagado' | 'cancelado'
+
+export interface CuotaPago {
+  id: string
+  periodoId?: string
+  fecha: string
+  montoPagado: number
+  esLiquidacion: boolean
+}
+
+export interface Prestamo {
+  id: string
+  empleadoId: string
+  monto: number
+  saldoPendiente: number
+  tasaInteres: number
+  cuotas: number
+  cuotaBase: number
+  frecuencia: 'mensual' | 'quincenal'
+  fechaOtorgamiento: string
+  estado: EstadoPrestamo
+  pagos: CuotaPago[]
+  notas?: string
 }

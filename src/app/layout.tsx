@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/lib/theme'
 import { EmpleadosProvider } from '@/lib/empleados-context'
 import { PeriodosProvider } from '@/lib/periodos-context'
 import { EmpresaProvider } from '@/lib/empresa-context'
+import { PrestamosProvider } from '@/lib/prestamos-context'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -37,11 +38,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <EmpresaProvider>
             <EmpleadosProvider>
-              <PeriodosProvider>
-                <Sidebar />
-                <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
-                <BottomNav />
-              </PeriodosProvider>
+              <PrestamosProvider>
+                <PeriodosProvider>
+                  <Sidebar />
+                  <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
+                  <BottomNav />
+                </PeriodosProvider>
+              </PrestamosProvider>
             </EmpleadosProvider>
           </EmpresaProvider>
         </ThemeProvider>
