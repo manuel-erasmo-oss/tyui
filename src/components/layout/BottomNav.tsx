@@ -15,7 +15,7 @@ const BOTTOM_ITEMS = [
   { href: '/',          icon: LayoutDashboard, label: 'Inicio' },
   { href: '/empleados', icon: Users,            label: 'Empleados' },
   { href: '/nomina',    icon: Calculator,       label: 'Nómina' },
-  { href: '/reportes',  icon: FileBarChart2,    label: 'Reportes' },
+  { href: '/reportes',  icon: FileBarChart2,    label: 'Reportería' },
   { href: '/liquidacion', icon: UserMinus,       label: 'Liquidar' },
 ]
 

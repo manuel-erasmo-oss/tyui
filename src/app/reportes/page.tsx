@@ -46,7 +46,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'nomina',     label: 'Nómina por Período',     icon: FileText,      desc: 'Detalle de nómina por período' },
   { id: 'empleados',  label: 'Listado de Empleados',   icon: Users,         desc: 'Plantilla y datos laborales' },
   { id: 'prestamos',  label: 'Reporte de Préstamos',   icon: CreditCard,    desc: 'Cartera de préstamos y saldos' },
-  { id: 'tss',        label: 'TSS / IR-2',             icon: Shield,        desc: 'Aportes TSS y retención ISR' },
+  { id: 'tss',        label: 'Cumplimiento Fiscal',     icon: Shield,        desc: 'TSS, ISR y retenciones regulatorias' },
 ]
 
 // ─── PDF Helper ───────────────────────────────────────────────────────────────
@@ -998,8 +998,8 @@ function ReporteTSS({
   return (
     <div className="space-y-5">
       <ReportHeader
-        title="TSS / IR-2"
-        desc="Aportes a la Tesorería de la Seguridad Social (CNSS) y retención de ISR para la DGII."
+        title="Cumplimiento Fiscal"
+        desc="Aportes a la Tesorería de la Seguridad Social (CNSS) y retención de ISR para declaración a la DGII."
         onPDF={filas.length > 0 ? exportarPDF : undefined}
         onExcel={filas.length > 0 ? exportarXlsx : undefined}
       />
@@ -1228,8 +1228,8 @@ export default function ReportesPage() {
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
-        title="Reportes"
-        subtitle="Exportación profesional de reportes laborales y fiscales"
+        title="Reportería"
+        subtitle="Análisis, exportación y cumplimiento regulatorio"
         actions={
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-zinc-400" />

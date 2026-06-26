@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   { href: '/prestamos',       icon: HandCoins,       label: 'Préstamos' },
   { href: '/liquidacion',     icon: UserMinus,       label: 'Liquidación' },
   { href: '/aumentos',        icon: TrendingUp,      label: 'Aumentos Salariales' },
-  { href: '/reportes',        icon: FileBarChart2,   label: 'Reportes TSS / ISR' },
+  { href: '/reportes',        icon: FileBarChart2,   label: 'Reportería' },
 ]
 
 export function Sidebar() {
