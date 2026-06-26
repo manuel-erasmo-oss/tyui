@@ -1,16 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ChevronRight,
   Download,
-  Printer,
-  Info,
-  CheckCircle2,
-  PlayCircle,
-  Clock,
   Lock,
   Trash2,
+  ArrowLeft,
+  Plus,
+  X,
+  Info,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -18,14 +17,23 @@ import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import { usePeriodos } from '@/lib/periodos-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import { calcularNomina, calcularNominaQuincenal } from '@/lib/dominican-labor'
-import { formatRD, formatPeriodo, fullName } from '@/lib/utils'
-import type { Empleado, ResultadoNomina, PeriodoNomina, TipoPeriodo } from '@/types'
+import { formatRD, fullName } from '@/lib/utils'
+import type {
+  Empleado,
+  ResultadoNomina,
+  PeriodoNomina,
+  TipoPeriodo,
+  ParametrosNomina,
+  ConceptoAjuste,
+  AjusteLinea,
+} from '@/types'
 import { Wallet, TrendingUp, Receipt, BarChart3 } from 'lucide-react'
 
 const MESES = [
-  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
-  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
 
 const hoy = new Date()
@@ -47,13 +55,48 @@ function exportarCSV(filename: string, headers: string[], rows: (string | number
   URL.revokeObjectURL(url)
 }
 
-// ── Label helper ──────────────────────────────────────────────────────────────
+// ── Label helpers ─────────────────────────────────────────────────────────────
 function labelPeriodo(p: PeriodoNomina): string {
   const mes = MESES[p.mes - 1]
   if (p.tipo === 'quincenal') {
     return `${p.quincena === 1 ? '1ª' : '2ª'} Quincena · ${mes} ${p.anio}`
   }
   return `${mes} ${p.anio}`
+}
+
+function labelConcepto(concepto: ConceptoAjuste): string {
+  const map: Record<ConceptoAjuste, string> = {
+    horas_extras_35:  'H.E. 35%',
+    horas_extras_100: 'H.E. 100%',
+    comision:         'Comisión',
+    bono:             'Bono',
+    prestamo:         'Préstamo',
+    otro_ingreso:     'Otro Ingreso',
+    otro_descuento:   'Otro Desc.',
+  }
+  return map[concepto]
+}
+
+function isHorasConcepto(concepto: ConceptoAjuste): boolean {
+  return concepto === 'horas_extras_35' || concepto === 'horas_extras_100'
+}
+
+// ── calcularConAjustes ────────────────────────────────────────────────────────
+function calcularConAjustes(
+  empleado: Empleado,
+  ajustes: AjusteLinea[],
+  tipo: TipoPeriodo,
+  quincena: 1 | 2,
+): ResultadoNomina {
+  const horasExtras35  = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
+  const horasExtras100 = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
+  const bonificaciones = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
+  const comisiones     = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
+  const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
+  const params: ParametrosNomina = { horasExtras35, horasExtras100, bonificaciones, comisiones, otrosDescuentos }
+  return tipo === 'quincenal'
+    ? calcularNominaQuincenal(empleado, quincena, params)
+    : calcularNomina(empleado, params)
 }
 
 // ── Detalle modal ─────────────────────────────────────────────────────────────
@@ -71,12 +114,14 @@ function DetalleNomina({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none animate-fade-in"
+        className="relative w-full max-w-2xl rounded-2xl bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between rounded-t-2xl bg-zinc-950 dark:bg-[#080a12] px-6 py-5 text-white">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">Comprobante · {periodoLabel}</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+              Comprobante · {periodoLabel}
+            </p>
             <p className="mt-1 text-lg font-bold">{fullName(empleado)}</p>
             <p className="text-sm text-zinc-400">{empleado.cargo} · {empleado.departamento}</p>
           </div>
@@ -121,7 +166,9 @@ function DetalleNomina({
                 </div>
               ))}
               {nomina.isrMensual === 0 && (
-                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">ISR: anticipo de quincena (se liquida en 2ª quincena)</p>
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
+                  ISR: anticipo de quincena (se liquida en 2ª quincena)
+                </p>
               )}
               <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-2 flex justify-between font-semibold text-sm">
                 <span className="text-zinc-800 dark:text-zinc-200">Total Descuentos</span>
@@ -169,87 +216,274 @@ function DetalleNomina({
   )
 }
 
-// ── Historial table ───────────────────────────────────────────────────────────
-function HistorialTable({
-  periodos,
-  cerrar,
-  eliminar,
-}: {
-  periodos: PeriodoNomina[]
-  cerrar: (id: string) => void
-  eliminar: (id: string) => void
-}) {
-  return (
-    <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-      <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-          <Clock className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-          Historial de Nóminas Generadas
-        </h2>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500">{periodos.length} período(s)</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
-              <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Período</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tipo</th>
-              <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleados</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Neto Total</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Costo Empresa</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
-            {periodos.map(p => (
-              <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
-                <td className="px-5 py-3.5">
-                  <p className="font-medium text-zinc-900 dark:text-zinc-100">{labelPeriodo(p)}</p>
-                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                    Generada: {new Date(p.fechaGeneracion).toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </p>
-                </td>
-                <td className="px-4 py-3.5">
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
-                    p.tipo === 'quincenal'
-                      ? 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/40 dark:text-violet-400 dark:ring-violet-800/50'
-                      : 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950/40 dark:text-sky-400 dark:ring-sky-800/50'
-                  }`}>
-                    {p.tipo === 'quincenal' ? `${p.quincena === 1 ? '1ª' : '2ª'} Quincena` : 'Mensual'}
-                  </span>
-                </td>
-                <td className="px-4 py-3.5 text-center tabular-nums text-zinc-600 dark:text-zinc-400">
-                  {p.totalEmpleados}
-                </td>
-                <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#151f66] dark:text-indigo-300">
-                  {formatRD(p.totales.neto, 0)}
-                </td>
-                <td className="px-4 py-3.5 text-right tabular-nums text-amber-700 dark:text-amber-400">
-                  {formatRD(p.totales.costoTotal, 0)}
-                </td>
-                <td className="px-4 py-3.5">
-                  {p.estado === 'cerrada' ? (
-                    <Badge variant="neutral">
-                      <Lock className="mr-1 h-3 w-3" />
-                      Cerrada
-                    </Badge>
-                  ) : (
-                    <Badge variant="success">
-                      <CheckCircle2 className="mr-1 h-3 w-3" />
-                      Procesada
-                    </Badge>
-                  )}
-                </td>
-                <td className="px-4 py-3.5">
-                  <div className="flex items-center gap-1.5 justify-end">
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function NominaPage() {
+  const { empleadosActivos } = useEmpleados()
+  const { periodos, generar, cerrar, eliminar, actualizarAjustes } = usePeriodos()
+  const { empresa } = useEmpresa()
+
+  // View state
+  const [periodoAbierto, setPeriodoAbierto] = useState<string | null>(null)
+
+  // Create period form
+  const [nuevoTipo, setNuevoTipo]         = useState<TipoPeriodo>('mensual')
+  const [nuevoMes, setNuevoMes]           = useState(hoy.getMonth() + 1)
+  const [nuevoAnio, setNuevoAnio]         = useState(hoy.getFullYear())
+  const [nuevaQuincena, setNuevaQuincena] = useState<1 | 2>(1)
+
+  // Ajuste inline form
+  const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null)
+  const [newTipo, setNewTipo]             = useState<'ingreso' | 'deduccion'>('ingreso')
+  const [newConcepto, setNewConcepto]     = useState<ConceptoAjuste>('bono')
+  const [newValor, setNewValor]           = useState('')
+  const [newDesc, setNewDesc]             = useState('')
+
+  // Modal + toast
+  const [detalleModal, setDetalleModal] = useState<{ emp: Empleado; nom: ResultadoNomina } | null>(null)
+  const [toast, setToast]               = useState<string | null>(null)
+
+  useEffect(() => {
+    if (empresa.modalidadNomina) setNuevoTipo(empresa.modalidadNomina)
+  }, [empresa.modalidadNomina])
+
+  const periodoActual = periodos.find(p => p.id === periodoAbierto) ?? null
+  const periodoActualLabel = periodoActual ? labelPeriodo(periodoActual) : ''
+
+  function calcularTotalesRapido() {
+    const rs = empleadosActivos.map(e => calcularNomina(e))
+    return {
+      bruto:      rs.reduce((s, r) => s + r.totalBruto, 0),
+      descuentos: rs.reduce((s, r) => s + r.totalDescuentos, 0),
+      neto:       rs.reduce((s, r) => s + r.salarioNeto, 0),
+      aportes:    rs.reduce((s, r) => s + r.totalAportesEmpleador, 0),
+      isr:        rs.reduce((s, r) => s + r.isrMensual, 0),
+      costoTotal: rs.reduce((s, r) => s + r.totalCostoEmpleador, 0),
+    }
+  }
+
+  function handleCrearPeriodo() {
+    const nuevo = generar({
+      tipo:            nuevoTipo,
+      quincena:        nuevoTipo === 'quincenal' ? nuevaQuincena : undefined,
+      mes:             nuevoMes,
+      anio:            nuevoAnio,
+      estado:          'procesada',
+      totalEmpleados:  empleadosActivos.length,
+      totales:         calcularTotalesRapido(),
+      ajustesPorEmpleado: {},
+    })
+    setPeriodoAbierto(nuevo.id)
+    setToast('Período creado correctamente')
+  }
+
+  function handleExportar() {
+    if (!periodoActual) return
+    const ajustesPorEmp  = periodoActual.ajustesPorEmpleado ?? {}
+    const quincenaActual: 1 | 2 = periodoActual.quincena ?? 1
+    const rows = empleadosActivos.map(e => {
+      const r = calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual)
+      return [
+        fullName(e), e.cargo, e.departamento,
+        r.totalBruto.toFixed(2), r.afpEmpleado.toFixed(2), r.sfsEmpleado.toFixed(2),
+        r.isrMensual.toFixed(2), r.totalDescuentos.toFixed(2), r.salarioNeto.toFixed(2),
+        r.afpEmpleador.toFixed(2), r.sfsEmpleador.toFixed(2), r.srlEmpleador.toFixed(2),
+        r.totalCostoEmpleador.toFixed(2),
+      ]
+    })
+    const slug = periodoActualLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
+    exportarCSV(
+      `nomina-${slug}.csv`,
+      ['Empleado','Cargo','Departamento','S. Bruto','AFP Emp','SFS Emp','ISR','Total Desc.','S. Neto','AFP Empr','SFS Empr','SRL','Costo Total'],
+      rows,
+    )
+    setToast('Nómina exportada correctamente')
+  }
+
+  function getAjustes(empleadoId: string): AjusteLinea[] {
+    return (periodoActual?.ajustesPorEmpleado ?? {})[empleadoId] ?? []
+  }
+
+  function handleRemoveAjuste(empleadoId: string, ajusteId: string) {
+    if (!periodoActual) return
+    actualizarAjustes(periodoActual.id, empleadoId, getAjustes(empleadoId).filter(a => a.id !== ajusteId))
+  }
+
+  function handleAgregarAjuste(empleadoId: string) {
+    if (!periodoActual || !newValor) return
+    const valor = parseFloat(newValor)
+    if (isNaN(valor) || valor <= 0) return
+    const ajuste: AjusteLinea = {
+      id:          Date.now().toString(36),
+      tipo:        newTipo,
+      concepto:    newConcepto,
+      descripcion: newDesc,
+      valor,
+    }
+    actualizarAjustes(periodoActual.id, empleadoId, [...getAjustes(empleadoId), ajuste])
+    setNewValor('')
+    setNewDesc('')
+    setExpandedEmpId(null)
+  }
+
+  function openAjusteForm(empId: string) {
+    setExpandedEmpId(empId)
+    setNewTipo('ingreso')
+    setNewConcepto('bono')
+    setNewValor('')
+    setNewDesc('')
+  }
+
+  const anios = [nuevoAnio - 1, nuevoAnio, nuevoAnio + 1]
+  const conceptosIngreso: ConceptoAjuste[]   = ['horas_extras_35', 'horas_extras_100', 'comision', 'bono', 'otro_ingreso']
+  const conceptosDeduccion: ConceptoAjuste[] = ['prestamo', 'otro_descuento']
+
+  // ── VISTA: LISTA ─────────────────────────────────────────────────────────────
+  if (!periodoAbierto) {
+    return (
+      <div className="flex flex-col overflow-hidden h-full">
+        <Header title="Nómina" subtitle="Gestión de períodos de pago" />
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50 dark:bg-[#0d0f1a]">
+
+          {/* Crear período */}
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+            <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Crear Período</h2>
+            </div>
+            <div className="px-5 py-4">
+              <div className="flex flex-wrap items-end gap-3">
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Tipo</label>
+                  <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                    {(['mensual', 'quincenal'] as TipoPeriodo[]).map(t => (
+                      <button
+                        key={t}
+                        onClick={() => setNuevoTipo(t)}
+                        className={`px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
+                          nuevoTipo === t
+                            ? 'bg-[#1B2980] text-white'
+                            : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                        }`}
+                      >
+                        {t === 'mensual' ? 'Mensual' : 'Quincenal'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Mes</label>
+                  <select
+                    value={nuevoMes}
+                    onChange={e => setNuevoMes(Number(e.target.value))}
+                    className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                  >
+                    {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Año</label>
+                  <select
+                    value={nuevoAnio}
+                    onChange={e => setNuevoAnio(Number(e.target.value))}
+                    className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                  >
+                    {anios.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </div>
+
+                {nuevoTipo === 'quincenal' && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Quincena</label>
+                    <select
+                      value={nuevaQuincena}
+                      onChange={e => setNuevaQuincena(Number(e.target.value) as 1 | 2)}
+                      className="rounded-lg border border-violet-300 dark:border-violet-700/60 bg-violet-50 dark:bg-violet-950/30 text-violet-800 dark:text-violet-300 px-3 py-1.5 text-sm focus:border-violet-500 focus:outline-none"
+                    >
+                      <option value={1}>1ª Quincena (1–15)</option>
+                      <option value={2}>2ª Quincena (16–fin)</option>
+                    </select>
+                  </div>
+                )}
+
+                <button
+                  onClick={handleCrearPeriodo}
+                  disabled={empleadosActivos.length === 0}
+                  className="self-end flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="h-4 w-4" />
+                  Crear Período
+                </button>
+              </div>
+
+              {empleadosActivos.length === 0 && (
+                <p className="mt-2.5 text-xs text-amber-600 dark:text-amber-400">
+                  Debes registrar al menos un empleado activo para crear un período de nómina.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Period cards */}
+          {periodos.length === 0 ? (
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-12 text-center">
+              <p className="text-base font-semibold text-zinc-700 dark:text-zinc-300">No hay períodos creados</p>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-500">
+                Crea tu primer período de nómina usando el formulario de arriba.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {periodos.map(p => (
+                <div
+                  key={p.id}
+                  className="flex flex-col rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden"
+                >
+                  <div className="flex items-start justify-between px-5 py-4 border-b border-zinc-100 dark:border-[#1d2035]">
+                    <div>
+                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">{labelPeriodo(p)}</p>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
+                        {p.totalEmpleados} empleado{p.totalEmpleados !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+                    {p.estado === 'cerrada' ? (
+                      <Badge variant="neutral"><Lock className="mr-1 h-3 w-3" />Cerrada</Badge>
+                    ) : (
+                      <Badge variant="success">Procesada</Badge>
+                    )}
+                  </div>
+
+                  <div className="flex-1 px-5 py-4 space-y-2">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">Neto Total</span>
+                      <span className="text-lg font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">
+                        {formatRD(p.totales.neto, 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">Costo Empresa</span>
+                      <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+                        {formatRD(p.totales.costoTotal, 0)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 px-5 py-3 border-t border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                    <button
+                      onClick={() => setPeriodoAbierto(p.id)}
+                      className="flex-1 rounded-lg bg-[#1B2980] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#151f66] transition-colors text-center"
+                    >
+                      Abrir
+                    </button>
                     {p.estado === 'procesada' && (
                       <button
                         onClick={() => cerrar(p.id)}
                         title="Cerrar período"
-                        className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                        className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
                       >
-                        <Lock className="h-3.5 w-3.5" />
+                        <Lock className="h-4 w-4" />
                       </button>
                     )}
                     <button
@@ -260,36 +494,33 @@ function HistorialTable({
                       title="Eliminar período"
                       className="rounded-lg border border-rose-200 dark:border-rose-800/50 p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       </div>
-    </div>
-  )
-}
+    )
+  }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
-export default function NominaPage() {
-  const [mes, setMes]         = useState(hoy.getMonth() + 1)
-  const [anio, setAnio]       = useState(hoy.getFullYear())
-  const [tipo, setTipo]       = useState<TipoPeriodo>('mensual')
-  const [quincena, setQuincena] = useState<1 | 2>(1)
-  const [detalle, setDetalle] = useState<{ emp: Empleado; nom: ResultadoNomina } | null>(null)
-  const [toast, setToast]     = useState<string | null>(null)
+  // ── VISTA: DETALLE ────────────────────────────────────────────────────────────
+  if (!periodoActual) {
+    setPeriodoAbierto(null)
+    return null
+  }
 
-  const { empleadosActivos }            = useEmpleados()
-  const { periodos, generar, cerrar, eliminar } = usePeriodos()
+  const ajustesPorEmp  = periodoActual.ajustesPorEmpleado ?? {}
+  const quincenaActual: 1 | 2 = periodoActual.quincena ?? 1
+  const esProcesada   = periodoActual.estado === 'procesada'
 
   const nominas = empleadosActivos.map(e => ({
     empleado: e,
-    resultado: tipo === 'quincenal'
-      ? calcularNominaQuincenal(e, quincena)
-      : calcularNomina(e),
+    resultado: calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual),
   }))
 
   const totales = {
@@ -301,149 +532,43 @@ export default function NominaPage() {
     costoTotal: nominas.reduce((s, n) => s + n.resultado.totalCostoEmpleador, 0),
   }
 
-  const periodoLabel = tipo === 'quincenal'
-    ? `${quincena === 1 ? '1ª' : '2ª'} Quincena — ${formatPeriodo(anio, mes)}`
-    : formatPeriodo(anio, mes)
-
-  function handleExportar() {
-    const headers = ['Empleado', 'Cargo', 'Departamento', 'S. Bruto', 'AFP Emp', 'SFS Emp', 'ISR', 'Total Desc.', 'S. Neto', 'AFP Empr', 'SFS Empr', 'SRL', 'Costo Total']
-    const rows = nominas.map(({ empleado, resultado }) => [
-      fullName(empleado),
-      empleado.cargo,
-      empleado.departamento,
-      resultado.totalBruto.toFixed(2),
-      resultado.afpEmpleado.toFixed(2),
-      resultado.sfsEmpleado.toFixed(2),
-      resultado.isrMensual.toFixed(2),
-      resultado.totalDescuentos.toFixed(2),
-      resultado.salarioNeto.toFixed(2),
-      resultado.afpEmpleador.toFixed(2),
-      resultado.sfsEmpleador.toFixed(2),
-      resultado.srlEmpleador.toFixed(2),
-      resultado.totalCostoEmpleador.toFixed(2),
-    ])
-    const slug = periodoLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
-    exportarCSV(`nomina-${slug}.csv`, headers, rows)
-    setToast('Nómina exportada correctamente')
-  }
-
-  function handleGenerar() {
-    generar({
-      tipo,
-      quincena: tipo === 'quincenal' ? quincena : undefined,
-      mes, anio,
-      estado: 'procesada',
-      totalEmpleados: empleadosActivos.length,
-      totales,
-    })
-    setToast(`Nómina "${periodoLabel}" generada correctamente`)
-  }
-
-  const anios = [anio - 1, anio, anio + 1]
-
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
-        title="Procesar Nómina"
-        subtitle={`Período: ${periodoLabel}`}
+        title={periodoActualLabel}
+        subtitle={esProcesada ? 'Período procesado' : 'Período cerrado'}
         actions={
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setToast('Preparando documento para imprimir…')}
-              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              onClick={() => setPeriodoAbierto(null)}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
             >
-              <Printer className="h-4 w-4" />
-              Imprimir
+              <ArrowLeft className="h-4 w-4" />
+              Períodos
             </button>
+            {esProcesada && (
+              <button
+                onClick={() => { cerrar(periodoActual.id); setToast('Período cerrado correctamente') }}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                <Lock className="h-4 w-4" />
+                Cerrar
+              </button>
+            )}
             <button
               onClick={handleExportar}
               className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
             >
               <Download className="h-4 w-4" />
-              Exportar
+              Exportar CSV
             </button>
           </div>
         }
       />
 
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
+      <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
-        {/* ── Period selector ── */}
-        <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-4 py-3 shadow-sm dark:shadow-none">
-          <div className="flex flex-wrap items-center gap-3">
-
-            {/* Tipo toggle */}
-            <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840] shrink-0">
-              {(['mensual', 'quincenal'] as TipoPeriodo[]).map(t => (
-                <button
-                  key={t}
-                  onClick={() => setTipo(t)}
-                  className={`px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-                    tipo === t
-                      ? 'bg-[#1B2980] text-white'
-                      : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
-                  }`}
-                >
-                  {t === 'mensual' ? 'Mensual' : 'Quincenal'}
-                </button>
-              ))}
-            </div>
-
-            {/* Month + Year */}
-            <select
-              value={mes}
-              onChange={e => setMes(Number(e.target.value))}
-              className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
-            >
-              {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
-            <select
-              value={anio}
-              onChange={e => setAnio(Number(e.target.value))}
-              className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
-            >
-              {anios.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
-
-            {/* Quincena selector */}
-            {tipo === 'quincenal' && (
-              <select
-                value={quincena}
-                onChange={e => setQuincena(Number(e.target.value) as 1 | 2)}
-                className="rounded-lg border border-violet-300 dark:border-violet-700/60 bg-violet-50 dark:bg-violet-950/30 text-violet-800 dark:text-violet-300 px-3 py-1.5 text-sm focus:border-violet-500 focus:outline-none"
-              >
-                <option value={1}>1ª Quincena (1–15)</option>
-                <option value={2}>2ª Quincena (16–fin)</option>
-              </select>
-            )}
-
-            <Badge variant="success" className="shrink-0">
-              <CheckCircle2 className="mr-1 h-3 w-3" />
-              Calculada
-            </Badge>
-
-            <div className="ml-auto shrink-0">
-              <button
-                onClick={handleGenerar}
-                className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
-              >
-                <PlayCircle className="h-4 w-4" />
-                Generar Nómina
-              </button>
-            </div>
-          </div>
-
-          {tipo === 'quincenal' && (
-            <p className="mt-2.5 text-[11px] text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
-              <Info className="h-3.5 w-3.5 shrink-0" />
-              {quincena === 1
-                ? '1ª quincena: anticipo sin ISR. El ISR mensual completo se liquida en la 2ª quincena.'
-                : '2ª quincena: incluye el ISR mensual completo del período.'}
-            </p>
-          )}
-        </div>
-
-        {/* ── KPIs ── */}
+        {/* KPIs */}
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           <StatCard
             label="Total Bruto"
@@ -469,21 +594,21 @@ export default function NominaPage() {
           <StatCard
             label="ISR Retenido"
             value={formatRD(totales.isr, 0)}
-            sub={tipo === 'quincenal' && quincena === 1 ? 'Anticipo — sin ISR' : 'Por remitir a DGII'}
+            sub={periodoActual.tipo === 'quincenal' && quincenaActual === 1 ? 'Anticipo — sin ISR' : 'Por remitir a DGII'}
             icon={Receipt}
             iconColor="bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
           />
         </div>
 
-        {/* ── Tabla empleados ── */}
+        {/* Employee table */}
         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
           <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              Detalle por Empleado — {periodoLabel}
+              Detalle por Empleado — {periodoActualLabel}
             </h2>
             <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
               <Info className="h-3.5 w-3.5" />
-              Haz clic en una fila para ver el comprobante
+              {esProcesada ? 'Puedes agregar ajustes por empleado' : 'Período cerrado (solo lectura)'}
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -491,57 +616,207 @@ export default function NominaPage() {
               <thead>
                 <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
                   <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Ajustes</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">S. Bruto</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">AFP Emp</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">SFS Emp</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">AFP+SFS</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ISR</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">T. Desc.</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 bg-[#eef0fb] dark:bg-indigo-950/40">S. Neto</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Costo Emp.</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
-                {nominas.map(({ empleado, resultado }) => (
-                  <tr
-                    key={empleado.id}
-                    className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer"
-                    onClick={() => setDetalle({ emp: empleado, nom: resultado })}
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#d5d9f4] dark:bg-indigo-900/40 text-xs font-bold text-[#151f66] dark:text-indigo-300">
-                          {empleado.nombre[0]}{empleado.apellido[0]}
-                        </div>
-                        <div>
-                          <p className="font-medium text-zinc-900 dark:text-zinc-100">{fullName(empleado)}</p>
-                          <p className="text-xs text-zinc-500 dark:text-zinc-400">{empleado.cargo}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3.5 text-right tabular-nums font-medium text-zinc-900 dark:text-zinc-100">{formatRD(resultado.totalBruto, 0)}</td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-rose-700 dark:text-rose-400">{formatRD(resultado.afpEmpleado, 0)}</td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-rose-700 dark:text-rose-400">{formatRD(resultado.sfsEmpleado, 0)}</td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-violet-700 dark:text-violet-400">
-                      {resultado.isrMensual === 0 ? <span className="text-zinc-300 dark:text-zinc-600">—</span> : formatRD(resultado.isrMensual, 0)}
-                    </td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-rose-800 dark:text-rose-400 font-medium">{formatRD(resultado.totalDescuentos, 0)}</td>
-                    <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#151f66] dark:text-indigo-300 bg-[#eef0fb]/60 dark:bg-indigo-950/30">{formatRD(resultado.salarioNeto, 0)}</td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-amber-700 dark:text-amber-400">{formatRD(resultado.totalCostoEmpleador, 0)}</td>
-                    <td className="px-4 py-3.5"><ChevronRight className="h-4 w-4 text-zinc-400 dark:text-zinc-500" /></td>
-                  </tr>
-                ))}
+              <tbody>
+                {nominas.map(({ empleado, resultado }) => {
+                  const ajustes    = ajustesPorEmp[empleado.id] ?? []
+                  const isExpanded = expandedEmpId === empleado.id
+
+                  return (
+                    <>
+                      <tr
+                        key={empleado.id}
+                        className="border-b border-zinc-50 dark:border-[#1d2035] hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors"
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#d5d9f4] dark:bg-indigo-900/40 text-xs font-bold text-[#151f66] dark:text-indigo-300">
+                              {empleado.nombre[0]}{empleado.apellido[0]}
+                            </div>
+                            <div>
+                              <p className="font-medium text-zinc-900 dark:text-zinc-100">{fullName(empleado)}</p>
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400">{empleado.cargo}</p>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Ajustes chips */}
+                        <td className="px-4 py-3.5 max-w-xs">
+                          <div className="flex flex-wrap items-center gap-1">
+                            {ajustes.map(a => (
+                              <span
+                                key={a.id}
+                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ${
+                                  a.tipo === 'ingreso'
+                                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800/50'
+                                    : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:ring-rose-800/50'
+                                }`}
+                              >
+                                {labelConcepto(a.concepto)}{' '}
+                                {isHorasConcepto(a.concepto) ? `${a.valor}h` : formatRD(a.valor, 0)}
+                                {esProcesada && (
+                                  <button
+                                    onClick={() => handleRemoveAjuste(empleado.id, a.id)}
+                                    className="ml-0.5 rounded-full hover:opacity-70 transition-opacity"
+                                    title="Eliminar ajuste"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </span>
+                            ))}
+                            {esProcesada && (
+                              <button
+                                onClick={() => isExpanded ? setExpandedEmpId(null) : openAjusteForm(empleado.id)}
+                                className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-zinc-100 dark:bg-[#252840] text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-[#2d3152] transition-colors"
+                                title="Agregar ajuste"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3.5 text-right tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
+                          {formatRD(resultado.totalBruto, 0)}
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums text-rose-700 dark:text-rose-400">
+                          {formatRD(resultado.afpEmpleado + resultado.sfsEmpleado, 0)}
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums text-violet-700 dark:text-violet-400">
+                          {resultado.isrMensual === 0
+                            ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                            : formatRD(resultado.isrMensual, 0)}
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#151f66] dark:text-indigo-300 bg-[#eef0fb]/60 dark:bg-indigo-950/30">
+                          {formatRD(resultado.salarioNeto, 0)}
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums text-amber-700 dark:text-amber-400">
+                          {formatRD(resultado.totalCostoEmpleador, 0)}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <button
+                            onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
+                            className="rounded-lg p-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] transition-colors"
+                            title="Ver comprobante"
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+
+                      {/* Inline ajuste form */}
+                      {isExpanded && (
+                        <tr
+                          key={`${empleado.id}-form`}
+                          className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]"
+                        >
+                          <td colSpan={8} className="px-5 py-4">
+                            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-3">
+                                Agregar ajuste — {fullName(empleado)}
+                              </p>
+                              <div className="flex flex-wrap items-end gap-3">
+
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Tipo</label>
+                                  <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                                    <button
+                                      onClick={() => { setNewTipo('ingreso'); setNewConcepto('bono') }}
+                                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${newTipo === 'ingreso' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'}`}
+                                    >
+                                      Ingreso
+                                    </button>
+                                    <button
+                                      onClick={() => { setNewTipo('deduccion'); setNewConcepto('prestamo') }}
+                                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${newTipo === 'deduccion' ? 'bg-rose-600 text-white' : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'}`}
+                                    >
+                                      Deducción
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Concepto</label>
+                                  <select
+                                    value={newConcepto}
+                                    onChange={e => setNewConcepto(e.target.value as ConceptoAjuste)}
+                                    className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                                  >
+                                    {(newTipo === 'ingreso' ? conceptosIngreso : conceptosDeduccion).map(c => (
+                                      <option key={c} value={c}>{labelConcepto(c)}</option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                                    {isHorasConcepto(newConcepto) ? 'Horas' : 'Monto RD$'}
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={newValor}
+                                    onChange={e => setNewValor(e.target.value)}
+                                    placeholder={isHorasConcepto(newConcepto) ? '0' : '0.00'}
+                                    min="0"
+                                    step={isHorasConcepto(newConcepto) ? '1' : '0.01'}
+                                    className="w-32 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                                  />
+                                </div>
+
+                                <div className="flex flex-col gap-1.5 flex-1 min-w-[160px]">
+                                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Descripción (opcional)</label>
+                                  <input
+                                    type="text"
+                                    value={newDesc}
+                                    onChange={e => setNewDesc(e.target.value)}
+                                    placeholder="Nota o referencia"
+                                    className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                                  />
+                                </div>
+
+                                <div className="flex gap-2 self-end">
+                                  <button
+                                    onClick={() => handleAgregarAjuste(empleado.id)}
+                                    disabled={!newValor || parseFloat(newValor) <= 0}
+                                    className="rounded-lg bg-[#1B2980] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#151f66] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    Agregar
+                                  </button>
+                                  <button
+                                    onClick={() => setExpandedEmpId(null)}
+                                    className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white">
-                  <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide">
+                  <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" colSpan={2}>
                     TOTALES — {empleadosActivos.length} empleados
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-bold">{formatRD(totales.bruto, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-rose-300">{formatRD(nominas.reduce((s,n) => s + n.resultado.afpEmpleado, 0), 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-rose-300">{formatRD(nominas.reduce((s,n) => s + n.resultado.sfsEmpleado, 0), 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-rose-300">
+                    {formatRD(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0), 0)}
+                  </td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-violet-300">{formatRD(totales.isr, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-rose-300 font-semibold">{formatRD(totales.descuentos, 0)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-bold text-indigo-300">{formatRD(totales.neto, 0)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-amber-300 font-bold">{formatRD(totales.costoTotal, 0)}</td>
                   <td />
@@ -551,14 +826,14 @@ export default function NominaPage() {
           </div>
         </div>
 
-        {/* ── Nota legal ── */}
-        <div className="rounded-xl border border-teal-100 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5">
+        {/* Nota legal */}
+        <div className="rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5">
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0" />
             <div className="text-xs text-[#151f66] dark:text-indigo-200 space-y-0.5">
               <p className="font-semibold">Normativa aplicada</p>
               <p>AFP 2.87% emp / 7.10% empr · SFS 3.04% emp / 7.09% empr · SRL 1.10% empr · Tope TSS RD$420,000</p>
-              {tipo === 'quincenal'
+              {periodoActual.tipo === 'quincenal'
                 ? <p>Quincenal: 1ª quincena = anticipo sin ISR · 2ª quincena = ISR mensual completo liquidado · Ley 11-92 Art. 309</p>
                 : <p>ISR calculado sobre base anual según tramos DGII vigentes · Ley 11-92 Art. 309</p>
               }
@@ -566,23 +841,18 @@ export default function NominaPage() {
           </div>
         </div>
 
-        {/* ── Historial ── */}
-        {periodos.length > 0 && (
-          <HistorialTable periodos={periodos} cerrar={cerrar} eliminar={eliminar} />
-        )}
-
       </div>
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
-      {detalle && (
+      {detalleModal && (
         <>
           <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm" />
           <DetalleNomina
-            empleado={detalle.emp}
-            nomina={detalle.nom}
-            periodoLabel={periodoLabel}
-            onClose={() => setDetalle(null)}
+            empleado={detalleModal.emp}
+            nomina={detalleModal.nom}
+            periodoLabel={periodoActualLabel}
+            onClose={() => setDetalleModal(null)}
           />
         </>
       )}
