@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react'
 import { Header } from '@/components/layout/Header'
 import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE } from '@/lib/dominican-labor'
 import { formatRD } from '@/lib/utils'
-import { Save, Settings, Info, Building2 } from 'lucide-react'
+import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle } from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
 import { Toast } from '@/components/ui/Toast'
+import { cargarDatosDemo } from '@/lib/seed-data'
 import type { Empresa } from '@/types'
 
 interface ParamRow {
@@ -115,12 +116,18 @@ const LABEL_CLASS = 'block text-xs font-medium text-zinc-500 dark:text-zinc-400 
 
 export default function ConfiguracionPage() {
   const { empresa, guardar } = useEmpresa()
-  const [form, setForm] = useState<Empresa>(empresa)
+  const [form, setForm]         = useState<Empresa>(empresa)
   const [showToast, setShowToast] = useState(false)
+  const [confirmDemo, setConfirmDemo] = useState(false)
 
   useEffect(() => {
     setForm(empresa)
   }, [empresa])
+
+  function handleCargarDemo() {
+    cargarDatosDemo()
+    window.location.reload()
+  }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -282,6 +289,73 @@ export default function ConfiguracionPage() {
             </form>
           </div>
         </section>
+
+        {/* Demo data loader */}
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-950/40">
+              <FlaskConical className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Datos de Demostración</h2>
+          </div>
+          <div className="rounded-xl border border-violet-200 dark:border-violet-800/40 bg-white dark:bg-[#141722] p-5">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-1">
+              Carga un escenario completo de demostración con 7 empleados, 2 préstamos activos y 4 períodos de nómina
+              cerrados (Marzo–Junio 2026), calculados conforme a la legislación vigente.
+            </p>
+            <ul className="mb-4 mt-2 space-y-1 text-xs text-zinc-500 dark:text-zinc-400 list-disc list-inside">
+              <li>Carlos Rodríguez — préstamo RD$80,000 (4 cuotas pagadas, saldo RD$53,333.32)</li>
+              <li>Ana Martínez — préstamo RD$18,000 (2 cuotas pagadas, saldo RD$12,000)</li>
+              <li>Bono de desempeño en Abril para María González (impacto en ISR)</li>
+              <li>Comisión en Junio para Luisa Reyes (eleva su base gravable a tramo II)</li>
+            </ul>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmDemo(true)}
+                className="flex items-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700/50 bg-violet-50 dark:bg-violet-950/30 px-4 py-2 text-sm font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors"
+              >
+                <FlaskConical className="h-4 w-4" />
+                Cargar Datos Demo
+              </button>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                Reemplaza todos los datos actuales. La página se recargará automáticamente.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* Confirm demo dialog */}
+        {confirmDemo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-2xl">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">¿Cargar datos demo?</p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Esto reemplazará todos los datos actuales (empleados, préstamos, períodos y empresa)
+                    con el escenario de demostración. Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 flex justify-end gap-3">
+                <button
+                  onClick={() => setConfirmDemo(false)}
+                  className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleCargarDemo}
+                  className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
+                >
+                  Sí, cargar demo
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Separator */}
         <div className="flex items-center gap-4">
