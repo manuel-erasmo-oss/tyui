@@ -37,44 +37,115 @@ interface Pais {
 }
 
 const PAISES: Pais[] = [
-  { code: 'DO', nombre: 'República Dominicana', bandera: '🇩🇴', docDefault: 'cedula' },
-  { code: 'US', nombre: 'Estados Unidos',       bandera: '🇺🇸', docDefault: 'pasaporte' },
-  { code: 'HT', nombre: 'Haití',                bandera: '🇭🇹', docDefault: 'pasaporte' },
-  { code: 'ES', nombre: 'España',               bandera: '🇪🇸', docDefault: 'pasaporte' },
-  { code: 'VE', nombre: 'Venezuela',            bandera: '🇻🇪', docDefault: 'pasaporte' },
-  { code: 'CO', nombre: 'Colombia',             bandera: '🇨🇴', docDefault: 'pasaporte' },
-  { code: 'MX', nombre: 'México',               bandera: '🇲🇽', docDefault: 'pasaporte' },
-  { code: 'CU', nombre: 'Cuba',                 bandera: '🇨🇺', docDefault: 'pasaporte' },
-  { code: 'PR', nombre: 'Puerto Rico',          bandera: '🇵🇷', docDefault: 'pasaporte' },
-  { code: 'PA', nombre: 'Panamá',               bandera: '🇵🇦', docDefault: 'pasaporte' },
-  { code: 'GT', nombre: 'Guatemala',            bandera: '🇬🇹', docDefault: 'pasaporte' },
-  { code: 'HN', nombre: 'Honduras',             bandera: '🇭🇳', docDefault: 'pasaporte' },
-  { code: 'SV', nombre: 'El Salvador',          bandera: '🇸🇻', docDefault: 'pasaporte' },
-  { code: 'NI', nombre: 'Nicaragua',            bandera: '🇳🇮', docDefault: 'pasaporte' },
-  { code: 'CR', nombre: 'Costa Rica',           bandera: '🇨🇷', docDefault: 'pasaporte' },
-  { code: 'JM', nombre: 'Jamaica',              bandera: '🇯🇲', docDefault: 'pasaporte' },
-  { code: 'TT', nombre: 'Trinidad y Tobago',    bandera: '🇹🇹', docDefault: 'pasaporte' },
-  { code: 'BR', nombre: 'Brasil',               bandera: '🇧🇷', docDefault: 'pasaporte' },
-  { code: 'AR', nombre: 'Argentina',            bandera: '🇦🇷', docDefault: 'pasaporte' },
-  { code: 'PE', nombre: 'Perú',                 bandera: '🇵🇪', docDefault: 'pasaporte' },
-  { code: 'EC', nombre: 'Ecuador',              bandera: '🇪🇨', docDefault: 'pasaporte' },
-  { code: 'CL', nombre: 'Chile',                bandera: '🇨🇱', docDefault: 'pasaporte' },
-  { code: 'BO', nombre: 'Bolivia',              bandera: '🇧🇴', docDefault: 'pasaporte' },
-  { code: 'PY', nombre: 'Paraguay',             bandera: '🇵🇾', docDefault: 'pasaporte' },
-  { code: 'UY', nombre: 'Uruguay',              bandera: '🇺🇾', docDefault: 'pasaporte' },
-  { code: 'CA', nombre: 'Canadá',               bandera: '🇨🇦', docDefault: 'pasaporte' },
-  { code: 'GB', nombre: 'Reino Unido',          bandera: '🇬🇧', docDefault: 'pasaporte' },
-  { code: 'FR', nombre: 'Francia',              bandera: '🇫🇷', docDefault: 'pasaporte' },
-  { code: 'IT', nombre: 'Italia',               bandera: '🇮🇹', docDefault: 'pasaporte' },
-  { code: 'DE', nombre: 'Alemania',             bandera: '🇩🇪', docDefault: 'pasaporte' },
-  { code: 'PT', nombre: 'Portugal',             bandera: '🇵🇹', docDefault: 'pasaporte' },
-  { code: 'NL', nombre: 'Países Bajos',         bandera: '🇳🇱', docDefault: 'pasaporte' },
-  { code: 'CN', nombre: 'China',                bandera: '🇨🇳', docDefault: 'pasaporte' },
-  { code: 'IN', nombre: 'India',                bandera: '🇮🇳', docDefault: 'pasaporte' },
-  { code: 'KR', nombre: 'Corea del Sur',        bandera: '🇰🇷', docDefault: 'pasaporte' },
-  { code: 'JP', nombre: 'Japón',                bandera: '🇯🇵', docDefault: 'pasaporte' },
-  { code: 'LB', nombre: 'Líbano',               bandera: '🇱🇧', docDefault: 'pasaporte' },
-  { code: 'SY', nombre: 'Siria',                bandera: '🇸🇾', docDefault: 'pasaporte' },
+  // ── Caribe / República Dominicana primero ──────────────────────────────────
+  { code: 'DO', nombre: 'República Dominicana',    bandera: '🇩🇴', docDefault: 'cedula' },
+  { code: 'HT', nombre: 'Haití',                   bandera: '🇭🇹', docDefault: 'pasaporte' },
+  { code: 'CU', nombre: 'Cuba',                    bandera: '🇨🇺', docDefault: 'pasaporte' },
+  { code: 'PR', nombre: 'Puerto Rico',             bandera: '🇵🇷', docDefault: 'pasaporte' },
+  { code: 'JM', nombre: 'Jamaica',                 bandera: '🇯🇲', docDefault: 'pasaporte' },
+  { code: 'TT', nombre: 'Trinidad y Tobago',       bandera: '🇹🇹', docDefault: 'pasaporte' },
+  { code: 'BB', nombre: 'Barbados',                bandera: '🇧🇧', docDefault: 'pasaporte' },
+  { code: 'BS', nombre: 'Bahamas',                 bandera: '🇧🇸', docDefault: 'pasaporte' },
+  { code: 'AG', nombre: 'Antigua y Barbuda',       bandera: '🇦🇬', docDefault: 'pasaporte' },
+  { code: 'DM', nombre: 'Dominica',                bandera: '🇩🇲', docDefault: 'pasaporte' },
+  { code: 'GD', nombre: 'Granada',                 bandera: '🇬🇩', docDefault: 'pasaporte' },
+  { code: 'LC', nombre: 'Santa Lucía',             bandera: '🇱🇨', docDefault: 'pasaporte' },
+  { code: 'VC', nombre: 'San Vicente y Granadinas',bandera: '🇻🇨', docDefault: 'pasaporte' },
+  { code: 'KN', nombre: 'San Cristóbal y Nieves',  bandera: '🇰🇳', docDefault: 'pasaporte' },
+  // ── América Central ────────────────────────────────────────────────────────
+  { code: 'GT', nombre: 'Guatemala',               bandera: '🇬🇹', docDefault: 'pasaporte' },
+  { code: 'HN', nombre: 'Honduras',                bandera: '🇭🇳', docDefault: 'pasaporte' },
+  { code: 'SV', nombre: 'El Salvador',             bandera: '🇸🇻', docDefault: 'pasaporte' },
+  { code: 'NI', nombre: 'Nicaragua',               bandera: '🇳🇮', docDefault: 'pasaporte' },
+  { code: 'CR', nombre: 'Costa Rica',              bandera: '🇨🇷', docDefault: 'pasaporte' },
+  { code: 'PA', nombre: 'Panamá',                  bandera: '🇵🇦', docDefault: 'pasaporte' },
+  { code: 'BZ', nombre: 'Belice',                  bandera: '🇧🇿', docDefault: 'pasaporte' },
+  // ── América del Sur ────────────────────────────────────────────────────────
+  { code: 'CO', nombre: 'Colombia',                bandera: '🇨🇴', docDefault: 'pasaporte' },
+  { code: 'VE', nombre: 'Venezuela',               bandera: '🇻🇪', docDefault: 'pasaporte' },
+  { code: 'BR', nombre: 'Brasil',                  bandera: '🇧🇷', docDefault: 'pasaporte' },
+  { code: 'AR', nombre: 'Argentina',               bandera: '🇦🇷', docDefault: 'pasaporte' },
+  { code: 'CL', nombre: 'Chile',                   bandera: '🇨🇱', docDefault: 'pasaporte' },
+  { code: 'PE', nombre: 'Perú',                    bandera: '🇵🇪', docDefault: 'pasaporte' },
+  { code: 'EC', nombre: 'Ecuador',                 bandera: '🇪🇨', docDefault: 'pasaporte' },
+  { code: 'BO', nombre: 'Bolivia',                 bandera: '🇧🇴', docDefault: 'pasaporte' },
+  { code: 'PY', nombre: 'Paraguay',                bandera: '🇵🇾', docDefault: 'pasaporte' },
+  { code: 'UY', nombre: 'Uruguay',                 bandera: '🇺🇾', docDefault: 'pasaporte' },
+  { code: 'GY', nombre: 'Guyana',                  bandera: '🇬🇾', docDefault: 'pasaporte' },
+  { code: 'SR', nombre: 'Surinam',                 bandera: '🇸🇷', docDefault: 'pasaporte' },
+  // ── América del Norte ──────────────────────────────────────────────────────
+  { code: 'MX', nombre: 'México',                  bandera: '🇲🇽', docDefault: 'pasaporte' },
+  { code: 'US', nombre: 'Estados Unidos',          bandera: '🇺🇸', docDefault: 'pasaporte' },
+  { code: 'CA', nombre: 'Canadá',                  bandera: '🇨🇦', docDefault: 'pasaporte' },
+  // ── Europa ─────────────────────────────────────────────────────────────────
+  { code: 'ES', nombre: 'España',                  bandera: '🇪🇸', docDefault: 'pasaporte' },
+  { code: 'PT', nombre: 'Portugal',                bandera: '🇵🇹', docDefault: 'pasaporte' },
+  { code: 'IT', nombre: 'Italia',                  bandera: '🇮🇹', docDefault: 'pasaporte' },
+  { code: 'FR', nombre: 'Francia',                 bandera: '🇫🇷', docDefault: 'pasaporte' },
+  { code: 'DE', nombre: 'Alemania',                bandera: '🇩🇪', docDefault: 'pasaporte' },
+  { code: 'GB', nombre: 'Reino Unido',             bandera: '🇬🇧', docDefault: 'pasaporte' },
+  { code: 'NL', nombre: 'Países Bajos',            bandera: '🇳🇱', docDefault: 'pasaporte' },
+  { code: 'BE', nombre: 'Bélgica',                 bandera: '🇧🇪', docDefault: 'pasaporte' },
+  { code: 'CH', nombre: 'Suiza',                   bandera: '🇨🇭', docDefault: 'pasaporte' },
+  { code: 'AT', nombre: 'Austria',                 bandera: '🇦🇹', docDefault: 'pasaporte' },
+  { code: 'SE', nombre: 'Suecia',                  bandera: '🇸🇪', docDefault: 'pasaporte' },
+  { code: 'NO', nombre: 'Noruega',                 bandera: '🇳🇴', docDefault: 'pasaporte' },
+  { code: 'DK', nombre: 'Dinamarca',               bandera: '🇩🇰', docDefault: 'pasaporte' },
+  { code: 'FI', nombre: 'Finlandia',               bandera: '🇫🇮', docDefault: 'pasaporte' },
+  { code: 'IE', nombre: 'Irlanda',                 bandera: '🇮🇪', docDefault: 'pasaporte' },
+  { code: 'PL', nombre: 'Polonia',                 bandera: '🇵🇱', docDefault: 'pasaporte' },
+  { code: 'CZ', nombre: 'República Checa',         bandera: '🇨🇿', docDefault: 'pasaporte' },
+  { code: 'RO', nombre: 'Rumania',                 bandera: '🇷🇴', docDefault: 'pasaporte' },
+  { code: 'HU', nombre: 'Hungría',                 bandera: '🇭🇺', docDefault: 'pasaporte' },
+  { code: 'GR', nombre: 'Grecia',                  bandera: '🇬🇷', docDefault: 'pasaporte' },
+  { code: 'TR', nombre: 'Turquía',                 bandera: '🇹🇷', docDefault: 'pasaporte' },
+  { code: 'UA', nombre: 'Ucrania',                 bandera: '🇺🇦', docDefault: 'pasaporte' },
+  { code: 'RU', nombre: 'Rusia',                   bandera: '🇷🇺', docDefault: 'pasaporte' },
+  // ── Oriente Medio ──────────────────────────────────────────────────────────
+  { code: 'LB', nombre: 'Líbano',                  bandera: '🇱🇧', docDefault: 'pasaporte' },
+  { code: 'SY', nombre: 'Siria',                   bandera: '🇸🇾', docDefault: 'pasaporte' },
+  { code: 'JO', nombre: 'Jordania',                bandera: '🇯🇴', docDefault: 'pasaporte' },
+  { code: 'IL', nombre: 'Israel',                  bandera: '🇮🇱', docDefault: 'pasaporte' },
+  { code: 'SA', nombre: 'Arabia Saudita',          bandera: '🇸🇦', docDefault: 'pasaporte' },
+  { code: 'AE', nombre: 'Emiratos Árabes Unidos',  bandera: '🇦🇪', docDefault: 'pasaporte' },
+  { code: 'KW', nombre: 'Kuwait',                  bandera: '🇰🇼', docDefault: 'pasaporte' },
+  { code: 'QA', nombre: 'Catar',                   bandera: '🇶🇦', docDefault: 'pasaporte' },
+  { code: 'IQ', nombre: 'Irak',                    bandera: '🇮🇶', docDefault: 'pasaporte' },
+  { code: 'IR', nombre: 'Irán',                    bandera: '🇮🇷', docDefault: 'pasaporte' },
+  // ── África ─────────────────────────────────────────────────────────────────
+  { code: 'EG', nombre: 'Egipto',                  bandera: '🇪🇬', docDefault: 'pasaporte' },
+  { code: 'MA', nombre: 'Marruecos',               bandera: '🇲🇦', docDefault: 'pasaporte' },
+  { code: 'DZ', nombre: 'Argelia',                 bandera: '🇩🇿', docDefault: 'pasaporte' },
+  { code: 'TN', nombre: 'Túnez',                   bandera: '🇹🇳', docDefault: 'pasaporte' },
+  { code: 'NG', nombre: 'Nigeria',                 bandera: '🇳🇬', docDefault: 'pasaporte' },
+  { code: 'GH', nombre: 'Ghana',                   bandera: '🇬🇭', docDefault: 'pasaporte' },
+  { code: 'SN', nombre: 'Senegal',                 bandera: '🇸🇳', docDefault: 'pasaporte' },
+  { code: 'CI', nombre: 'Costa de Marfil',         bandera: '🇨🇮', docDefault: 'pasaporte' },
+  { code: 'CM', nombre: 'Camerún',                 bandera: '🇨🇲', docDefault: 'pasaporte' },
+  { code: 'ET', nombre: 'Etiopía',                 bandera: '🇪🇹', docDefault: 'pasaporte' },
+  { code: 'KE', nombre: 'Kenia',                   bandera: '🇰🇪', docDefault: 'pasaporte' },
+  { code: 'TZ', nombre: 'Tanzania',                bandera: '🇹🇿', docDefault: 'pasaporte' },
+  { code: 'ZA', nombre: 'Sudáfrica',               bandera: '🇿🇦', docDefault: 'pasaporte' },
+  { code: 'AO', nombre: 'Angola',                  bandera: '🇦🇴', docDefault: 'pasaporte' },
+  { code: 'MZ', nombre: 'Mozambique',              bandera: '🇲🇿', docDefault: 'pasaporte' },
+  // ── Asia ───────────────────────────────────────────────────────────────────
+  { code: 'IN', nombre: 'India',                   bandera: '🇮🇳', docDefault: 'pasaporte' },
+  { code: 'PK', nombre: 'Pakistán',                bandera: '🇵🇰', docDefault: 'pasaporte' },
+  { code: 'BD', nombre: 'Bangladesh',              bandera: '🇧🇩', docDefault: 'pasaporte' },
+  { code: 'CN', nombre: 'China',                   bandera: '🇨🇳', docDefault: 'pasaporte' },
+  { code: 'JP', nombre: 'Japón',                   bandera: '🇯🇵', docDefault: 'pasaporte' },
+  { code: 'KR', nombre: 'Corea del Sur',           bandera: '🇰🇷', docDefault: 'pasaporte' },
+  { code: 'TW', nombre: 'Taiwán',                  bandera: '🇹🇼', docDefault: 'pasaporte' },
+  { code: 'HK', nombre: 'Hong Kong',               bandera: '🇭🇰', docDefault: 'pasaporte' },
+  { code: 'SG', nombre: 'Singapur',                bandera: '🇸🇬', docDefault: 'pasaporte' },
+  { code: 'MY', nombre: 'Malasia',                 bandera: '🇲🇾', docDefault: 'pasaporte' },
+  { code: 'ID', nombre: 'Indonesia',               bandera: '🇮🇩', docDefault: 'pasaporte' },
+  { code: 'PH', nombre: 'Filipinas',               bandera: '🇵🇭', docDefault: 'pasaporte' },
+  { code: 'TH', nombre: 'Tailandia',               bandera: '🇹🇭', docDefault: 'pasaporte' },
+  { code: 'VN', nombre: 'Vietnam',                 bandera: '🇻🇳', docDefault: 'pasaporte' },
+  // ── Oceanía ────────────────────────────────────────────────────────────────
+  { code: 'AU', nombre: 'Australia',               bandera: '🇦🇺', docDefault: 'pasaporte' },
+  { code: 'NZ', nombre: 'Nueva Zelanda',           bandera: '🇳🇿', docDefault: 'pasaporte' },
 ]
 
 const inputCls = 'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10'
@@ -320,6 +391,127 @@ function NacionalidadSelect({
             ))}
             {filtered.length === 0 && (
               <li className="px-4 py-3 text-xs text-zinc-400 dark:text-zinc-500 text-center">Sin resultados</li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Supervisor selector (searchable, enabled only when dept is chosen) ────────
+function SupervisorSelect({
+  value, onChange, candidatos, disabled,
+}: {
+  value: string
+  onChange: (id: string) => void
+  candidatos: Empleado[]
+  disabled: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const ref = useRef<HTMLDivElement>(null)
+  const selected = candidatos.find(e => e.id === value)
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filtered = query.trim()
+    ? candidatos.filter(e => fullName(e).toLowerCase().includes(query.toLowerCase()) ||
+        e.cargo.toLowerCase().includes(query.toLowerCase()))
+    : candidatos
+
+  const triggerCls = disabled
+    ? 'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#16192a] px-3 py-2 text-sm text-zinc-400 dark:text-zinc-600 cursor-not-allowed flex items-center gap-2'
+    : `${inputCls} flex items-center gap-2 text-left`
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => { if (!disabled) { setOpen(o => !o); setQuery('') } }}
+        className={triggerCls}
+      >
+        {disabled ? (
+          <span className="flex-1 italic text-zinc-400 dark:text-zinc-600">Seleccione primero un departamento</span>
+        ) : selected ? (
+          <>
+            <EmpleadoAvatar emp={selected} size="sm" />
+            <span className="flex-1 text-left">{fullName(selected)}</span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">{selected.cargo}</span>
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onChange('') }}
+              className="ml-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <User className="h-4 w-4 text-zinc-400 shrink-0" />
+            <span className="flex-1 text-zinc-400 dark:text-zinc-500">— Sin supervisor asignado —</span>
+            <svg className="h-4 w-4 text-zinc-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </>
+        )}
+      </button>
+
+      {open && !disabled && (
+        <div className="absolute z-50 mt-1 w-full rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] shadow-xl overflow-hidden">
+          <div className="p-2 border-b border-zinc-100 dark:border-[#252840]">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Buscar por nombre o cargo…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              className="w-full rounded-lg bg-zinc-50 dark:bg-[#141722] px-3 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
+            />
+          </div>
+          <ul className="max-h-56 overflow-y-auto py-1">
+            <li>
+              <button
+                type="button"
+                onClick={() => { onChange(''); setOpen(false); setQuery('') }}
+                className={`flex w-full items-center gap-3 px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#252840] transition-colors italic ${!value ? 'bg-zinc-50 dark:bg-[#252840]' : ''}`}
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-600">
+                  <X className="h-3.5 w-3.5 text-zinc-400" />
+                </span>
+                <span>Sin supervisor asignado</span>
+              </button>
+            </li>
+            {filtered.map(emp => (
+              <li key={emp.id}>
+                <button
+                  type="button"
+                  onClick={() => { onChange(emp.id); setOpen(false); setQuery('') }}
+                  className={`flex w-full items-center gap-3 px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-[#252840] transition-colors ${
+                    value === emp.id ? 'bg-indigo-50 dark:bg-indigo-950/30' : ''
+                  }`}
+                >
+                  <EmpleadoAvatar emp={emp} size="sm" />
+                  <div className="flex-1 text-left">
+                    <p className={`font-medium ${value === emp.id ? 'text-[#1B2980] dark:text-indigo-300' : 'text-zinc-800 dark:text-zinc-200'}`}>
+                      {fullName(emp)}
+                    </p>
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500">{emp.cargo} · {emp.departamento}</p>
+                  </div>
+                </button>
+              </li>
+            ))}
+            {filtered.length === 0 && (
+              <li className="px-4 py-3 text-xs text-zinc-400 dark:text-zinc-500 text-center">
+                No se encontraron empleados
+              </li>
             )}
           </ul>
         </div>
@@ -723,14 +915,20 @@ function EmpleadoFormModal({
                     </div>
                   )}
                   <div>
-                    <label className={labelCls}>Supervisor Directo</label>
-                    <select className={inputCls} value={form.supervisorId}
-                      onChange={e => set('supervisorId', e.target.value)}>
-                      <option value="">— Sin supervisor asignado —</option>
-                      {supervisores.map(s => (
-                        <option key={s.id} value={s.id}>{fullName(s)} · {s.cargo}</option>
-                      ))}
-                    </select>
+                    <label className={labelCls}>
+                      Supervisor Directo
+                      {!form.departamento && (
+                        <span className="ml-1.5 text-amber-500 dark:text-amber-400 font-normal normal-case tracking-normal">
+                          — seleccione un departamento primero
+                        </span>
+                      )}
+                    </label>
+                    <SupervisorSelect
+                      value={form.supervisorId}
+                      onChange={id => set('supervisorId', id)}
+                      candidatos={supervisores}
+                      disabled={!form.departamento.trim()}
+                    />
                   </div>
                 </div>
               </section>
