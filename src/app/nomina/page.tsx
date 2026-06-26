@@ -851,26 +851,26 @@ export default function NominaPage() {
                         <td className="px-4 py-3.5 text-right tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
                           {formatRD(resultado.totalBruto, 0)}
                         </td>
-                        <td className="px-4 py-3.5 text-right tabular-nums text-rose-700 dark:text-rose-400">
+                        <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {formatRD(resultado.afpEmpleado + resultado.sfsEmpleado, 0)}
                         </td>
-                        <td className="px-4 py-3.5 text-right tabular-nums text-violet-700 dark:text-violet-400">
+                        <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {resultado.isrMensual === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
                             : formatRD(resultado.isrMensual, 0)}
                         </td>
-                        <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#151f66] dark:text-indigo-300 bg-[#eef0fb]/60 dark:bg-indigo-950/30">
+                        <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#151f66] dark:text-indigo-300 bg-[#eef0fb]/50 dark:bg-indigo-950/20">
                           {formatRD(resultado.salarioNeto, 0)}
                         </td>
-                        <td className="px-4 py-3.5 text-right tabular-nums text-amber-700 dark:text-amber-400">
+                        <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {formatRD(resultado.totalCostoEmpleador, 0)}
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             {esEnProceso && !isProcesado && (
                               <button
                                 onClick={() => handleProcesarEmpleado(empleado.id)}
-                                className="rounded-lg px-2 py-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                                className="rounded-md border border-emerald-300 dark:border-emerald-700/50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
                                 title="Procesar este empleado"
                               >
                                 Procesar
@@ -987,12 +987,12 @@ export default function NominaPage() {
                     TOTALES — {empleadosActivos.length} empleados
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-bold">{formatRD(totales.bruto, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-rose-300">
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-400">
                     {formatRD(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0), 0)}
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-violet-300">{formatRD(totales.isr, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-400">{formatRD(totales.isr, 0)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-bold text-indigo-300">{formatRD(totales.neto, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-amber-300 font-bold">{formatRD(totales.costoTotal, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-zinc-300">{formatRD(totales.costoTotal, 0)}</td>
                   <td />
                 </tr>
               </tfoot>
