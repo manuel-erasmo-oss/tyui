@@ -237,7 +237,7 @@ export default function AumentosPage() {
                       <tr
                         key={emp.id}
                         onClick={() => toggleSeleccion(emp.id)}
-                        className={`hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] cursor-pointer transition-colors ${
+                        className={`hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 cursor-pointer transition-colors ${
                           isSelected ? 'bg-[#eef0fb]/40 dark:bg-indigo-950/20' : ''
                         }`}
                       >
@@ -346,7 +346,7 @@ export default function AumentosPage() {
                 disabled={!canApply}
                 className={`shrink-0 px-6 py-2 rounded-lg font-semibold text-sm transition-colors ${
                   canApply
-                    ? 'bg-[#1B2980] text-white hover:bg-[#152070]'
+                    ? 'bg-[#1B2980] text-white hover:bg-[#151f66]'
                     : 'bg-zinc-200 dark:bg-[#252840] text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
                 }`}
               >

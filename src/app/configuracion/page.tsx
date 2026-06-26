@@ -87,7 +87,7 @@ function ParamTable({ rows }: { rows: ParamRow[] }) {
     <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840]">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-zinc-100 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e]">
+          <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
             <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Parámetro</th>
             <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Valor</th>
             <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Descripción</th>
@@ -110,7 +110,7 @@ function ParamTable({ rows }: { rows: ParamRow[] }) {
 }
 
 const INPUT_CLASS =
-  'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10'
+  'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10'
 
 const LABEL_CLASS = 'block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1'
 
@@ -280,7 +280,7 @@ export default function ConfiguracionPage() {
               <div className="flex justify-end pt-2">
                 <button
                   type="submit"
-                  className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-medium text-white hover:bg-[#151f66] focus:outline-none focus:ring-2 focus:ring-[#1B2980]/40 transition-colors"
+                  className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] focus:outline-none focus:ring-2 focus:ring-[#1B2980]/40 transition-colors"
                 >
                   <Save className="h-4 w-4" />
                   Guardar datos
@@ -313,7 +313,7 @@ export default function ConfiguracionPage() {
               <button
                 type="button"
                 onClick={() => setConfirmDemo(true)}
-                className="flex items-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700/50 bg-violet-50 dark:bg-violet-950/30 px-4 py-2 text-sm font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors"
+                className="flex items-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700/50 bg-violet-50 dark:bg-violet-950/30 px-4 py-2 text-sm font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors"
               >
                 <FlaskConical className="h-4 w-4" />
                 Cargar Datos Demo
@@ -366,7 +366,7 @@ export default function ConfiguracionPage() {
           <div className="flex-1 border-t border-zinc-200 dark:border-[#252840]" />
         </div>
 
-        <div className="rounded-xl border border-teal-100 dark:border-indigo-800/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5 flex items-center gap-3">
+        <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5 flex items-center gap-3">
           <Info className="h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0" />
           <p className="text-xs text-[#151f66] dark:text-indigo-200">
             Los parámetros mostrados reflejan la legislación vigente en la República Dominicana.

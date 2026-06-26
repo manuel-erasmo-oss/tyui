@@ -32,12 +32,12 @@ export function Toast({ message, type = 'success', onClose, duration = 3000 }: T
   }
 
   return (
-    <div className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-4 py-3 shadow-xl dark:shadow-2xl ${exiting ? 'animate-toast-out' : 'animate-toast-in'}`}>
+    <div className={`fixed bottom-6 right-6 z-[100] flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-4 py-3 shadow-2xl dark:shadow-none ${exiting ? 'animate-toast-out' : 'animate-toast-in'}`}>
       {ICONS[type]}
       <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{message}</p>
       <button
         onClick={handleClose}
-        className="ml-1 rounded p-0.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+        className="ml-1 rounded-lg p-0.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
       >
         <X className="h-3.5 w-3.5" />
       </button>

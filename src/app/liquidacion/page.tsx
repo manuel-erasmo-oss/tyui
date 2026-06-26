@@ -51,7 +51,7 @@ const LEGAL_NOTES: Record<Motivo, { title: string; text: string }> = {
 }
 
 const INPUT_CLASS =
-  'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none'
+  'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none'
 
 export default function LiquidacionPage() {
   const { empleadosActivos } = useEmpleados()
@@ -429,11 +429,11 @@ export default function LiquidacionPage() {
             )}
 
             {/* Total a Pagar */}
-            <div className="rounded-xl bg-zinc-950 dark:bg-[#080a12] text-white shadow-lg overflow-hidden">
+            <div className="rounded-xl bg-zinc-950 dark:bg-[#080a12] text-white shadow-sm dark:shadow-none overflow-hidden">
               <div className="px-6 py-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                       {MOTIVO_LABELS[motivo]}
                     </p>
                     <p className="mt-1 text-sm text-zinc-400">Total Neto a Pagar al Empleado</p>

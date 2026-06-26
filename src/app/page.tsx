@@ -51,7 +51,7 @@ function ChartCard({
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-5 shadow-sm flex flex-col gap-3">
       <div className="flex items-start justify-between">
-        <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{label}</p>
         <button className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
           {period} <MoreHorizontal className="h-3.5 w-3.5" />
         </button>
@@ -246,8 +246,8 @@ export default function DashboardPage() {
             {/* Retenciones */}
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-5 shadow-sm">
               <div className="flex items-start justify-between mb-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Retenciones</p>
-                <button className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Retenciones</p>
+                <button className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
                   <MoreHorizontal className="h-3.5 w-3.5" />
                 </button>
               </div>
@@ -266,7 +266,7 @@ export default function DashboardPage() {
                       <span className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
                         {row.label}
                         {row.badge && (
-                          <span className="rounded bg-zinc-100 dark:bg-[#1a1d2e] px-1 py-0.5 text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase">{row.badge}</span>
+                          <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-1 py-0.5 text-[9px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase">{row.badge}</span>
                         )}
                       </span>
                       <span className="text-xs font-semibold tabular-nums text-zinc-700 dark:text-zinc-300">{formatK(row.value)}</span>
@@ -285,7 +285,7 @@ export default function DashboardPage() {
             {/* Tareas */}
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm">
               <div className="flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Tareas</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Tareas</p>
                 <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-950/50 text-[10px] font-bold text-amber-700 dark:text-amber-400 flex items-center justify-center">
                   {tareas.length}
                 </span>
@@ -310,7 +310,7 @@ export default function DashboardPage() {
                     </div>
                     <Link
                       href={t.href}
-                      className="shrink-0 rounded border border-zinc-200 dark:border-[#252840] px-3 py-1 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                      className="shrink-0 rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-1 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
                     >
                       Ir
                     </Link>
@@ -322,7 +322,7 @@ export default function DashboardPage() {
             {/* Empleados activos */}
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm">
               <div className="flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-                <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Empleados</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Empleados</p>
                 <Link href="/empleados" className="text-xs text-[#1B2980] dark:text-indigo-400 hover:underline flex items-center gap-0.5">
                   Ver todos <ArrowRight className="h-3 w-3" />
                 </Link>
