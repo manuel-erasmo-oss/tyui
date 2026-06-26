@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { Header } from '@/components/layout/Header'
 import { useEmpleados } from '@/lib/empleados-context'
+import { usePrestamos } from '@/lib/prestamos-context'
 import { calcularCesantia, calcularPreaviso } from '@/lib/dominican-labor'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
-import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote } from 'lucide-react'
+import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins } from 'lucide-react'
 
 type Motivo = 'renuncia' | 'despido_sin_causa' | 'despido_con_causa' | 'mutuo_acuerdo'
 
@@ -54,15 +55,18 @@ const INPUT_CLASS =
 
 export default function LiquidacionPage() {
   const { empleadosActivos } = useEmpleados()
+  const { getPrestamosActivos, registrarPago } = usePrestamos()
   const [empleadoId, setEmpleadoId] = useState<string>('')
   const [motivo, setMotivo] = useState<Motivo | ''>('')
   const [fechaTerminacion, setFechaTerminacion] = useState<string>(
     new Date().toISOString().split('T')[0]
   )
+  const [prestamosADescontar, setPrestamosADescontar] = useState<string[]>([])
   const [, setToast] = useState<string | null>(null)
 
   // ── Calculation ────────────────────────────────────────────────────────────
   const emp = empleadosActivos.find(e => e.id === empleadoId) ?? null
+  const prestamosActivos = emp ? getPrestamosActivos(emp.id) : []
 
   const resultado = (() => {
     if (!emp || !motivo) return null
@@ -91,27 +95,52 @@ export default function LiquidacionPage() {
 
     const regalia = (emp.salarioBase / 12) * mesesEnAnio
 
-    const total = cesantia + preaviso + vacaciones + regalia
+    const subtotal = cesantia + preaviso + vacaciones + regalia
+    const totalPrestamos = prestamosADescontar.reduce((s, pid) => {
+      const p = prestamosActivos.find(x => x.id === pid)
+      return s + (p?.saldoPendiente ?? 0)
+    }, 0)
+    const total = Math.max(0, subtotal - totalPrestamos)
 
-    return { anosServicio, mesesEnAnio, cesantia, preaviso, vacaciones, regalia, total }
+    return { anosServicio, mesesEnAnio, cesantia, preaviso, vacaciones, regalia, subtotal, totalPrestamos, total }
   })()
 
   function handleExportCSV() {
     if (!emp || !resultado || !motivo) return
-    const { cesantia, preaviso, vacaciones, regalia, total } = resultado
+    const { cesantia, preaviso, vacaciones, regalia, subtotal, totalPrestamos, total } = resultado
+    const rows: (string | number)[][] = [
+      ['Cesantía', cesantia > 0 ? 'Sí' : 'No', cesantia.toFixed(2)],
+      ['Preaviso', preaviso > 0 ? 'Sí' : 'No', preaviso.toFixed(2)],
+      ['Vacaciones No Gozadas', 'Sí', vacaciones.toFixed(2)],
+      ['Regalía Proporcional', 'Sí', regalia.toFixed(2)],
+      ['Subtotal Prestaciones', '', subtotal.toFixed(2)],
+    ]
+    if (totalPrestamos > 0) {
+      rows.push(['Descuento Préstamos Pendientes', 'Sí', (-totalPrestamos).toFixed(2)])
+    }
+    rows.push(['TOTAL NETO A PAGAR', '', total.toFixed(2)])
     exportarCSV(
       `liquidacion_${fullName(emp).replace(/\s+/g, '_')}_${fechaTerminacion}.csv`,
       ['Concepto', 'Aplica', 'Monto (RD$)'],
-      [
-        ['Cesantía', cesantia > 0 ? 'Sí' : 'No', cesantia.toFixed(2)],
-        ['Preaviso', preaviso > 0 ? 'Sí' : 'No', preaviso.toFixed(2)],
-        ['Vacaciones No Gozadas', 'Sí', vacaciones.toFixed(2)],
-        ['Regalía Proporcional', 'Sí', regalia.toFixed(2)],
-        ['TOTAL', '', total.toFixed(2)],
-      ]
+      rows,
     )
     setToast('CSV exportado')
     setTimeout(() => setToast(null), 2500)
+  }
+
+  function handleFinalizarLiquidacion() {
+    if (!emp || !resultado) return
+    // Register loan payments as liquidation payments
+    for (const pid of prestamosADescontar) {
+      const p = prestamosActivos.find(x => x.id === pid)
+      if (!p) continue
+      registrarPago(p.id, {
+        fecha: new Date().toISOString(),
+        montoPagado: p.saldoPendiente,
+        esLiquidacion: true,
+      })
+    }
+    handleExportCSV()
   }
 
   const legalNote = motivo ? LEGAL_NOTES[motivo] : null
@@ -344,6 +373,61 @@ export default function LiquidacionPage() {
               </div>
             </div>
 
+            {/* Préstamos pendientes */}
+            {prestamosActivos.length > 0 && (
+              <div className="rounded-xl border border-rose-200 dark:border-rose-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
+                <div className="border-b border-rose-100 dark:border-rose-900/40 px-5 py-4 flex items-center gap-2">
+                  <HandCoins className="h-4 w-4 text-rose-500 dark:text-rose-400 shrink-0" />
+                  <div>
+                    <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Préstamos Pendientes</h2>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Seleccione los préstamos a descontar del finiquito</p>
+                  </div>
+                </div>
+                <div className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                  {prestamosActivos.map(p => (
+                    <label
+                      key={p.id}
+                      className="flex items-center gap-4 px-5 py-3.5 cursor-pointer hover:bg-rose-50/40 dark:hover:bg-rose-950/10 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={prestamosADescontar.includes(p.id)}
+                        onChange={e => setPrestamosADescontar(prev =>
+                          e.target.checked ? [...prev, p.id] : prev.filter(id => id !== p.id)
+                        )}
+                        className="h-4 w-4 rounded border-zinc-300 dark:border-[#252840] text-[#1B2980] focus:ring-[#1B2980]/30"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          {p.notas || 'Préstamo'}
+                        </p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          Original: {formatRD(p.monto, 0)} · {p.cuotas} cuotas
+                          {p.tasaInteres > 0 && ` · ${p.tasaInteres}% mensual`}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">
+                          {formatRD(p.saldoPendiente, 2)}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500">saldo pendiente</p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {prestamosADescontar.length > 0 && (
+                  <div className="border-t border-rose-100 dark:border-rose-900/40 px-5 py-3 flex items-center justify-between bg-rose-50/50 dark:bg-rose-950/20">
+                    <span className="text-xs text-rose-700 dark:text-rose-400 font-medium">
+                      Total a descontar del finiquito
+                    </span>
+                    <span className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">
+                      ({formatRD(resultado.totalPrestamos, 2)})
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Total a Pagar */}
             <div className="rounded-xl bg-zinc-950 dark:bg-[#080a12] text-white shadow-lg overflow-hidden">
               <div className="px-6 py-5">
@@ -352,7 +436,7 @@ export default function LiquidacionPage() {
                     <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
                       {MOTIVO_LABELS[motivo]}
                     </p>
-                    <p className="mt-1 text-sm text-zinc-400">Total a Pagar al Empleado</p>
+                    <p className="mt-1 text-sm text-zinc-400">Total Neto a Pagar al Empleado</p>
                   </div>
                   <div className="text-right">
                     <p className="text-3xl font-bold tabular-nums tracking-tight text-white">
@@ -382,19 +466,36 @@ export default function LiquidacionPage() {
                     <p className="text-zinc-500 uppercase tracking-wide">Regalía</p>
                     <p className="font-semibold mt-0.5 text-emerald-300">{formatRD(resultado.regalia, 0)}</p>
                   </div>
+                  {resultado.totalPrestamos > 0 && (
+                    <div className="col-span-2 md:col-span-4 border-t border-zinc-800 pt-3">
+                      <p className="text-zinc-500 uppercase tracking-wide">Desc. Préstamos</p>
+                      <p className="font-semibold mt-0.5 text-rose-400">
+                        ({formatRD(resultado.totalPrestamos, 0)})
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Export CSV button */}
-            <div className="flex justify-end">
+            {/* Actions */}
+            <div className="flex justify-end gap-3">
               <button
                 onClick={handleExportCSV}
                 className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors"
               >
                 <Download className="h-4 w-4" />
-                Exportar Liquidación (CSV)
+                Exportar CSV
               </button>
+              {prestamosADescontar.length > 0 && (
+                <button
+                  onClick={handleFinalizarLiquidacion}
+                  className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
+                >
+                  <Download className="h-4 w-4" />
+                  Finalizar y Exportar
+                </button>
+              )}
             </div>
           </>
         )}

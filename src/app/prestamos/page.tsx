@@ -472,17 +472,14 @@ export default function PrestamosPage() {
     e.preventDefault()
     if (!fEmpleado || previewMonto <= 0 || previewCuotas <= 0) return
     otorgar({
-      empleadoId:       fEmpleado,
-      monto:            previewMonto,
-      saldoPendiente:   previewMonto,
-      tasaInteres:      previewTasa,
-      cuotas:           previewCuotas,
-      cuotaBase:        previewCuota,
-      frecuencia:       fFrecuencia,
+      empleadoId:        fEmpleado,
+      monto:             previewMonto,
+      tasaInteres:       previewTasa,
+      cuotas:            previewCuotas,
+      cuotaBase:         previewCuota,
+      frecuencia:        fFrecuencia,
       fechaOtorgamiento: new Date().toISOString().split('T')[0],
-      estado:           'activo',
-      pagos:            [],
-      notas:            fNotas.trim() || undefined,
+      notas:             fNotas.trim() || undefined,
     })
     // Reset form
     setFEmpleado('')
@@ -500,9 +497,12 @@ export default function PrestamosPage() {
     setToast('Préstamo cancelado')
   }
 
-  function handleRegistrarPago(prestamoId: string, monto: number, descripcion: string) {
-    registrarPago(prestamoId, monto, descripcion)
-    // Refresh selected loan
+  function handleRegistrarPago(prestamoId: string, monto: number) {
+    registrarPago(prestamoId, {
+      fecha: new Date().toISOString(),
+      montoPagado: monto,
+      esLiquidacion: false,
+    })
     const updated = prestamos.find(p => p.id === prestamoId)
     if (updated) setPrestamoSeleccionado(updated)
     setToast('Pago registrado exitosamente')

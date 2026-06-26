@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
+import { usePrestamos } from '@/lib/prestamos-context'
 import { calcularNomina, calcularNominaQuincenal } from '@/lib/dominican-labor'
 import { formatRD, fullName } from '@/lib/utils'
 import type {
@@ -221,6 +222,7 @@ export default function NominaPage() {
   const { empleadosActivos } = useEmpleados()
   const { periodos, generar, cerrar, eliminar, actualizarAjustes } = usePeriodos()
   const { empresa } = useEmpresa()
+  const { getPrestamosActivos, registrarPago } = usePrestamos()
 
   // View state
   const [periodoAbierto, setPeriodoAbierto] = useState<string | null>(null)
@@ -262,18 +264,53 @@ export default function NominaPage() {
   }
 
   function handleCrearPeriodo() {
+    // Pre-load active loan installments as deductions per employee
+    const ajustesIniciales: Record<string, AjusteLinea[]> = {}
+    for (const emp of empleadosActivos) {
+      const loans = getPrestamosActivos(emp.id)
+      if (loans.length > 0) {
+        ajustesIniciales[emp.id] = loans.map(p => ({
+          id: `loan-${p.id}`,
+          tipo: 'deduccion' as const,
+          concepto: 'prestamo' as const,
+          descripcion: p.notas ? `Préstamo — ${p.notas}` : 'Préstamo',
+          valor: p.cuotaBase,
+          prestamoId: p.id,
+        }))
+      }
+    }
     const nuevo = generar({
-      tipo:            nuevoTipo,
-      quincena:        nuevoTipo === 'quincenal' ? nuevaQuincena : undefined,
-      mes:             nuevoMes,
-      anio:            nuevoAnio,
-      estado:          'procesada',
-      totalEmpleados:  empleadosActivos.length,
-      totales:         calcularTotalesRapido(),
-      ajustesPorEmpleado: {},
+      tipo:               nuevoTipo,
+      quincena:           nuevoTipo === 'quincenal' ? nuevaQuincena : undefined,
+      mes:                nuevoMes,
+      anio:               nuevoAnio,
+      estado:             'procesada',
+      totalEmpleados:     empleadosActivos.length,
+      totales:            calcularTotalesRapido(),
+      ajustesPorEmpleado: ajustesIniciales,
     })
     setPeriodoAbierto(nuevo.id)
-    setToast('Período creado correctamente')
+    setToast('Período creado · Cuotas de préstamos pre-cargadas')
+  }
+
+  function handleCerrarPeriodo() {
+    if (!periodoActual) return
+    // Register actual paid amounts against each loan
+    const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
+    for (const ajustes of Object.values(ajustesPorEmp)) {
+      for (const ajuste of ajustes) {
+        if (ajuste.concepto === 'prestamo' && ajuste.prestamoId && ajuste.valor > 0) {
+          registrarPago(ajuste.prestamoId, {
+            periodoId: periodoActual.id,
+            fecha: new Date().toISOString(),
+            montoPagado: ajuste.valor,
+            esLiquidacion: false,
+          })
+        }
+      }
+    }
+    cerrar(periodoActual.id)
+    setToast('Período cerrado · Pagos de préstamos registrados')
   }
 
   function handleExportar() {
@@ -548,7 +585,7 @@ export default function NominaPage() {
             </button>
             {esProcesada && (
               <button
-                onClick={() => { cerrar(periodoActual.id); setToast('Período cerrado correctamente') }}
+                onClick={handleCerrarPeriodo}
                 className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
               >
                 <Lock className="h-4 w-4" />
