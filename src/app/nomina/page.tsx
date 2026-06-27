@@ -754,7 +754,7 @@ export default function NominaPage() {
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">S. Bruto</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">AFP+SFS</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ISR</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 bg-[#eef0fb] dark:bg-indigo-950/40">S. Neto</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">S. Neto</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Costo Emp.</th>
                   <th className="px-4 py-3" />
                 </tr>
@@ -797,16 +797,16 @@ export default function NominaPage() {
 
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
-                            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
                               isProcesado
                                 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
-                                : 'bg-[#d5d9f4] dark:bg-indigo-900/40 text-[#151f66] dark:text-indigo-300'
+                                : 'bg-[#eef0fb] dark:bg-indigo-900/40 text-[#1B2980] dark:text-indigo-300'
                             }`}>
                               {empleado.nombre[0]}{empleado.apellido[0]}
                             </div>
                             <div>
-                              <p className="font-medium text-zinc-900 dark:text-zinc-100">{fullName(empleado)}</p>
-                              <p className="text-xs text-zinc-500 dark:text-zinc-400">{empleado.cargo}</p>
+                              <p className="font-medium text-[#1B2980] dark:text-indigo-400 leading-tight">{fullName(empleado)}</p>
+                              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-tight mt-0.5">{empleado.cedula} · {empleado.cargo}</p>
                             </div>
                           </div>
                         </td>
@@ -848,7 +848,7 @@ export default function NominaPage() {
                           </div>
                         </td>
 
-                        <td className="px-4 py-3.5 text-right tabular-nums font-medium text-zinc-900 dark:text-zinc-100">
+                        <td className="px-4 py-3.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                           {formatRD(resultado.totalBruto, 0)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
@@ -859,7 +859,7 @@ export default function NominaPage() {
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
                             : formatRD(resultado.isrMensual, 0)}
                         </td>
-                        <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#151f66] dark:text-indigo-300 bg-[#eef0fb]/50 dark:bg-indigo-950/20">
+                        <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
                           {formatRD(resultado.salarioNeto, 0)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
@@ -986,13 +986,13 @@ export default function NominaPage() {
                   <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" colSpan={esEnProceso ? 3 : 2}>
                     TOTALES — {empleadosActivos.length} empleados
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-bold">{formatRD(totales.bruto, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold">{formatRD(totales.bruto, 0)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-zinc-400">
                     {formatRD(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0), 0)}
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-zinc-400">{formatRD(totales.isr, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-indigo-300">{formatRD(totales.neto, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-zinc-300">{formatRD(totales.costoTotal, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-indigo-200">{formatRD(totales.neto, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-400">{formatRD(totales.costoTotal, 0)}</td>
                   <td />
                 </tr>
               </tfoot>
