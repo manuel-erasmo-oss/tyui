@@ -31,7 +31,13 @@ export interface AjusteLinea {
   prestamoId?: string
 }
 
-export type ParentescoDependiente = 'conyuge' | 'hijo' | 'padre' | 'madre' | 'hermano' | 'otro'
+export type ParentescoDependiente =
+  | 'hijo_mayor_18_no_estudiante'
+  | 'hijo_mayor_21'
+  | 'padre_titular'
+  | 'madre_titular'
+  | 'padre_conyuge'
+  | 'madre_conyuge'
 
 export interface Dependiente {
   id: string

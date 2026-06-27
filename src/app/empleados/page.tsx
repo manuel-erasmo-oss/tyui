@@ -1059,7 +1059,7 @@ function EmpleadoDrawer({
   const [depNombre, setDepNombre]     = useState('')
   const [depApellido, setDepApellido] = useState('')
   const [depCedula, setDepCedula]     = useState('')
-  const [depParentesco, setDepParentesco] = useState<ParentescoDependiente>('conyuge')
+  const [depParentesco, setDepParentesco] = useState<ParentescoDependiente>('hijo_mayor_18_no_estudiante')
   const [depFechaNac, setDepFechaNac] = useState('')
   const [depCuota, setDepCuota]       = useState('')
   const anos      = getAnosServicio(empleado.fechaIngreso)
@@ -1387,12 +1387,12 @@ function EmpleadoDrawer({
                     <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Parentesco</label>
                     <select value={depParentesco} onChange={e => setDepParentesco(e.target.value as ParentescoDependiente)}
                       className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none">
-                      <option value="conyuge">Cónyuge</option>
-                      <option value="hijo">Hijo/a</option>
-                      <option value="padre">Padre</option>
-                      <option value="madre">Madre</option>
-                      <option value="hermano">Hermano/a</option>
-                      <option value="otro">Otro</option>
+                      <option value="hijo_mayor_18_no_estudiante">Hijo/Hijastro +18 (no estudiante)</option>
+                      <option value="hijo_mayor_21">Hijo/Hijastro +21 años</option>
+                      <option value="padre_titular">Padre del Titular</option>
+                      <option value="madre_titular">Madre del Titular</option>
+                      <option value="padre_conyuge">Padre del Cónyuge</option>
+                      <option value="madre_conyuge">Madre del Cónyuge</option>
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">
@@ -1423,7 +1423,7 @@ function EmpleadoDrawer({
                       update(empleado.id, { dependientes: deps })
                       setShowDepForm(false)
                       setDepNombre(''); setDepApellido(''); setDepCedula('')
-                      setDepParentesco('conyuge'); setDepFechaNac(''); setDepCuota('')
+                      setDepParentesco('hijo_mayor_18_no_estudiante'); setDepFechaNac(''); setDepCuota('')
                     }}
                     disabled={!depNombre.trim() || !depApellido.trim() || !depCuota}
                     className="rounded-lg bg-[#1B2980] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#151f66] transition-colors disabled:opacity-50"
@@ -1457,7 +1457,14 @@ function EmpleadoDrawer({
                       <div>
                         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{dep.nombre} {dep.apellido}</p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400 capitalize">
-                          {dep.parentesco}{dep.cedula ? ` · ${dep.cedula}` : ''}{dep.fechaNacimiento ? ` · ${new Date(dep.fechaNacimiento).toLocaleDateString('es-DO')}` : ''}
+                          {({
+                            hijo_mayor_18_no_estudiante: 'Hijo/Hijastro +18 (no estudiante)',
+                            hijo_mayor_21:               'Hijo/Hijastro +21 años',
+                            padre_titular:               'Padre del Titular',
+                            madre_titular:               'Madre del Titular',
+                            padre_conyuge:               'Padre del Cónyuge',
+                            madre_conyuge:               'Madre del Cónyuge',
+                          } as Record<ParentescoDependiente, string>)[dep.parentesco]}{dep.cedula ? ` · ${dep.cedula}` : ''}{dep.fechaNacimiento ? ` · ${new Date(dep.fechaNacimiento).toLocaleDateString('es-DO')}` : ''}
                         </p>
                       </div>
                     </div>
