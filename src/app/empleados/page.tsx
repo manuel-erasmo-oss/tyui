@@ -10,12 +10,13 @@ import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularCesantia, calcularPreaviso, getAnosServicio } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
   fullName, contratoBadgeClass, contratoLabel,
 } from '@/lib/utils'
-import type { Empleado, TipoContrato, Banco, TipoDocumento, Dependiente, ParentescoDependiente } from '@/types'
+import { usePeriodos } from '@/lib/periodos-context'
+import type { Empleado, TipoContrato, Banco, TipoDocumento, Dependiente, ParentescoDependiente, PeriodoNomina, AjusteLinea, TipoPeriodo, ResultadoNomina } from '@/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BANCOS: Banco[] = ['Banco Popular', 'BanReservas', 'Scotiabank', 'BHD León', 'Banistmo', 'Otro']
@@ -1008,6 +1009,37 @@ function EmpleadoFormModal({
   )
 }
 
+// ── Historial helpers ─────────────────────────────────────────────────────────
+const MESES_HIST = [
+  'Ene','Feb','Mar','Abr','May','Jun',
+  'Jul','Ago','Sep','Oct','Nov','Dic',
+]
+
+function labelPeriodoHist(p: PeriodoNomina): string {
+  const mes = MESES_HIST[p.mes - 1]
+  if (p.tipo === 'quincenal') {
+    return `${p.quincena === 1 ? '1a Q' : '2a Q'} ${mes} ${p.anio}`
+  }
+  return `${mes} ${p.anio}`
+}
+
+function calcNominaConAjustes(
+  empleado: Empleado,
+  ajustes: AjusteLinea[],
+  tipo: TipoPeriodo,
+  quincena: 1 | 2,
+): ResultadoNomina {
+  const horasExtras35   = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
+  const horasExtras100  = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
+  const bonificaciones  = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
+  const comisiones      = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
+  const otrosDescuentos = ajustes.filter(a => ['prestamo','dependiente_sfs','otro_descuento'].includes(a.concepto)).reduce((s, a) => s + a.valor, 0)
+  const params = { horasExtras35, horasExtras100, bonificaciones, comisiones, otrosDescuentos }
+  return tipo === 'quincenal'
+    ? calcularNominaQuincenal(empleado, quincena, params)
+    : calcularNomina(empleado, params)
+}
+
 // ── View Modal (floating window) ──────────────────────────────────────────────
 function EmpleadoDrawer({
   empleado, todosEmpleados, onClose, onEditar, onToggleActivo, onEliminar,
@@ -1020,6 +1052,7 @@ function EmpleadoDrawer({
   onEliminar: () => void
 }) {
   const { update } = useEmpleados()
+  const { periodos } = usePeriodos()
   const [winState, setWinState] = useState<WindowState>('normal')
   const [tabActivo, setTabActivo] = useState<'info' | 'dependientes' | 'historial'>('info')
   const [showDepForm, setShowDepForm] = useState(false)
@@ -1459,15 +1492,122 @@ function EmpleadoDrawer({
         )}
 
         {/* ── Tab: Historial Nómina ───────────────────────────────── */}
-        {tabActivo === 'historial' && (
-          <div className="flex-1 overflow-y-auto p-5 flex items-center justify-center">
-            <div className="text-center">
-              <Clock className="mx-auto h-10 w-10 text-zinc-300 dark:text-zinc-600 mb-3" />
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">Historial de nómina</p>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">Próximamente disponible</p>
+        {tabActivo === 'historial' && (() => {
+          const historial = periodos
+            .filter(p => {
+              const fechaPeriodo = new Date(p.fechaGeneracion)
+              const fechaIngreso = new Date(empleado.fechaIngreso)
+              return fechaIngreso <= fechaPeriodo
+            })
+            .map(p => {
+              const ajustes = p.ajustesPorEmpleado?.[empleado.id] ?? []
+              const resultado = calcNominaConAjustes(empleado, ajustes, p.tipo, p.quincena ?? 1)
+              return { periodo: p, resultado }
+            })
+            .sort((a, b) => new Date(b.periodo.fechaGeneracion).getTime() - new Date(a.periodo.fechaGeneracion).getTime())
+
+          if (historial.length === 0) {
+            return (
+              <div className="flex-1 overflow-y-auto p-5 flex flex-col items-center justify-center text-center">
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
+                  <Clock className="h-7 w-7 text-[#1B2980] dark:text-indigo-400" />
+                </div>
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Sin historial de nómina</p>
+                <p className="mt-1 max-w-xs text-xs text-zinc-500 dark:text-zinc-400">
+                  Los períodos procesados aparecerán aquí con el detalle de cada pago.
+                </p>
+              </div>
+            )
+          }
+
+          const ytdYear = new Date().getFullYear()
+          const ytd = historial
+            .filter(h => h.periodo.anio === ytdYear)
+            .reduce((acc, h) => ({
+              bruto: acc.bruto + h.resultado.totalBruto,
+              neto:  acc.neto  + h.resultado.salarioNeto,
+              isr:   acc.isr   + h.resultado.isrMensual,
+            }), { bruto: 0, neto: 0, isr: 0 })
+
+          return (
+            <div className="flex-1 overflow-y-auto">
+              <div className="grid grid-cols-3 gap-3 p-5 border-b border-zinc-100 dark:border-[#1d2035]">
+                {[
+                  { label: `Bruto YTD ${ytdYear}`, value: ytd.bruto },
+                  { label: `Neto YTD ${ytdYear}`,  value: ytd.neto  },
+                  { label: `ISR YTD ${ytdYear}`,   value: ytd.isr   },
+                ].map(kpi => (
+                  <div key={kpi.label} className="rounded-xl border border-zinc-100 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{kpi.label}</p>
+                    <p className="mt-1 text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">{formatRD(kpi.value, 0)}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
+                      <th className="px-5 py-2.5 font-semibold uppercase tracking-wide text-zinc-400">Período</th>
+                      <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">S. Bruto</th>
+                      <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">AFP+SFS</th>
+                      <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">ISR</th>
+                      <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">S. Neto</th>
+                      <th className="px-3 py-2.5 font-semibold uppercase tracking-wide text-zinc-400">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historial.map(({ periodo, resultado }) => (
+                      <tr key={periodo.id} className="border-b border-zinc-50 dark:border-[#1d2035] hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                        <td className="px-5 py-3">
+                          <p className="font-medium text-zinc-800 dark:text-zinc-200">{labelPeriodoHist(periodo)}</p>
+                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 capitalize">{periodo.tipo}</p>
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(resultado.totalBruto, 0)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(resultado.afpEmpleado + resultado.sfsEmpleado, 0)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                          {resultado.isrMensual === 0
+                            ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                            : formatRD(resultado.isrMensual, 0)}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(resultado.salarioNeto, 0)}</td>
+                        <td className="px-3 py-3">
+                          {periodo.estado === 'cerrada' ? (
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-zinc-100 text-zinc-600 dark:bg-[#1a1d2e] dark:text-zinc-400">Cerrada</span>
+                          ) : periodo.estado === 'procesada' ? (
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">Procesada</span>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">En Proceso</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
+                      <td className="px-5 py-2.5 text-[10px] font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">
+                        Total — {historial.length} período{historial.length !== 1 ? 's' : ''}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.totalBruto, 0), 0)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.afpEmpleado + h.resultado.sfsEmpleado, 0), 0)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.isrMensual, 0), 0)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.salarioNeto, 0), 0)}
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* ── Footer actions ──────────────────────────────────────── */}
         <div className="shrink-0 flex items-center justify-between gap-2 border-t border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4">
