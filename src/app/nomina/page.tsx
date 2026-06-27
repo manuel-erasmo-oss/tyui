@@ -982,17 +982,17 @@ export default function NominaPage() {
                 })}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white">
-                  <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wide" colSpan={esEnProceso ? 3 : 2}>
+                <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
+                  <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400" colSpan={esEnProceso ? 3 : 2}>
                     TOTALES — {empleadosActivos.length} empleados
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold">{formatRD(totales.bruto, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-400">
+                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{formatRD(totales.bruto, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                     {formatRD(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0), 0)}
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-400">{formatRD(totales.isr, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-indigo-200">{formatRD(totales.neto, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-400">{formatRD(totales.costoTotal, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(totales.isr, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">{formatRD(totales.neto, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(totales.costoTotal, 0)}</td>
                   <td />
                 </tr>
               </tfoot>
