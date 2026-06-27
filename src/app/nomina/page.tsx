@@ -95,12 +95,13 @@ function calcularConAjustes(
   tipo: TipoPeriodo,
   quincena: 1 | 2,
 ): ResultadoNomina {
-  const horasExtras35  = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
-  const horasExtras100 = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
-  const bonificaciones = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
-  const comisiones     = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
-  const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'dependiente_sfs' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
-  const params: ParametrosNomina = { horasExtras35, horasExtras100, bonificaciones, comisiones, otrosDescuentos }
+  const horasExtras35   = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
+  const horasExtras100  = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
+  const bonificaciones  = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
+  const comisiones      = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
+  const sfsDependientes = ajustes.filter(a => a.concepto === 'dependiente_sfs').reduce((s, a) => s + a.valor, 0)
+  const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
+  const params: ParametrosNomina = { horasExtras35, horasExtras100, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
     : calcularNomina(empleado, params)
@@ -162,10 +163,11 @@ function DetalleNomina({
             <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-rose-600 dark:text-rose-400">Descuentos</p>
             <div className="space-y-2">
               {[
-                { label: 'AFP Empleado (2.87%)',  value: nomina.afpEmpleado },
-                { label: 'SFS Empleado (3.04%)',  value: nomina.sfsEmpleado },
-                { label: 'ISR Retención',          value: nomina.isrMensual,      hide: nomina.isrMensual === 0 },
-                { label: 'Otros Descuentos',       value: nomina.otrosDescuentos, hide: nomina.otrosDescuentos === 0 },
+                { label: 'AFP Empleado (2.87%)',     value: nomina.afpEmpleado },
+                { label: 'SFS Empleado (3.04%)',     value: nomina.sfsEmpleado },
+                { label: 'ISR Retención',             value: nomina.isrMensual,        hide: nomina.isrMensual === 0 },
+                { label: 'SFS Dep. Adicionales',      value: nomina.sfsDependientes,   hide: nomina.sfsDependientes === 0 },
+                { label: 'Otros Descuentos',          value: nomina.otrosDescuentos,   hide: nomina.otrosDescuentos === 0 },
               ].filter(r => !r.hide).map(row => (
                 <div key={row.label} className="flex justify-between text-sm">
                   <span className="text-zinc-600 dark:text-zinc-400">{row.label}</span>
@@ -358,15 +360,15 @@ export default function NominaPage() {
       return [
         fullName(e), e.cargo, e.departamento,
         r.totalBruto.toFixed(2), r.afpEmpleado.toFixed(2), r.sfsEmpleado.toFixed(2),
-        r.isrMensual.toFixed(2), r.totalDescuentos.toFixed(2), r.salarioNeto.toFixed(2),
-        r.afpEmpleador.toFixed(2), r.sfsEmpleador.toFixed(2), r.srlEmpleador.toFixed(2),
-        r.totalCostoEmpleador.toFixed(2),
+        r.isrMensual.toFixed(2), r.sfsDependientes.toFixed(2), r.totalDescuentos.toFixed(2),
+        r.salarioNeto.toFixed(2), r.afpEmpleador.toFixed(2), r.sfsEmpleador.toFixed(2),
+        r.srlEmpleador.toFixed(2), r.totalCostoEmpleador.toFixed(2),
       ]
     })
     const slug = periodoActualLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
     exportarCSV(
       `nomina-${slug}.csv`,
-      ['Empleado','Cargo','Departamento','S. Bruto','AFP Emp','SFS Emp','ISR','Total Desc.','S. Neto','AFP Empr','SFS Empr','SRL','Costo Total'],
+      ['Empleado','Cargo','Departamento','S. Bruto','AFP Emp','SFS Emp','ISR','SFS Dep.','Total Desc.','S. Neto','AFP Empr','SFS Empr','SRL','Costo Total'],
       rows,
     )
     setToast('Nómina exportada correctamente')
@@ -769,6 +771,7 @@ export default function NominaPage() {
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">S. Bruto</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">AFP+SFS</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">ISR</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Dep. SFS</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">S. Neto</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Costo Emp.</th>
                   <th className="px-4 py-3" />
@@ -780,7 +783,7 @@ export default function NominaPage() {
                   const isExpanded   = expandedEmpId === empleado.id
                   const isProcesado  = procesados.has(empleado.id)
                   const isSelected   = selectedEmps.has(empleado.id)
-                  const colSpanTotal = esEnProceso ? 9 : 8
+                  const colSpanTotal = esEnProceso ? 10 : 9
 
                   return (
                     <>
@@ -873,6 +876,11 @@ export default function NominaPage() {
                           {resultado.isrMensual === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
                             : formatRD(resultado.isrMensual, 0)}
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                          {resultado.sfsDependientes === 0
+                            ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                            : formatRD(resultado.sfsDependientes, 0)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
                           {formatRD(resultado.salarioNeto, 0)}

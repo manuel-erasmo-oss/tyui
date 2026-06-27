@@ -66,6 +66,7 @@ export function calcularNomina(
     horasExtras100    = 0,
     bonificaciones    = 0,
     comisiones        = 0,
+    sfsDependientes   = 0,
     otrosDescuentos   = 0,
     categoriaRiesgo   = empleado.categoriaRiesgo ?? 'bajo',
   } = params
@@ -104,7 +105,7 @@ export function calcularNomina(
   const isrMensual           = calcularISRAnual(baseGravableAnual) / 12
 
   // ─── Totales ───────────────────────────────────────────────────────────────
-  const totalDescuentos       = afpEmpleado + sfsEmpleado + isrMensual + otrosDescuentos
+  const totalDescuentos       = afpEmpleado + sfsEmpleado + isrMensual + sfsDependientes + otrosDescuentos
   const salarioNeto           = totalBruto - totalDescuentos
   const totalAportesEmpleador = afpEmpleador + sfsEmpleador + srlEmpleador
   const totalCostoEmpleador   = totalBruto + totalAportesEmpleador
@@ -138,6 +139,7 @@ export function calcularNomina(
     afpEmpleado,
     sfsEmpleado,
     isrMensual,
+    sfsDependientes,
     otrosDescuentos,
     totalDescuentos,
     salarioNeto,
@@ -166,8 +168,9 @@ export function calcularNominaQuincenal(
   const afpEmp   = m.afpEmpleado / 2
   const sfsEmp   = m.sfsEmpleado / 2
   const isr      = quincena === 2 ? m.isrMensual : 0
+  const sfsDep   = m.sfsDependientes   // already the per-quincena amount (pre-split at period creation)
   const otros    = m.otrosDescuentos / 2
-  const totalDesc = afpEmp + sfsEmp + isr + otros
+  const totalDesc = afpEmp + sfsEmp + isr + sfsDep + otros
 
   return {
     ...m,
@@ -182,6 +185,7 @@ export function calcularNominaQuincenal(
     afpEmpleado:              afpEmp,
     sfsEmpleado:              sfsEmp,
     isrMensual:               isr,
+    sfsDependientes:          sfsDep,
     otrosDescuentos:          otros,
     totalDescuentos:          totalDesc,
     salarioNeto:              bruto - totalDesc,

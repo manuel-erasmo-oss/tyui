@@ -96,6 +96,7 @@ export interface ResultadoNomina {
   afpEmpleado: number
   sfsEmpleado: number
   isrMensual: number
+  sfsDependientes: number
   otrosDescuentos: number
   totalDescuentos: number
 
@@ -127,6 +128,7 @@ export interface ParametrosNomina {
   horasExtras100?: number
   bonificaciones?: number
   comisiones?: number
+  sfsDependientes?: number
   otrosDescuentos?: number
   categoriaRiesgo?: CategoriaRiesgoSRL
 }

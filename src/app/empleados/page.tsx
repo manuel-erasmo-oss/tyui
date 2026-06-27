@@ -1033,8 +1033,9 @@ function calcNominaConAjustes(
   const horasExtras100  = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
   const bonificaciones  = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
   const comisiones      = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
-  const otrosDescuentos = ajustes.filter(a => ['prestamo','dependiente_sfs','otro_descuento'].includes(a.concepto)).reduce((s, a) => s + a.valor, 0)
-  const params = { horasExtras35, horasExtras100, bonificaciones, comisiones, otrosDescuentos }
+  const sfsDependientes = ajustes.filter(a => a.concepto === 'dependiente_sfs').reduce((s, a) => s + a.valor, 0)
+  const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
+  const params = { horasExtras35, horasExtras100, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
     : calcularNomina(empleado, params)
@@ -1562,6 +1563,7 @@ function EmpleadoDrawer({
                       <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">S. Bruto</th>
                       <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">AFP+SFS</th>
                       <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">ISR</th>
+                      <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">Dep. SFS</th>
                       <th className="px-3 py-2.5 text-right font-semibold uppercase tracking-wide text-zinc-400">S. Neto</th>
                       <th className="px-3 py-2.5 font-semibold uppercase tracking-wide text-zinc-400">Estado</th>
                     </tr>
@@ -1579,6 +1581,11 @@ function EmpleadoDrawer({
                           {resultado.isrMensual === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
                             : formatRD(resultado.isrMensual, 0)}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                          {resultado.sfsDependientes === 0
+                            ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                            : formatRD(resultado.sfsDependientes, 0)}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(resultado.salarioNeto, 0)}</td>
                         <td className="px-3 py-3">
@@ -1606,6 +1613,9 @@ function EmpleadoDrawer({
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                         {formatRD(historial.reduce((s, h) => s + h.resultado.isrMensual, 0), 0)}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.sfsDependientes, 0), 0)}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
                         {formatRD(historial.reduce((s, h) => s + h.resultado.salarioNeto, 0), 0)}
