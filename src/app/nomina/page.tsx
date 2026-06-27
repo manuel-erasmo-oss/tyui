@@ -77,6 +77,7 @@ function labelConcepto(concepto: ConceptoAjuste): string {
     comision:         'Comisión',
     bono:             'Bono',
     prestamo:         'Préstamo',
+    dependiente_sfs:  'Dep. SFS',
     otro_ingreso:     'Otro Ingreso',
     otro_descuento:   'Otro Desc.',
   }
@@ -98,7 +99,7 @@ function calcularConAjustes(
   const horasExtras100 = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
   const bonificaciones = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
   const comisiones     = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
-  const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
+  const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'dependiente_sfs' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
   const params: ParametrosNomina = { horasExtras35, horasExtras100, bonificaciones, comisiones, otrosDescuentos }
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
@@ -299,6 +300,19 @@ export default function NominaPage() {
         }))
       }
     }
+    for (const emp of empleadosActivos) {
+      const deps = (emp.dependientes ?? []).filter(d => d.cuotaMensual > 0)
+      if (deps.length > 0) {
+        const depAjustes = deps.map(d => ({
+          id: `dep-${d.id}-${Date.now().toString(36)}`,
+          tipo: 'deduccion' as const,
+          concepto: 'dependiente_sfs' as const,
+          descripcion: `SFS Dep. — ${d.nombre} ${d.apellido}`,
+          valor: nuevoTipo === 'quincenal' ? Math.round(d.cuotaMensual / 2) : d.cuotaMensual,
+        }))
+        ajustesIniciales[emp.id] = [...(ajustesIniciales[emp.id] ?? []), ...depAjustes]
+      }
+    }
     const nuevo = generar({
       tipo:               nuevoTipo,
       quincena:           nuevoTipo === 'quincenal' ? nuevaQuincena : undefined,
@@ -428,7 +442,7 @@ export default function NominaPage() {
 
   const anios = [nuevoAnio - 1, nuevoAnio, nuevoAnio + 1]
   const conceptosIngreso: ConceptoAjuste[]   = ['horas_extras_35', 'horas_extras_100', 'comision', 'bono', 'otro_ingreso']
-  const conceptosDeduccion: ConceptoAjuste[] = ['prestamo', 'otro_descuento']
+  const conceptosDeduccion: ConceptoAjuste[] = ['prestamo', 'dependiente_sfs', 'otro_descuento']
 
   // ── VISTA: LISTA ─────────────────────────────────────────────────────────────
   if (!periodoAbierto) {

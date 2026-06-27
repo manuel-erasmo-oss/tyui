@@ -18,6 +18,7 @@ export type ConceptoAjuste =
   | 'comision'
   | 'bono'
   | 'prestamo'
+  | 'dependiente_sfs'
   | 'otro_ingreso'
   | 'otro_descuento'
 
@@ -28,6 +29,18 @@ export interface AjusteLinea {
   descripcion: string
   valor: number
   prestamoId?: string
+}
+
+export type ParentescoDependiente = 'conyuge' | 'hijo' | 'padre' | 'madre' | 'hermano' | 'otro'
+
+export interface Dependiente {
+  id: string
+  nombre: string
+  apellido: string
+  cedula?: string
+  parentesco: ParentescoDependiente
+  fechaNacimiento?: string
+  cuotaMensual: number
 }
 
 export interface Empleado {
@@ -56,6 +69,7 @@ export interface Empleado {
   numeroCuenta?: string
   banco?: Banco
   categoriaRiesgo?: CategoriaRiesgoSRL
+  dependientes?: Dependiente[]
 }
 
 export interface ResultadoNomina {

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Search, Plus, ChevronRight, Building2, Mail, Phone, X, Pencil,
   Upload, Download, FileText, Camera, User, Calendar, CreditCard,
-  Minimize2, Maximize2, Globe,
+  Minimize2, Maximize2, Globe, UserPlus, Users, Clock, Trash2,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -15,7 +15,7 @@ import {
   formatRD, formatDate, formatAnosServicio,
   fullName, contratoBadgeClass, contratoLabel,
 } from '@/lib/utils'
-import type { Empleado, TipoContrato, Banco, TipoDocumento } from '@/types'
+import type { Empleado, TipoContrato, Banco, TipoDocumento, Dependiente, ParentescoDependiente } from '@/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BANCOS: Banco[] = ['Banco Popular', 'BanReservas', 'Scotiabank', 'BHD León', 'Banistmo', 'Otro']
@@ -1019,7 +1019,16 @@ function EmpleadoDrawer({
   onToggleActivo: () => void
   onEliminar: () => void
 }) {
+  const { update } = useEmpleados()
   const [winState, setWinState] = useState<WindowState>('normal')
+  const [tabActivo, setTabActivo] = useState<'info' | 'dependientes' | 'historial'>('info')
+  const [showDepForm, setShowDepForm] = useState(false)
+  const [depNombre, setDepNombre]     = useState('')
+  const [depApellido, setDepApellido] = useState('')
+  const [depCedula, setDepCedula]     = useState('')
+  const [depParentesco, setDepParentesco] = useState<ParentescoDependiente>('conyuge')
+  const [depFechaNac, setDepFechaNac] = useState('')
+  const [depCuota, setDepCuota]       = useState('')
   const anos      = getAnosServicio(empleado.fechaIngreso)
   const cesantia  = calcularCesantia(empleado.salarioBase, anos)
   const preaviso  = calcularPreaviso(empleado.salarioBase, anos)
@@ -1121,7 +1130,29 @@ function EmpleadoDrawer({
           </div>
         </div>
 
-        {/* ── Scrollable body ─────────────────────────────────────── */}
+        {/* ── Tab bar ─────────────────────────────────────────────── */}
+        <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 flex gap-0 shrink-0">
+          {([
+            { id: 'info',         label: 'Información' },
+            { id: 'dependientes', label: 'Dependientes' },
+            { id: 'historial',    label: 'Historial Nómina' },
+          ] as const).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setTabActivo(tab.id)}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                tabActivo === tab.id
+                  ? 'border-[#1B2980] text-[#1B2980] dark:text-indigo-400 dark:border-indigo-400'
+                  : 'border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab: Información ─────────────────────────────────────── */}
+        {tabActivo === 'info' && (
         <div className={`overflow-y-auto flex-1 ${isMax ? 'p-8' : 'p-6'}`}>
           <div className={`space-y-6 ${isMax ? 'grid grid-cols-2 gap-8 space-y-0' : ''}`}>
 
@@ -1279,6 +1310,164 @@ function EmpleadoDrawer({
 
           </div>
         </div>
+        )}
+
+        {/* ── Tab: Dependientes ───────────────────────────────────── */}
+        {tabActivo === 'dependientes' && (
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Dependientes Adicionales SFS</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Resolución 624-02 CNSS · Descuento por nómina</p>
+              </div>
+              {!showDepForm && (
+                <button
+                  onClick={() => setShowDepForm(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-[#1B2980] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#151f66] transition-colors"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  Agregar
+                </button>
+              )}
+            </div>
+
+            {showDepForm && (
+              <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] p-4 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Nuevo Dependiente</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Nombre</label>
+                    <input value={depNombre} onChange={e => setDepNombre(e.target.value)}
+                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Apellido</label>
+                    <input value={depApellido} onChange={e => setDepApellido(e.target.value)}
+                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cédula (opcional)</label>
+                    <input value={depCedula} onChange={e => setDepCedula(e.target.value)}
+                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Parentesco</label>
+                    <select value={depParentesco} onChange={e => setDepParentesco(e.target.value as ParentescoDependiente)}
+                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none">
+                      <option value="conyuge">Cónyuge</option>
+                      <option value="hijo">Hijo/a</option>
+                      <option value="padre">Padre</option>
+                      <option value="madre">Madre</option>
+                      <option value="hermano">Hermano/a</option>
+                      <option value="otro">Otro</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Fecha de Nacimiento</label>
+                    <input type="date" value={depFechaNac} onChange={e => setDepFechaNac(e.target.value)}
+                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cuota Mensual SFS (RD$)</label>
+                    <input type="number" value={depCuota} onChange={e => setDepCuota(e.target.value)} min="0" step="0.01"
+                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none" />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      if (!depNombre.trim() || !depApellido.trim() || !depCuota) return
+                      const nuevo: Dependiente = {
+                        id: Date.now().toString(36),
+                        nombre: depNombre.trim(),
+                        apellido: depApellido.trim(),
+                        cedula: depCedula.trim() || undefined,
+                        parentesco: depParentesco,
+                        fechaNacimiento: depFechaNac || undefined,
+                        cuotaMensual: parseFloat(depCuota),
+                      }
+                      const deps = [...(empleado.dependientes ?? []), nuevo]
+                      update(empleado.id, { dependientes: deps })
+                      setShowDepForm(false)
+                      setDepNombre(''); setDepApellido(''); setDepCedula('')
+                      setDepParentesco('conyuge'); setDepFechaNac(''); setDepCuota('')
+                    }}
+                    disabled={!depNombre.trim() || !depApellido.trim() || !depCuota}
+                    className="rounded-lg bg-[#1B2980] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#151f66] transition-colors disabled:opacity-50"
+                  >
+                    Guardar
+                  </button>
+                  <button onClick={() => setShowDepForm(false)}
+                    className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {(empleado.dependientes ?? []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
+                  <Users className="h-7 w-7 text-[#1B2980] dark:text-indigo-400" />
+                </div>
+                <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Sin dependientes registrados</p>
+                <p className="mt-1 max-w-xs text-xs text-zinc-500 dark:text-zinc-400">Los dependientes adicionales SFS se descuentan automáticamente en cada nómina.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {(empleado.dependientes ?? []).map(dep => (
+                  <div key={dep.id} className="flex items-center justify-between rounded-xl border border-zinc-100 dark:border-[#252840] bg-white dark:bg-[#141722] px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#eef0fb] dark:bg-indigo-900/40 text-xs font-semibold text-[#1B2980] dark:text-indigo-300">
+                        {dep.nombre[0]}{dep.apellido[0]}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{dep.nombre} {dep.apellido}</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400 capitalize">
+                          {dep.parentesco}{dep.cedula ? ` · ${dep.cedula}` : ''}{dep.fechaNacimiento ? ` · ${new Date(dep.fechaNacimiento).toLocaleDateString('es-DO')}` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 0 }).format(dep.cuotaMensual)}</p>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500">/ mes</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const deps = (empleado.dependientes ?? []).filter(d => d.id !== dep.id)
+                          update(empleado.id, { dependientes: deps })
+                        }}
+                        className="rounded-lg p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="rounded-xl bg-[#eef0fb] dark:bg-indigo-950/20 px-4 py-2.5 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#1B2980] dark:text-indigo-400">Total descuento mensual</p>
+                  <p className="text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">
+                    {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 0 }).format(
+                      (empleado.dependientes ?? []).reduce((s, d) => s + d.cuotaMensual, 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Tab: Historial Nómina ───────────────────────────────── */}
+        {tabActivo === 'historial' && (
+          <div className="flex-1 overflow-y-auto p-5 flex items-center justify-center">
+            <div className="text-center">
+              <Clock className="mx-auto h-10 w-10 text-zinc-300 dark:text-zinc-600 mb-3" />
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">Historial de nómina</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">Próximamente disponible</p>
+            </div>
+          </div>
+        )}
 
         {/* ── Footer actions ──────────────────────────────────────── */}
         <div className="shrink-0 flex items-center justify-between gap-2 border-t border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4">
