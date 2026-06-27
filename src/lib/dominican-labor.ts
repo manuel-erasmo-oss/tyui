@@ -32,6 +32,13 @@ export const SALARIO_MINIMO = {
 // Tope salario cotizable TSS = 20 × salario mínimo grandes empresas
 export const TOPE_COTIZABLE = SALARIO_MINIMO.grandesEmpresas * 20  // RD$ 420,000
 
+// Resolución 624-02 CNSS: tasa SFS por dependiente adicional
+export const SFS_DEP_RATE = 0.029
+
+export function cuotaDependienteSFS(salarioBase: number): number {
+  return Math.min(salarioBase, TOPE_COTIZABLE) * SFS_DEP_RATE
+}
+
 // ─── Parámetros laborales (Código de Trabajo Ley 16-92) ──────────────────────
 export const HORAS_SEMANA = 44                     // Art. 147: semana de 44h
 export const DIAS_VACACIONES_HASTA_5_ANOS = 14     // Art. 177: 14 días laborables

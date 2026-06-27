@@ -10,7 +10,7 @@ import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
   fullName, contratoBadgeClass, contratoLabel,
@@ -1061,7 +1061,7 @@ function EmpleadoDrawer({
   const [depCedula, setDepCedula]     = useState('')
   const [depParentesco, setDepParentesco] = useState<ParentescoDependiente>('hijo_mayor_18_no_estudiante')
   const [depFechaNac, setDepFechaNac] = useState('')
-  const [depCuota, setDepCuota]       = useState('')
+  const depCuotaMensual = cuotaDependienteSFS(empleado.salarioBase)
   const anos      = getAnosServicio(empleado.fechaIngreso)
   const cesantia  = calcularCesantia(empleado.salarioBase, anos)
   const preaviso  = calcularPreaviso(empleado.salarioBase, anos)
@@ -1400,16 +1400,20 @@ function EmpleadoDrawer({
                     <input type="date" value={depFechaNac} onChange={e => setDepFechaNac(e.target.value)}
                       className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none" />
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cuota Mensual SFS (RD$)</label>
-                    <input type="number" value={depCuota} onChange={e => setDepCuota(e.target.value)} min="0" step="0.01"
-                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none" />
+                  <div className="flex flex-col gap-1 col-span-2">
+                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Descuento SFS (Res. 624-02)</label>
+                    <div className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-1.5 text-sm text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
+                      <span>2.9% × cotizable del empleado</span>
+                      <span className="tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
+                        {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(depCuotaMensual)}/mes
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={() => {
-                      if (!depNombre.trim() || !depApellido.trim() || !depCuota) return
+                      if (!depNombre.trim() || !depApellido.trim()) return
                       const nuevo: Dependiente = {
                         id: Date.now().toString(36),
                         nombre: depNombre.trim(),
@@ -1417,15 +1421,14 @@ function EmpleadoDrawer({
                         cedula: depCedula.trim() || undefined,
                         parentesco: depParentesco,
                         fechaNacimiento: depFechaNac || undefined,
-                        cuotaMensual: parseFloat(depCuota),
                       }
                       const deps = [...(empleado.dependientes ?? []), nuevo]
                       update(empleado.id, { dependientes: deps })
                       setShowDepForm(false)
                       setDepNombre(''); setDepApellido(''); setDepCedula('')
-                      setDepParentesco('hijo_mayor_18_no_estudiante'); setDepFechaNac(''); setDepCuota('')
+                      setDepParentesco('hijo_mayor_18_no_estudiante'); setDepFechaNac('')
                     }}
-                    disabled={!depNombre.trim() || !depApellido.trim() || !depCuota}
+                    disabled={!depNombre.trim() || !depApellido.trim()}
                     className="rounded-lg bg-[#1B2980] px-4 py-1.5 text-sm font-medium text-white hover:bg-[#151f66] transition-colors disabled:opacity-50"
                   >
                     Guardar
@@ -1470,7 +1473,7 @@ function EmpleadoDrawer({
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 0 }).format(dep.cuotaMensual)}</p>
+                        <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 0 }).format(cuotaDependienteSFS(empleado.salarioBase))}</p>
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500">/ mes</p>
                       </div>
                       <button
@@ -1489,7 +1492,7 @@ function EmpleadoDrawer({
                   <p className="text-xs font-semibold text-[#1B2980] dark:text-indigo-400">Total descuento mensual</p>
                   <p className="text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">
                     {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 0 }).format(
-                      (empleado.dependientes ?? []).reduce((s, d) => s + d.cuotaMensual, 0)
+                      (empleado.dependientes ?? []).length * cuotaDependienteSFS(empleado.salarioBase)
                     )}
                   </p>
                 </div>

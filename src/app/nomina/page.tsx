@@ -24,7 +24,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePrestamos } from '@/lib/prestamos-context'
-import { calcularNomina, calcularNominaQuincenal } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
 import { formatRD, fullName } from '@/lib/utils'
 import type {
   Empleado,
@@ -301,14 +301,15 @@ export default function NominaPage() {
       }
     }
     for (const emp of empleadosActivos) {
-      const deps = (emp.dependientes ?? []).filter(d => d.cuotaMensual > 0)
+      const deps = emp.dependientes ?? []
       if (deps.length > 0) {
+        const cuotaMensualDep = cuotaDependienteSFS(emp.salarioBase)
         const depAjustes = deps.map(d => ({
           id: `dep-${d.id}-${Date.now().toString(36)}`,
           tipo: 'deduccion' as const,
           concepto: 'dependiente_sfs' as const,
           descripcion: `SFS Dep. — ${d.nombre} ${d.apellido}`,
-          valor: nuevoTipo === 'quincenal' ? Math.round(d.cuotaMensual / 2) : d.cuotaMensual,
+          valor: nuevoTipo === 'quincenal' ? Math.round(cuotaMensualDep / 2) : Math.round(cuotaMensualDep),
         }))
         ajustesIniciales[emp.id] = [...(ajustesIniciales[emp.id] ?? []), ...depAjustes]
       }

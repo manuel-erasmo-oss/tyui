@@ -46,7 +46,6 @@ export interface Dependiente {
   cedula?: string
   parentesco: ParentescoDependiente
   fechaNacimiento?: string
-  cuotaMensual: number
 }
 
 export interface Empleado {
