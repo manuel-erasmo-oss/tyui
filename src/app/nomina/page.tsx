@@ -305,7 +305,7 @@ export default function NominaPage() {
     for (const emp of empleadosActivos) {
       const deps = emp.dependientes ?? []
       if (deps.length > 0) {
-        const cuotaMensualDep = cuotaDependienteSFS(emp.salarioBase)
+        const cuotaMensualDep = cuotaDependienteSFS()
         const depAjustes = deps.map(d => ({
           id: `dep-${d.id}-${Date.now().toString(36)}`,
           tipo: 'deduccion' as const,

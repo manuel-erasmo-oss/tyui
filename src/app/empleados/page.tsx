@@ -1062,7 +1062,7 @@ function EmpleadoDrawer({
   const [depCedula, setDepCedula]     = useState('')
   const [depParentesco, setDepParentesco] = useState<ParentescoDependiente>('hijo_mayor_18_no_estudiante')
   const [depFechaNac, setDepFechaNac] = useState('')
-  const depCuotaMensual = cuotaDependienteSFS(empleado.salarioBase)
+  const depCuotaMensual = cuotaDependienteSFS()
   const anos      = getAnosServicio(empleado.fechaIngreso)
   const cesantia  = calcularCesantia(empleado.salarioBase, anos)
   const preaviso  = calcularPreaviso(empleado.salarioBase, anos)
@@ -1474,7 +1474,7 @@ function EmpleadoDrawer({
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
-                        <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 0 }).format(cuotaDependienteSFS(empleado.salarioBase))}</p>
+                        <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 2 }).format(cuotaDependienteSFS())}</p>
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500">/ mes</p>
                       </div>
                       <button
@@ -1493,7 +1493,7 @@ function EmpleadoDrawer({
                   <p className="text-xs font-semibold text-[#1B2980] dark:text-indigo-400">Total descuento mensual</p>
                   <p className="text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">
                     {new Intl.NumberFormat('es-DO', { style: 'currency', currency: 'DOP', minimumFractionDigits: 0 }).format(
-                      (empleado.dependientes ?? []).length * cuotaDependienteSFS(empleado.salarioBase)
+                      (empleado.dependientes ?? []).length * cuotaDependienteSFS()
                     )}
                   </p>
                 </div>

@@ -32,11 +32,11 @@ export const SALARIO_MINIMO = {
 // Tope salario cotizable TSS = 20 × salario mínimo grandes empresas
 export const TOPE_COTIZABLE = SALARIO_MINIMO.grandesEmpresas * 20  // RD$ 420,000
 
-// Resolución 624-02 CNSS: tasa SFS por dependiente adicional
-export const SFS_DEP_RATE = 0.029
+// Resolución 624-02 CNSS: cuota fija mensual por dependiente adicional (vigente 2024-2025)
+export const CUOTA_DEP_SFS_MENSUAL = 1_919.78
 
-export function cuotaDependienteSFS(salarioBase: number): number {
-  return Math.min(salarioBase, TOPE_COTIZABLE) * SFS_DEP_RATE
+export function cuotaDependienteSFS(): number {
+  return CUOTA_DEP_SFS_MENSUAL
 }
 
 // ─── Parámetros laborales (Código de Trabajo Ley 16-92) ──────────────────────
