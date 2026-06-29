@@ -74,7 +74,10 @@ export default function DashboardPage() {
   const { empresa } = useEmpresa()
   const { periodos } = usePeriodos()
   const nombreEmpresa = empresa.nombre || 'Mi Empresa'
-  const rncEmpresa = empresa.rnc ? `RNC ${empresa.rnc}` : 'República Dominicana'
+  const infoEmpresa = [
+    empresa.ciudad || 'República Dominicana',
+    empresa.rnc ? `RNC ${empresa.rnc}` : null,
+  ].filter(Boolean).join(' · ')
 
   const { empleadosActivos } = useEmpleados()
   const nominas = empleadosActivos.map(e => calcularNomina(e))
@@ -134,15 +137,15 @@ export default function DashboardPage() {
 
         {/* Company + Tabs */}
         <div className="bg-white dark:bg-[#141722] border-b border-zinc-200 dark:border-[#252840] px-6 pt-5 pb-0">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="h-12 w-12 rounded-lg border-2 border-dashed border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] flex flex-col items-center justify-center shrink-0">
-              <Building2 className="h-5 w-5 text-zinc-300 dark:text-zinc-600" />
-              <span className="text-[8px] text-zinc-300 dark:text-zinc-600 font-medium tracking-wide">LOGO</span>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-11 w-11 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] flex items-center justify-center shrink-0 overflow-hidden">
+              {empresa.logo ? (
+                <img src={empresa.logo} alt={nombreEmpresa} className="h-full w-full object-contain p-1" />
+              ) : (
+                <Building2 className="h-5 w-5 text-zinc-300 dark:text-zinc-600" />
+              )}
             </div>
-            <div>
-              <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 leading-none">{nombreEmpresa}</h1>
-              <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">República Dominicana · {rncEmpresa}</p>
-            </div>
+            <p className="text-xs text-zinc-400 dark:text-zinc-500">{infoEmpresa}</p>
           </div>
           <div className="flex gap-6 -mb-px">
             <button className="pb-3 text-sm font-semibold text-[#1B2980] dark:text-indigo-400 border-b-2 border-[#1B2980] dark:border-indigo-500">
