@@ -66,8 +66,8 @@ export function Sidebar() {
       {/* ── Logo / Brand ─────────────────────────────────────────── */}
       <div
         className={cn(
-          'flex h-16 shrink-0 items-center border-b border-zinc-200 dark:border-[#252840]',
-          c ? 'flex-col justify-center gap-2 px-0' : 'px-5 gap-3',
+          'flex h-[80px] shrink-0 items-center border-b border-zinc-200 dark:border-[#252840]',
+          c ? 'flex-col justify-center gap-2.5 px-0' : 'px-5 gap-4',
         )}
       >
         {/* Isotipo — arco geométrico 300° */}
@@ -75,13 +75,13 @@ export function Sidebar() {
           viewBox="0 0 32 32"
           fill="none"
           aria-label="Cielo Cloud"
-          className={cn('shrink-0', c ? 'h-8 w-8' : 'h-7 w-7')}
+          className={cn('shrink-0', c ? 'h-[46px] w-[46px]' : 'h-10 w-10')}
         >
           {/*
             Arco grueso: círculo r=9, strokeWidth=5.5
-            300° de arco (gap=60°) con terminaciones redondeadas.
-            rotate(30°) centra el gap en la posición Este (derecha).
-            Circunferencia = 2π×9 ≈ 56.55 → arco 300° ≈ 47.12, gap ≈ 9.43
+            300° de arco · gap=60° con terminaciones redondeadas
+            rotate(30°) → apertura centrada al Este (derecha)
+            C = 2π×9 ≈ 56.55 · arco300° ≈ 47.12 · gap ≈ 9.43
           */}
           <circle
             cx="16" cy="16" r="9"
@@ -91,21 +91,24 @@ export function Sidebar() {
             transform="rotate(30 16 16)"
             className="stroke-[#1B2980] dark:stroke-indigo-300"
           />
-          {/* Punto interior — ancla visual, referencia a "datos / persona" */}
-          <circle
-            cx="16" cy="16" r="2.8"
-            className="fill-[#1B2980] dark:fill-indigo-300"
-          />
+          {/* Punto interior */}
+          <circle cx="16" cy="16" r="2.8" className="fill-[#1B2980] dark:fill-indigo-300" />
         </svg>
 
         {/* Wordmark — visible solo expandido */}
         {!c && (
-          <div className="flex flex-col leading-tight min-w-0 flex-1">
-            <span className="text-[13px] font-semibold tracking-tight text-zinc-900 dark:text-white truncate">
-              Cielo
-              <span className="font-light text-zinc-500 dark:text-zinc-400"> Cloud</span>
-            </span>
-            <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
+          <div className="flex flex-col min-w-0 flex-1 gap-[3px]">
+            {/* Nombre de marca con contraste de peso */}
+            <div className="flex items-baseline gap-[5px]">
+              <span className="text-[16px] font-bold tracking-[-0.02em] text-zinc-900 dark:text-white leading-none">
+                Cielo
+              </span>
+              <span className="text-[16px] font-extralight tracking-[-0.01em] text-zinc-400 dark:text-zinc-500 leading-none">
+                Cloud
+              </span>
+            </div>
+            {/* Descriptor en versalitas espaciadas */}
+            <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-600 leading-none">
               Nómina
             </span>
           </div>
@@ -117,8 +120,8 @@ export function Sidebar() {
           title={c ? 'Expandir' : 'Colapsar'}
           className={cn(
             'flex items-center justify-center rounded-lg transition-colors shrink-0',
-            'text-zinc-400 hover:text-[#1B2980] hover:bg-[#eef0fb]',
-            'dark:hover:text-indigo-400 dark:hover:bg-indigo-950/30',
+            'text-zinc-300 hover:text-[#1B2980] hover:bg-[#eef0fb]',
+            'dark:text-zinc-600 dark:hover:text-indigo-400 dark:hover:bg-indigo-950/30',
             c ? 'h-5 w-5' : 'h-6 w-6',
           )}
         >
