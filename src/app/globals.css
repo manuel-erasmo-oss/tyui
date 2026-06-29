@@ -64,6 +64,13 @@ table {
   animation: backdrop-in 0.15s ease-out forwards;
 }
 
+/* Loading bar */
+@keyframes loading-bar {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(150%); }
+  100% { transform: translateX(150%); }
+}
+
 /* Scrollbar minimal */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutDashboard,
   UserMinus,
@@ -16,8 +16,10 @@ import {
   ChevronLeft,
   ChevronRight,
   HandCoins,
+  LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-context'
 
 const NAV_ITEMS = [
   { href: '/',                icon: LayoutDashboard, label: 'Dashboard' },
@@ -32,10 +34,17 @@ const NAV_ITEMS = [
 ]
 
 export function Sidebar() {
-  const pathname = usePathname()
+  const pathname  = usePathname()
+  const router    = useRouter()
+  const { user, logout } = useAuth()
 
   const [collapsed, setCollapsed] = useState(false)
   const [mounted,   setMounted]   = useState(false)
+
+  async function handleLogout() {
+    await logout()
+    router.replace('/login')
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -196,29 +205,41 @@ export function Sidebar() {
           )}
         </Link>
 
-        {/* User profile */}
+        {/* User profile + logout */}
         <div
           className={cn(
             'flex items-center py-2.5',
-            c ? 'justify-center px-0' : 'gap-2.5 px-4',
+            c ? 'flex-col gap-1.5 px-0' : 'gap-2.5 px-4',
           )}
         >
           <div
             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
             style={{ backgroundColor: '#1B2980' }}
           >
-            A
+            {user?.displayName?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? 'U'}
           </div>
           {!c && (
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Administrador
+                {user?.displayName ?? 'Mi cuenta'}
               </p>
               <p className="truncate text-[10px] text-zinc-400 dark:text-zinc-500">
-                admin@cielocloud.do
+                {user?.email ?? ''}
               </p>
             </div>
           )}
+          <button
+            onClick={handleLogout}
+            title="Cerrar sesión"
+            className={cn(
+              'shrink-0 flex items-center justify-center rounded-lg transition-colors',
+              'text-zinc-300 hover:text-rose-500 hover:bg-rose-50',
+              'dark:text-zinc-600 dark:hover:text-rose-400 dark:hover:bg-rose-950/30',
+              c ? 'h-6 w-6' : 'h-6 w-6',
+            )}
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
         </div>
       </div>
     </aside>

@@ -1,13 +1,13 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { BottomNav } from '@/components/layout/BottomNav'
 import { ThemeProvider } from '@/lib/theme'
 import { EmpleadosProvider } from '@/lib/empleados-context'
 import { PeriodosProvider } from '@/lib/periodos-context'
 import { EmpresaProvider } from '@/lib/empresa-context'
 import { PrestamosProvider } from '@/lib/prestamos-context'
+import { AuthProvider } from '@/lib/auth-context'
+import { RouteGuard } from '@/components/auth/RouteGuard'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -25,7 +25,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={inter.variable} suppressHydrationWarning>
       <head>
-        {/* Anti-FOUC: apply saved theme class before first paint */}
         <script dangerouslySetInnerHTML={{ __html: `
           try {
             var t = localStorage.getItem('cielo-theme');
@@ -36,17 +35,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="flex h-screen overflow-hidden bg-zinc-50 dark:bg-[#0d0f1a] font-sans transition-colors duration-200">
         <ThemeProvider>
-          <EmpresaProvider>
-            <EmpleadosProvider>
-              <PrestamosProvider>
-                <PeriodosProvider>
-                  <Sidebar />
-                  <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
-                  <BottomNav />
-                </PeriodosProvider>
-              </PrestamosProvider>
-            </EmpleadosProvider>
-          </EmpresaProvider>
+          <AuthProvider>
+            <EmpresaProvider>
+              <EmpleadosProvider>
+                <PrestamosProvider>
+                  <PeriodosProvider>
+                    <RouteGuard>{children}</RouteGuard>
+                  </PeriodosProvider>
+                </PrestamosProvider>
+              </EmpleadosProvider>
+            </EmpresaProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>
