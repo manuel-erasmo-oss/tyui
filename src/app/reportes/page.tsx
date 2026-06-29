@@ -14,7 +14,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { useEmpresa } from '@/lib/empresa-context'
-import { calcularNomina } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatCedula, fullName,
   formatAnosServicio, contratoLabel,
@@ -153,7 +153,7 @@ function ReporteGerencial({
     const groups: Record<string, { bruto: number; neto: number; costo: number; headcount: number }> = {}
     for (const emp of activos) {
       const ajustes: AjusteLinea[] = ultimoPeriodo.ajustesPorEmpleado?.[emp.id] ?? []
-      const res = calcularNomina(emp, ajustesToParams(ajustes))
+      const res = calcularConPeriodo(emp, ajustes, ultimoPeriodo)
       const d = emp.departamento || 'Sin Departamento'
       if (!groups[d]) groups[d] = { bruto: 0, neto: 0, costo: 0, headcount: 0 }
       groups[d].bruto    += res.totalBruto
@@ -482,8 +482,7 @@ function ReporteNomina({
     const activos = empleados.filter(e => e.activo)
     return activos.map(emp => {
       const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
-      const params = ajustesToParams(ajustes)
-      const res = calcularNomina(emp, params)
+      const res = calcularConPeriodo(emp, ajustes, periodo)
       return { emp, res }
     })
   }, [periodo, generado, empleados])
@@ -1135,8 +1134,7 @@ function ReporteTSS({
     if (!periodo || !generado) return []
     return empleados.filter(e => e.activo).map(emp => {
       const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
-      const params = ajustesToParams(ajustes)
-      const res = calcularNomina(emp, params)
+      const res = calcularConPeriodo(emp, ajustes, periodo)
       const totalTSS = res.afpEmpleado + res.sfsEmpleado + res.afpEmpleador + res.sfsEmpleador + res.srlEmpleador
       return { emp, res, totalTSS }
     })
@@ -1437,7 +1435,7 @@ function ReporteCostoPorDepto({
     const groups: Record<string, { headcount: number; bruto: number; neto: number; tss: number; costo: number }> = {}
     for (const emp of empleados.filter(e => e.activo)) {
       const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
-      const res = calcularNomina(emp, ajustesToParams(ajustes))
+      const res = calcularConPeriodo(emp, ajustes, periodo)
       const d = emp.departamento || 'Sin Departamento'
       if (!groups[d]) groups[d] = { headcount: 0, bruto: 0, neto: 0, tss: 0, costo: 0 }
       groups[d].headcount++
@@ -1612,7 +1610,7 @@ function ReportePlanillaACH({
       .filter(e => filtroBanco === 'todos' || e.banco === filtroBanco)
       .map(emp => {
         const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
-        const res = calcularNomina(emp, ajustesToParams(ajustes))
+        const res = calcularConPeriodo(emp, ajustes, periodo)
         return { emp, neto: res.salarioNeto }
       })
       .sort((a, b) => (a.emp.banco ?? '').localeCompare(b.emp.banco ?? '') || fullName(a.emp).localeCompare(fullName(b.emp)))
@@ -1767,7 +1765,7 @@ function ReporteHorasExtras({
         if (he35 === 0 && he100 === 0) continue
         const emp = empMap[empId]
         if (!emp) continue
-        const res = calcularNomina(emp, ajustesToParams(ajustes))
+        const res = calcularConPeriodo(emp, ajustes, p)
         rows.push({ empId, per: periodoLabel(p), he35, imp35: res.importeHE35, he100, imp100: res.importeHE100, total: res.totalHorasExtras })
       }
     }
@@ -1929,7 +1927,7 @@ function ReporteProyeccionAnual({
       for (const [empId, ajustes] of Object.entries(p.ajustesPorEmpleado ?? {})) {
         const emp = empleados.find(e => e.id === empId)
         if (!emp) continue
-        const res = calcularNomina(emp, ajustesToParams(ajustes))
+        const res = calcularConPeriodo(emp, ajustes, p)
         map[empId] = (map[empId] ?? 0) + res.totalCostoEmpleador
       }
     }
@@ -2162,23 +2160,28 @@ function EmptyState({ message }: { message: string }) {
   )
 }
 
-// ─── Helper: convert AjusteLinea[] to ParametrosNomina ────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 function ajustesToParams(ajustes: AjusteLinea[]) {
-  let horasExtras35 = 0
-  let horasExtras100 = 0
-  let bonificaciones = 0
-  let comisiones = 0
-  let otrosDescuentos = 0
+  let horasExtras35 = 0, horasExtras100 = 0, bonificaciones = 0
+  let comisiones = 0, sfsDependientes = 0, otrosDescuentos = 0
 
   for (const a of ajustes) {
-    if (a.concepto === 'horas_extras_35')  horasExtras35  += a.valor
-    if (a.concepto === 'horas_extras_100') horasExtras100 += a.valor
-    if (a.concepto === 'bono')             bonificaciones += a.valor
-    if (a.concepto === 'comision')         comisiones     += a.valor
-    if (a.tipo === 'deduccion')            otrosDescuentos += a.valor
+    if (a.concepto === 'horas_extras_35')                             horasExtras35   += a.valor
+    if (a.concepto === 'horas_extras_100')                            horasExtras100  += a.valor
+    if (a.concepto === 'bono' || a.concepto === 'otro_ingreso')       bonificaciones  += a.valor
+    if (a.concepto === 'comision')                                    comisiones      += a.valor
+    if (a.concepto === 'dependiente_sfs')                             sfsDependientes += a.valor
+    if (a.concepto === 'prestamo' || a.concepto === 'otro_descuento') otrosDescuentos += a.valor
   }
 
-  return { horasExtras35, horasExtras100, bonificaciones, comisiones, otrosDescuentos }
+  return { horasExtras35, horasExtras100, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
+}
+
+function calcularConPeriodo(emp: Parameters<typeof calcularNomina>[0], ajustes: AjusteLinea[], periodo: PeriodoNomina) {
+  const params = ajustesToParams(ajustes)
+  return periodo.tipo === 'quincenal'
+    ? calcularNominaQuincenal(emp, periodo.quincena ?? 1, params)
+    : calcularNomina(emp, params)
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────

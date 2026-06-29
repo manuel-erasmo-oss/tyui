@@ -17,7 +17,7 @@ export default function VacacionesPage() {
   const filas = empleadosActivos.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
-    const mesesServicio   = Math.min(Math.floor(anos * 12), 12)
+    const mesesServicio   = anos < 1 ? Math.floor(anos * 12) : (Math.floor((anos % 1) * 12) || 12)
     const diasAcumulados  = (diasAnuales / 12) * mesesServicio
     const valorDiario     = e.salarioBase / 26
     const valorAcumulado  = diasAcumulados * valorDiario

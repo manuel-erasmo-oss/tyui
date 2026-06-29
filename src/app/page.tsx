@@ -113,11 +113,15 @@ export default function DashboardPage() {
         { mes: MESES[hoy.getMonth()],                  nomina: totalBruto,                    tss: totalTSSEmpleador },
       ]
 
-  const LINE_DATA = BAR_DATA.map(d => ({ mes: d.mes, valor: Math.round(d.nomina * (totalNeto / totalBruto)) }))
+  const netoRatio  = totalBruto > 0 ? totalNeto / totalBruto : 0
+  const LINE_DATA  = BAR_DATA.map(d => ({ mes: d.mes, valor: Math.round(d.nomina * netoRatio) }))
 
-  const deltaBruto = ((BAR_DATA[4].nomina - BAR_DATA[3].nomina) / BAR_DATA[3].nomina) * 100
-  const deltaCosto = ((costoTotal - (BAR_DATA[3].nomina + BAR_DATA[3].tss)) / (BAR_DATA[3].nomina + BAR_DATA[3].tss)) * 100
-  const deltaNeto  = ((LINE_DATA[4].valor - LINE_DATA[3].valor) / LINE_DATA[3].valor) * 100
+  const prevBruto  = BAR_DATA[3].nomina
+  const prevCosto  = BAR_DATA[3].nomina + BAR_DATA[3].tss
+  const prevNeto   = LINE_DATA[3].valor
+  const deltaBruto = prevBruto > 0 ? ((BAR_DATA[4].nomina   - prevBruto) / prevBruto) * 100 : 0
+  const deltaCosto = prevCosto > 0 ? ((costoTotal             - prevCosto) / prevCosto) * 100 : 0
+  const deltaNeto  = prevNeto  > 0 ? ((LINE_DATA[4].valor    - prevNeto)  / prevNeto)  * 100 : 0
 
   const DONUT_DATA = [
     { name: 'Salario neto',  value: totalNeto,   color: '#1B2980' },
@@ -249,8 +253,8 @@ export default function DashboardPage() {
                 </Link>
               </div>
               <div className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
-                {empleadosActivos.slice(0, 5).map((emp) => {
-                  const n = nominas[empleadosActivos.indexOf(emp)]
+                {empleadosActivos.slice(0, 5).map((emp, i) => {
+                  const n = nominas[i]
                   return (
                     <div key={emp.id} className="flex items-center gap-3 px-5 py-3">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-zinc-100 dark:bg-[#1a1d2e] text-xs font-bold text-zinc-600 dark:text-zinc-400">

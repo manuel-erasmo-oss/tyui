@@ -136,7 +136,7 @@ export function AgendaNomina() {
 
   function addEvent() {
     if (!newFecha || !newTitulo.trim()) return
-    const id = `custom-${newFecha}-${newTitulo.trim().slice(0, 8).replace(/\s+/g, '')}-${custom.length}`
+    const id = `custom-${newFecha}-${newTitulo.trim().slice(0, 8).replace(/\s+/g, '')}-${Date.now().toString(36)}`
     const ev: Evento = { id, fecha: newFecha, titulo: newTitulo.trim(), tipo: 'custom' }
     const next = [...custom, ev]
     setCustom(next)

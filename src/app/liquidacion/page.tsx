@@ -75,11 +75,17 @@ export default function LiquidacionPage() {
     const fechaTerm = new Date(fechaTerminacion)
     const anosServicio = (fechaTerm.getTime() - fechaHire.getTime()) / (365.25 * 24 * 3600 * 1000)
 
+    // Regalía: proportional to calendar year (Jan 1 → termination)
     const inicioAnio = new Date(fechaTerm.getFullYear(), 0, 1)
-    const mesesEnAnio = Math.min(
+    const mesesCalendario = Math.min(
       Math.ceil((fechaTerm.getTime() - inicioAnio.getTime()) / (30.44 * 24 * 3600 * 1000)),
       12
     )
+
+    // Vacaciones: proportional to current hire-anniversary cycle
+    const mesesCicloVac = anosServicio < 1
+      ? Math.floor(anosServicio * 12)
+      : (Math.floor((anosServicio % 1) * 12) || 12)
 
     const cesantia = (motivo === 'despido_sin_causa' || motivo === 'mutuo_acuerdo')
       ? calcularCesantia(emp.salarioBase, anosServicio)
@@ -90,10 +96,10 @@ export default function LiquidacionPage() {
       : 0
 
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
-    const diasVacAcum = (diasVacAnuales / 12) * mesesEnAnio
+    const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac
     const vacaciones = diasVacAcum * (emp.salarioBase / 26)
 
-    const regalia = (emp.salarioBase / 12) * mesesEnAnio
+    const regalia = (emp.salarioBase / 12) * mesesCalendario
 
     const subtotal = cesantia + preaviso + vacaciones + regalia
     const totalPrestamos = prestamosADescontar.reduce((s, pid) => {
@@ -102,7 +108,7 @@ export default function LiquidacionPage() {
     }, 0)
     const total = Math.max(0, subtotal - totalPrestamos)
 
-    return { anosServicio, mesesEnAnio, cesantia, preaviso, vacaciones, regalia, subtotal, totalPrestamos, total }
+    return { anosServicio, mesesCicloVac, mesesCalendario, cesantia, preaviso, vacaciones, regalia, subtotal, totalPrestamos, total }
   })()
 
   function handleExportCSV() {
@@ -342,7 +348,7 @@ export default function LiquidacionPage() {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Vacaciones No Gozadas</p>
                     <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                      Art. 177 — {resultado.mesesEnAnio} mes{resultado.mesesEnAnio !== 1 ? 'es' : ''} × tarifa diaria
+                      Art. 177 — {resultado.mesesCicloVac} mes{resultado.mesesCicloVac !== 1 ? 'es' : ''} × tarifa diaria
                     </p>
                   </div>
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-500 dark:text-sky-400">
@@ -360,7 +366,7 @@ export default function LiquidacionPage() {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Regalía Proporcional</p>
                     <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                      Art. 219 — {resultado.mesesEnAnio}/12 del salario
+                      Art. 219 — {resultado.mesesCalendario}/12 del salario
                     </p>
                   </div>
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 dark:text-emerald-400">

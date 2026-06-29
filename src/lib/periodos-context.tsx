@@ -38,7 +38,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
       ...data,
       id: `periodo-${Date.now().toString(36)}`,
       fechaGeneracion: new Date().toISOString(),
-      ajustesPorEmpleado: {},
+      ajustesPorEmpleado: data.ajustesPorEmpleado ?? {},
     }
     setPeriodos(prev => {
       const next = [nuevo, ...prev]

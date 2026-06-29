@@ -5,8 +5,8 @@ import type { Empleado, ParametrosNomina, ResultadoNomina } from '@/types'
 const TRAMOS_ISR = [
   { hasta: 416_220.00, tasa: 0.00, fijo: 0 },
   { hasta: 624_329.00, tasa: 0.15, fijo: 0 },
-  { hasta: 867_123.00, tasa: 0.20, fijo: 31_213.35 },
-  { hasta: Infinity,   tasa: 0.25, fijo: 79_776.51 },
+  { hasta: 867_123.00, tasa: 0.20, fijo: 31_216.35 },
+  { hasta: Infinity,   tasa: 0.25, fijo: 79_775.15 },
 ] as const
 
 // ─── TSS Contribution Rates ───────────────────────────────────────────────────

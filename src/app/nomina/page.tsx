@@ -451,8 +451,17 @@ export default function NominaPage() {
   const periodoActual = periodos.find(p => p.id === periodoAbierto) ?? null
   const periodoActualLabel = periodoActual ? labelPeriodo(periodoActual) : ''
 
-  function calcularTotalesRapido() {
-    const rs = empleadosActivos.map(e => calcularNomina(e))
+  // If the open period was deleted, reset to list view without calling setState during render
+  useEffect(() => {
+    if (periodoAbierto && !periodos.find(p => p.id === periodoAbierto)) {
+      setPeriodoAbierto(null)
+    }
+  }, [periodoAbierto, periodos])
+
+  function calcularTotalesRapido(ajustesPorEmp: Record<string, AjusteLinea[]> = {}) {
+    const rs = empleadosActivos.map(e =>
+      calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], nuevoTipo, nuevaQuincena)
+    )
     return {
       bruto:      rs.reduce((s, r) => s + r.totalBruto, 0),
       descuentos: rs.reduce((s, r) => s + r.totalDescuentos, 0),
@@ -500,7 +509,7 @@ export default function NominaPage() {
           tipo: 'deduccion' as const,
           concepto: 'dependiente_sfs' as const,
           descripcion: `SFS Dep. — ${d.nombre} ${d.apellido}`,
-          valor: nuevoTipo === 'quincenal' ? Math.round(cuotaMensualDep / 2) : Math.round(cuotaMensualDep),
+          valor: Math.round((nuevoTipo === 'quincenal' ? cuotaMensualDep / 2 : cuotaMensualDep) * 100) / 100,
         }))
         ajustesIniciales[emp.id] = [...(ajustesIniciales[emp.id] ?? []), ...depAjustes]
       }
@@ -512,7 +521,7 @@ export default function NominaPage() {
       anio:               nuevoAnio,
       estado:             'en_proceso',
       totalEmpleados:     empleadosActivos.length,
-      totales:            calcularTotalesRapido(),
+      totales:            calcularTotalesRapido(ajustesIniciales),
       ajustesPorEmpleado: ajustesIniciales,
     })
     setPeriodoAbierto(nuevo.id)
@@ -820,7 +829,6 @@ export default function NominaPage() {
 
   // ── VISTA: DETALLE ────────────────────────────────────────────────────────────
   if (!periodoActual) {
-    setPeriodoAbierto(null)
     return null
   }
 

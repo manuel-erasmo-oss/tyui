@@ -39,7 +39,6 @@ export function PrestamosProvider({ children }: { children: ReactNode }) {
   }, [])
 
   function persist(next: Prestamo[]) {
-    setPrestamos(next)
     try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
   }
 
@@ -51,27 +50,38 @@ export function PrestamosProvider({ children }: { children: ReactNode }) {
       pagos: [],
       estado: 'activo',
     }
-    persist([nuevo, ...prestamos])
+    setPrestamos(prev => {
+      const next = [nuevo, ...prev]
+      persist(next)
+      return next
+    })
     return nuevo
   }
 
   function registrarPago(prestamoId: string, pago: Omit<CuotaPago, 'id'>) {
     const cuota: CuotaPago = { ...pago, id: `pago-${Date.now().toString(36)}` }
-    const next = prestamos.map(p => {
-      if (p.id !== prestamoId) return p
-      const nuevoSaldo = Math.max(0, p.saldoPendiente - cuota.montoPagado)
-      return {
-        ...p,
-        saldoPendiente: nuevoSaldo,
-        estado: nuevoSaldo <= 0 ? 'pagado' as const : p.estado,
-        pagos: [...p.pagos, cuota],
-      }
+    setPrestamos(prev => {
+      const next = prev.map(p => {
+        if (p.id !== prestamoId) return p
+        const nuevoSaldo = Math.max(0, p.saldoPendiente - cuota.montoPagado)
+        return {
+          ...p,
+          saldoPendiente: nuevoSaldo,
+          estado: nuevoSaldo <= 0 ? 'pagado' as const : p.estado,
+          pagos: [...p.pagos, cuota],
+        }
+      })
+      persist(next)
+      return next
     })
-    persist(next)
   }
 
   function cancelar(prestamoId: string) {
-    persist(prestamos.map(p => p.id === prestamoId ? { ...p, estado: 'cancelado' as const } : p))
+    setPrestamos(prev => {
+      const next = prev.map(p => p.id === prestamoId ? { ...p, estado: 'cancelado' as const } : p)
+      persist(next)
+      return next
+    })
   }
 
   function getPrestamosActivos(empleadoId: string): Prestamo[] {
