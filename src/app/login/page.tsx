@@ -20,8 +20,14 @@ function firebaseMsg(code: string): string {
       return 'Esta cuenta ha sido deshabilitada. Contacta soporte.'
     case 'auth/network-request-failed':
       return 'Sin conexión a internet. Verifica tu red e intenta de nuevo.'
+    case 'auth/unauthorized-domain':
+      return 'Este dominio no está autorizado en Firebase. Agrégalo en Firebase Console → Authentication → Settings → Dominios autorizados.'
+    case 'auth/popup-blocked':
+      return 'El navegador bloqueó la ventana de Google. Permite popups para este sitio e intenta de nuevo.'
+    case 'auth/operation-not-allowed':
+      return 'El inicio de sesión con Google no está activado. Actívalo en Firebase Console → Authentication → Sign-in method.'
     default:
-      return 'Ocurrió un error inesperado. Intenta de nuevo.'
+      return `Error: ${code || 'desconocido'}. Intenta de nuevo o usa correo y contraseña.`
   }
 }
 
