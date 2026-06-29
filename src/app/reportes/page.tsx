@@ -64,13 +64,23 @@ function pdfHeader(
   const pageW = landscape ? 297 : 210
   doc.setFillColor(...NAVY)
   doc.rect(0, 0, pageW, 22, 'F')
+
+  let textX = 14
+  if (empresa.logo) {
+    try {
+      const fmt = empresa.logo.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+      doc.addImage(empresa.logo, fmt, 14, 3, 16, 16)
+      textX = 34
+    } catch { /* ignore malformed logo */ }
+  }
+
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(13)
   doc.setFont('helvetica', 'bold')
-  doc.text(empresa.nombre || 'Empresa', 14, 10)
+  doc.text(empresa.nombre || 'Empresa', textX, 10)
   doc.setFontSize(8)
   doc.setFont('helvetica', 'normal')
-  doc.text(`RNC: ${empresa.rnc || '—'}`, 14, 16)
+  doc.text(`RNC: ${empresa.rnc || '—'}`, textX, 16)
 
   doc.setTextColor(...NAVY)
   doc.setFontSize(12)

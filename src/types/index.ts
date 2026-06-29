@@ -177,6 +177,7 @@ export interface Empresa {
   email: string
   representanteLegal: string
   modalidadNomina?: 'mensual' | 'quincenal'
+  logo?: string // base64 data URL
 }
 
 export type EstadoPrestamo = 'activo' | 'pagado' | 'cancelado'

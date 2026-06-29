@@ -25,7 +25,8 @@ import { usePeriodos } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
-import { formatRD, fullName } from '@/lib/utils'
+import { formatRD, fullName, formatCedula, formatDate } from '@/lib/utils'
+import jsPDF from 'jspdf'
 import type {
   Empleado,
   ResultadoNomina,
@@ -34,6 +35,7 @@ import type {
   ParametrosNomina,
   ConceptoAjuste,
   AjusteLinea,
+  Empresa,
 } from '@/types'
 import { Wallet, TrendingUp, Receipt, BarChart3 } from 'lucide-react'
 
@@ -107,6 +109,179 @@ function calcularConAjustes(
     : calcularNomina(empleado, params)
 }
 
+// ── Comprobante PDF ───────────────────────────────────────────────────────────
+function descargarComprobantePDF(
+  empleado: Empleado,
+  nomina: ResultadoNomina,
+  label: string,
+  empresa: Empresa,
+) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const W = 210
+  const NR = 27, NG = 41, NB = 128
+
+  // Header bar
+  doc.setFillColor(NR, NG, NB)
+  doc.rect(0, 0, W, 26, 'F')
+
+  let tX = 14
+  if (empresa.logo) {
+    try {
+      const fmt = empresa.logo.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+      doc.addImage(empresa.logo, fmt, 14, 4, 18, 18)
+      tX = 36
+    } catch {}
+  }
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text(empresa.nombre || 'Empresa', tX, 11)
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`RNC: ${empresa.rnc || '—'}  ·  ${empresa.ciudad || 'República Dominicana'}`, tX, 17)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text('COMPROBANTE DE NÓMINA', W - 14, 11, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.text(label, W - 14, 17, { align: 'right' })
+  doc.text(`Emitido: ${new Date().toLocaleDateString('es-DO')}`, W - 14, 22, { align: 'right' })
+
+  // Employee info
+  let y = 36
+  doc.setTextColor(NR, NG, NB)
+  doc.setFontSize(13)
+  doc.setFont('helvetica', 'bold')
+  doc.text(fullName(empleado), 14, y)
+  y += 5.5
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(100, 100, 100)
+  doc.text(`${empleado.cargo}  ·  ${empleado.departamento}  ·  Cédula: ${formatCedula(empleado.cedula)}`, 14, y)
+  y += 4.5
+  doc.text(`Ingreso: ${formatDate(empleado.fechaIngreso)}  ·  Salario base: ${formatRD(empleado.salarioBase, 0)}`, 14, y)
+  y += 6
+  doc.setDrawColor(220, 220, 220)
+  doc.line(14, y, W - 14, y)
+  y += 7
+
+  // Two columns
+  const colW = (W - 32) / 2
+  const c2 = 14 + colW + 4
+
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(16, 185, 129)
+  doc.text('DEVENGOS', 14, y)
+  doc.setTextColor(220, 38, 38)
+  doc.text('DESCUENTOS', c2, y)
+  y += 5
+
+  const devengos = [
+    { label: 'Salario Básico', v: nomina.salarioBruto },
+    ...(nomina.importeHE35   > 0 ? [{ label: 'H.E. 35% Recargo',  v: nomina.importeHE35 }]   : []),
+    ...(nomina.importeHE100  > 0 ? [{ label: 'H.E. 100% Recargo', v: nomina.importeHE100 }]  : []),
+    ...(nomina.bonificaciones > 0 ? [{ label: 'Bonificaciones',    v: nomina.bonificaciones }] : []),
+    ...(nomina.comisiones     > 0 ? [{ label: 'Comisiones',        v: nomina.comisiones }]     : []),
+  ]
+  const descuentos = [
+    { label: 'AFP Empleado (2.87%)', v: nomina.afpEmpleado },
+    { label: 'SFS Empleado (3.04%)', v: nomina.sfsEmpleado },
+    ...(nomina.isrMensual      > 0 ? [{ label: 'ISR Retención',       v: nomina.isrMensual }]      : []),
+    ...(nomina.sfsDependientes > 0 ? [{ label: 'SFS Dep. Adicionales',v: nomina.sfsDependientes }] : []),
+    ...(nomina.otrosDescuentos > 0 ? [{ label: 'Otros Descuentos',    v: nomina.otrosDescuentos }] : []),
+  ]
+
+  const rH = 5.2
+  const rows = Math.max(devengos.length, descuentos.length)
+  for (let i = 0; i < rows; i++) {
+    const ry = y + i * rH
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(80, 80, 80)
+    if (devengos[i]) {
+      doc.text(devengos[i].label, 14, ry)
+      doc.setTextColor(40, 40, 40)
+      doc.setFont('helvetica', 'bold')
+      doc.text(formatRD(devengos[i].v), 14 + colW, ry, { align: 'right' })
+    }
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(80, 80, 80)
+    if (descuentos[i]) {
+      doc.text(descuentos[i].label, c2, ry)
+      doc.setTextColor(40, 40, 40)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`(${formatRD(descuentos[i].v)})`, W - 14, ry, { align: 'right' })
+    }
+  }
+
+  y += rows * rH + 2
+  doc.setDrawColor(200, 200, 200)
+  doc.line(14, y, 14 + colW, y)
+  doc.line(c2, y, W - 14, y)
+  y += 4
+
+  doc.setFontSize(8.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(16, 185, 129)
+  doc.text('Total Bruto', 14, y)
+  doc.text(formatRD(nomina.totalBruto), 14 + colW, y, { align: 'right' })
+  doc.setTextColor(220, 38, 38)
+  doc.text('Total Descuentos', c2, y)
+  doc.text(`(${formatRD(nomina.totalDescuentos)})`, W - 14, y, { align: 'right' })
+
+  // Neto box
+  y += 9
+  doc.setFillColor(NR, NG, NB)
+  doc.roundedRect(14, y, W - 28, 15, 2.5, 2.5, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.text('SALARIO NETO A PAGAR', 22, y + 5.5)
+  doc.setFontSize(13)
+  doc.setFont('helvetica', 'bold')
+  doc.text(formatRD(nomina.salarioNeto, 0), W - 22, y + 10, { align: 'right' })
+
+  // Aportes empresa
+  y += 21
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(NR, NG, NB)
+  doc.text('APORTES EMPRESA (TSS)', 14, y)
+  y += 4.5
+  const aportes = [
+    { label: 'AFP Empleador (7.10%)', v: nomina.afpEmpleador },
+    { label: 'SFS Empleador (7.09%)', v: nomina.sfsEmpleador },
+    { label: 'SRL Empleador',         v: nomina.srlEmpleador },
+  ]
+  aportes.forEach(a => {
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(90, 90, 90)
+    doc.text(a.label, 14, y)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(40, 40, 40)
+    doc.text(formatRD(a.v), W - 14, y, { align: 'right' })
+    y += 4.5
+  })
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(NR, NG, NB)
+  doc.text('Costo Total Empresa', 14, y)
+  doc.text(formatRD(nomina.totalCostoEmpleador), W - 14, y, { align: 'right' })
+
+  // Footer
+  y += 9
+  doc.setDrawColor(220, 220, 220)
+  doc.line(14, y, W - 14, y)
+  y += 5
+  doc.setFontSize(6.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(170, 170, 170)
+  doc.text(`Regalía/período: ${formatRD(nomina.regaliaPascual, 0)}`, 14, y)
+  doc.text(`Vacaciones: ${nomina.vacacionesMensualesDias.toFixed(2)} días`, 90, y)
+  doc.text('Ley 16-92  ·  Ley 87-01  ·  Ley 11-92', W - 14, y, { align: 'right' })
+
+  doc.save(`comprobante-${empleado.cedula}-${label.replace(/\s+/g, '-')}.pdf`)
+}
+
 // ── Detalle modal ─────────────────────────────────────────────────────────────
 function DetalleNomina({
   empleado,
@@ -119,6 +294,7 @@ function DetalleNomina({
   periodoLabel: string
   onClose: () => void
 }) {
+  const { empresa } = useEmpresa()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -126,12 +302,19 @@ function DetalleNomina({
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-start justify-between rounded-t-xl bg-zinc-950 dark:bg-[#080a12] px-6 py-5 text-white">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
-              Comprobante · {periodoLabel}
-            </p>
-            <p className="mt-1 text-lg font-bold">{fullName(empleado)}</p>
-            <p className="text-sm text-zinc-400">{empleado.cargo} · {empleado.departamento}</p>
+          <div className="flex items-center gap-4">
+            {empresa.logo && (
+              <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white flex items-center justify-center">
+                <img src={empresa.logo} alt={empresa.nombre} className="h-full w-full object-contain p-1" />
+              </div>
+            )}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+                Comprobante · {periodoLabel}
+              </p>
+              <p className="mt-1 text-lg font-bold">{fullName(empleado)}</p>
+              <p className="text-sm text-zinc-400">{empleado.cargo} · {empleado.departamento}</p>
+            </div>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-zinc-400 hover:text-white transition-colors">✕</button>
         </div>
@@ -213,12 +396,18 @@ function DetalleNomina({
           </div>
         </div>
 
-        <div className="border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4 flex items-center justify-between">
+        <div className="border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex gap-4 text-xs text-zinc-500 dark:text-zinc-400">
             <span>Regalía/período: <strong className="text-zinc-800 dark:text-zinc-200">{formatRD(nomina.regaliaPascual, 0)}</strong></span>
             <span>Vacaciones: <strong className="text-zinc-800 dark:text-zinc-200">{nomina.vacacionesMensualesDias.toFixed(2)} días</strong></span>
           </div>
-          <p className="text-[10px] text-zinc-400 dark:text-zinc-500 text-right">Ley 16-92 · Ley 87-01 · Ley 11-92</p>
+          <button
+            onClick={() => descargarComprobantePDF(empleado, nomina, periodoLabel, empresa)}
+            className="flex items-center gap-2 rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-4 py-2 text-xs font-semibold text-white transition-colors shrink-0"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Descargar PDF
+          </button>
         </div>
       </div>
     </div>

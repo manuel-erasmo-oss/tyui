@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/Header'
 import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE } from '@/lib/dominican-labor'
 import { formatRD } from '@/lib/utils'
-import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle } from 'lucide-react'
+import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2 } from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
 import { Toast } from '@/components/ui/Toast'
 import { cargarDatosDemo } from '@/lib/seed-data'
@@ -119,6 +119,8 @@ export default function ConfiguracionPage() {
   const [form, setForm]         = useState<Empresa>(empresa)
   const [showToast, setShowToast] = useState(false)
   const [confirmDemo, setConfirmDemo] = useState(false)
+  const [logoError, setLogoError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setForm(empresa)
@@ -131,6 +133,38 @@ export default function ConfiguracionPage() {
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  }
+
+  function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    if (file.size > 3 * 1024 * 1024) {
+      setLogoError('El archivo supera los 3 MB.')
+      return
+    }
+    setLogoError('')
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const src = ev.target?.result as string
+      const img = new window.Image()
+      img.onload = () => {
+        const MAX = 320
+        const scale = Math.min(MAX / img.width, MAX / img.height, 1)
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, w, h)
+        ctx.drawImage(img, 0, 0, w, h)
+        setForm(prev => ({ ...prev, logo: canvas.toDataURL('image/jpeg', 0.88) }))
+      }
+      img.src = src
+    }
+    reader.readAsDataURL(file)
   }
 
   function handleSave(e: React.FormEvent) {
@@ -155,6 +189,59 @@ export default function ConfiguracionPage() {
 
           <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
             <form onSubmit={handleSave} className="space-y-4">
+              {/* Logo */}
+              <div>
+                <label className={LABEL_CLASS}>Logo de la empresa</label>
+                <div className="flex items-center gap-5">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] transition-colors hover:border-[#1B2980] dark:hover:border-indigo-500"
+                  >
+                    {form.logo ? (
+                      <img src={form.logo} alt="Logo" className="h-full w-full object-contain p-2" />
+                    ) : (
+                      <div className="flex flex-col items-center gap-1.5 text-zinc-300 dark:text-zinc-600">
+                        <Building2 className="h-7 w-7" />
+                        <span className="text-[9px] font-semibold uppercase tracking-widest">Logo</span>
+                      </div>
+                    )}
+                  </button>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#252840] transition-colors"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                      {form.logo ? 'Cambiar logo' : 'Subir logo'}
+                    </button>
+                    {form.logo && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, logo: undefined }))}
+                        className="flex items-center gap-2 rounded-lg border border-rose-200 dark:border-rose-800/40 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Eliminar logo
+                      </button>
+                    )}
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug">
+                      JPG, PNG · Máx. 3 MB<br />
+                      Se ajusta automáticamente para PDFs y comprobantes.
+                    </p>
+                    {logoError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{logoError}</p>}
+                  </div>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleLogoChange}
+                />
+              </div>
+
               {/* Nombre */}
               <div>
                 <label htmlFor="nombre" className={LABEL_CLASS}>Nombre de la empresa</label>
