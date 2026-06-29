@@ -89,10 +89,10 @@ export function Sidebar() {
             strokeDasharray="47.12 9.43"
             strokeLinecap="round"
             transform="rotate(30 16 16)"
-            className="stroke-[#1B2980] dark:stroke-indigo-300"
+            className="stroke-[#1B2980] dark:stroke-white"
           />
           {/* Punto interior */}
-          <circle cx="16" cy="16" r="2.8" className="fill-[#1B2980] dark:fill-indigo-300" />
+          <circle cx="16" cy="16" r="2.8" className="fill-[#1B2980] dark:fill-white" />
         </svg>
 
         {/* Wordmark — visible solo expandido */}
@@ -103,12 +103,12 @@ export function Sidebar() {
               <span className="text-[16px] font-bold tracking-[-0.02em] text-zinc-900 dark:text-white leading-none">
                 Cielo
               </span>
-              <span className="text-[16px] font-extralight tracking-[-0.01em] text-zinc-400 dark:text-zinc-500 leading-none">
+              <span className="text-[16px] font-extralight tracking-[-0.01em] text-zinc-400 dark:text-zinc-300 leading-none">
                 Cloud
               </span>
             </div>
             {/* Descriptor en versalitas espaciadas */}
-            <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-600 leading-none">
+            <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-400 dark:text-zinc-500 leading-none">
               Nómina
             </span>
           </div>
