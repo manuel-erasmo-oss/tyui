@@ -67,61 +67,64 @@ export function Sidebar() {
       <div
         className={cn(
           'flex h-16 shrink-0 items-center border-b border-zinc-200 dark:border-[#252840]',
-          c ? 'flex-col justify-center gap-1.5 px-0' : 'px-4 gap-3',
+          c ? 'flex-col justify-center gap-2 px-0' : 'px-5 gap-3',
         )}
       >
-        {/* Isotipo */}
-        <div
-          className={cn(
-            'flex items-center justify-center rounded-xl bg-[#eef0fb] dark:bg-indigo-950/40 shrink-0',
-            c ? 'h-9 w-9' : 'h-8 w-8',
-          )}
+        {/* Isotipo — arco geométrico 300° */}
+        <svg
+          viewBox="0 0 32 32"
+          fill="none"
+          aria-label="Cielo Cloud"
+          className={cn('shrink-0', c ? 'h-8 w-8' : 'h-7 w-7')}
         >
-          <svg
-            viewBox="0 0 32 32"
-            className={cn('fill-none', c ? 'h-5 w-5' : 'h-[18px] w-[18px]')}
-            aria-hidden="true"
-          >
-            <path
-              d="M9 22a5 5 0 01-.9-9.9 7 7 0 0113.4-1.1H22a4 4 0 010 8H9z"
-              className="fill-[#1B2980] dark:fill-indigo-400"
-            />
-            <path
-              d="M14 15.5a2.5 2.5 0 015 0"
-              stroke="white"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-              className="dark:stroke-[#141722]"
-            />
-          </svg>
-        </div>
+          {/*
+            Arco grueso: círculo r=9, strokeWidth=5.5
+            300° de arco (gap=60°) con terminaciones redondeadas.
+            rotate(30°) centra el gap en la posición Este (derecha).
+            Circunferencia = 2π×9 ≈ 56.55 → arco 300° ≈ 47.12, gap ≈ 9.43
+          */}
+          <circle
+            cx="16" cy="16" r="9"
+            strokeWidth="5.5"
+            strokeDasharray="47.12 9.43"
+            strokeLinecap="round"
+            transform="rotate(30 16 16)"
+            className="stroke-[#1B2980] dark:stroke-indigo-300"
+          />
+          {/* Punto interior — ancla visual, referencia a "datos / persona" */}
+          <circle
+            cx="16" cy="16" r="2.8"
+            className="fill-[#1B2980] dark:fill-indigo-300"
+          />
+        </svg>
 
-        {/* Wordmark — hidden when collapsed */}
+        {/* Wordmark — visible solo expandido */}
         {!c && (
           <div className="flex flex-col leading-tight min-w-0 flex-1">
-            <span className="text-sm font-bold tracking-tight text-[#1B2980] dark:text-white truncate">
-              Cielo <span className="font-light">Cloud</span>
+            <span className="text-[13px] font-semibold tracking-tight text-zinc-900 dark:text-white truncate">
+              Cielo
+              <span className="font-light text-zinc-500 dark:text-zinc-400"> Cloud</span>
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+            <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-400 dark:text-zinc-500">
               Nómina
             </span>
           </div>
         )}
 
-        {/* Toggle button */}
+        {/* Toggle */}
         <button
           onClick={toggle}
-          title={c ? 'Expandir menú' : 'Colapsar menú'}
+          title={c ? 'Expandir' : 'Colapsar'}
           className={cn(
-            'flex items-center justify-center rounded-lg transition-colors',
+            'flex items-center justify-center rounded-lg transition-colors shrink-0',
             'text-zinc-400 hover:text-[#1B2980] hover:bg-[#eef0fb]',
             'dark:hover:text-indigo-400 dark:hover:bg-indigo-950/30',
-            c ? 'h-5 w-5' : 'h-7 w-7 shrink-0',
+            c ? 'h-5 w-5' : 'h-6 w-6',
           )}
         >
           {c
             ? <ChevronRight className="h-3.5 w-3.5" />
-            : <ChevronLeft  className="h-4 w-4" />}
+            : <ChevronLeft  className="h-3.5 w-3.5" />}
         </button>
       </div>
 
