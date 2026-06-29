@@ -6,7 +6,8 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   sendPasswordResetEmail,
   updateProfile,
@@ -43,6 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
     const auth = getFirebaseAuth()
+    // Pick up the result when Google redirects back to the app
+    getRedirectResult(auth).catch(() => {})
     const unsub = onAuthStateChanged(auth, u => {
       setUser(u)
       setLoading(false)
@@ -61,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signInGoogle() {
-    await signInWithPopup(getFirebaseAuth(), googleProvider)
+    await signInWithRedirect(getFirebaseAuth(), googleProvider)
   }
 
   async function logout() {
