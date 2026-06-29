@@ -2,14 +2,14 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { ArrowRight, AlertTriangle, CheckCircle2, MoreHorizontal, Building2 } from 'lucide-react'
+import { ArrowRight, MoreHorizontal, Building2 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
-import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import { calcularNomina } from '@/lib/dominican-labor'
-import { formatRD, formatDate, fullName } from '@/lib/utils'
+import { fullName } from '@/lib/utils'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
+import { AgendaNomina } from '@/components/dashboard/AgendaNomina'
 
 const PayrollBarChart = dynamic(
   () => import('@/components/charts/PayrollBarChart').then(m => m.PayrollBarChart),
@@ -126,53 +126,6 @@ export default function DashboardPage() {
 
   const maxBar = Math.max(...[afpEmpleador, sfsEmpleador, srlEmpleador, totalISR, totalRegalia])
 
-  // Days until fiscal deadlines
-  function diasHasta(fecha: Date): number {
-    return Math.ceil((fecha.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
-  }
-  const dia10ProxMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 10)
-  const diasTSS = diasHasta(dia10ProxMes)
-  const diasISR = diasTSS
-  const dic20 = new Date(hoy.getFullYear(), 11, 20)
-  const diasRegalia = diasHasta(dic20) > 0 ? diasHasta(dic20) : diasHasta(new Date(hoy.getFullYear() + 1, 11, 20))
-
-  function urgencyClass(dias: number) {
-    if (dias <= 5) return 'text-rose-600 dark:text-rose-400'
-    if (dias <= 15) return 'text-amber-600 dark:text-amber-400'
-    return 'text-emerald-600 dark:text-emerald-400'
-  }
-  function urgencyIcon(dias: number) {
-    if (dias <= 5) return 'warning' as const
-    return 'info' as const
-  }
-
-  const tareas = [
-    ...empleadosActivos
-      .filter(e => e.tipoContrato === 'tiempo_determinado')
-      .map(e => ({ tipo: 'warning' as const, titulo: `Renovar contrato — ${fullName(e)}`, sub: `Contrato a término determinado · ${e.cargo}`, dias: null, href: '/empleados' })),
-    {
-      tipo: urgencyIcon(diasISR),
-      titulo: `ISR a remitir: ${formatRD(totalISR)}`,
-      sub: `Vence en ${diasISR} días · día 10 · DGII`,
-      dias: diasISR,
-      href: '/reportes',
-    },
-    {
-      tipo: urgencyIcon(diasTSS),
-      titulo: `TSS empleador: ${formatRD(totalTSSEmpleador)}`,
-      sub: `Vence en ${diasTSS} días · día 10 · CNSS`,
-      dias: diasTSS,
-      href: '/reportes',
-    },
-    {
-      tipo: urgencyIcon(diasRegalia),
-      titulo: `Regalía Pascual: ${formatRD(totalRegalia)}`,
-      sub: `Vence en ${diasRegalia} días · 20 dic · Art. 219`,
-      href: '/regalia-pascual',
-      dias: diasRegalia,
-    },
-  ] as { tipo: 'warning' | 'info'; titulo: string; sub: string; dias: number | null; href: string }[]
-
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header title={nombreEmpresa} subtitle={periodo} />
@@ -282,42 +235,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Tareas */}
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm">
-              <div className="flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Tareas</p>
-                <span className="h-5 w-5 rounded-full bg-amber-100 dark:bg-amber-950/50 text-[10px] font-bold text-amber-700 dark:text-amber-400 flex items-center justify-center">
-                  {tareas.length}
-                </span>
-              </div>
-              <div className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
-                {tareas.map((t, i) => (
-                  <div key={i} className="flex items-start gap-3 px-5 py-3.5">
-                    {t.tipo === 'warning'
-                      ? <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-                      : <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#1B2980] dark:text-indigo-400" />
-                    }
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-snug">{t.titulo}</p>
-                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 leading-snug flex items-center gap-1.5">
-                        {t.sub}
-                        {t.dias !== null && (
-                          <span className={`font-semibold ${urgencyClass(t.dias)}`}>
-                            {t.dias <= 5 ? '⚠ urgente' : t.dias <= 15 ? '● pronto' : '✓'}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <Link
-                      href={t.href}
-                      className="shrink-0 rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-1 text-[11px] font-semibold text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
-                    >
-                      Ir
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <AgendaNomina />
 
             {/* Empleados activos */}
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm">
