@@ -1,6 +1,7 @@
 'use client'
 
-import { Bell, Search, HelpCircle, Settings, Menu } from 'lucide-react'
+import Link from 'next/link'
+import { HelpCircle, Menu } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 
 interface HeaderProps {
@@ -26,26 +27,16 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
         {actions && <div className="ml-3 shrink-0">{actions}</div>}
       </div>
 
-      {/* Right icons */}
+      {/* Right */}
       <div className="flex items-center gap-0.5">
-        <button className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+        <Link
+          href="/configuracion"
+          className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+        >
           <HelpCircle className="h-4 w-4" />
           Ayuda
-        </button>
-        <button className="rounded-lg p-2 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
-          <Search className="h-4 w-4" />
-        </button>
-        <button className="relative rounded-lg p-2 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
-          <Bell className="h-4 w-4" />
-          <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" />
-        </button>
-        <button className="rounded-lg p-2 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
-          <Settings className="h-4 w-4" />
-        </button>
+        </Link>
         <ThemeToggle />
-        <div className="ml-1.5 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: '#1B2980' }}>
-          A
-        </div>
       </div>
     </header>
   )
