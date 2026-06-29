@@ -11,7 +11,7 @@ import {
   sendPasswordResetEmail,
   updateProfile,
 } from 'firebase/auth'
-import { auth, googleProvider } from './firebase'
+import { getFirebaseAuth, googleProvider, FIREBASE_ENABLED } from './firebase'
 
 interface AuthCtx {
   user: User | null
@@ -38,6 +38,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!FIREBASE_ENABLED) {
+      setLoading(false)
+      return
+    }
+    const auth = getFirebaseAuth()
     const unsub = onAuthStateChanged(auth, u => {
       setUser(u)
       setLoading(false)
@@ -46,24 +51,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   async function signIn(email: string, password: string) {
-    await signInWithEmailAndPassword(auth, email, password)
+    await signInWithEmailAndPassword(getFirebaseAuth(), email, password)
   }
 
   async function signUp(email: string, password: string, nombre: string) {
+    const auth = getFirebaseAuth()
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     await updateProfile(cred.user, { displayName: nombre })
   }
 
   async function signInGoogle() {
-    await signInWithPopup(auth, googleProvider)
+    await signInWithPopup(getFirebaseAuth(), googleProvider)
   }
 
   async function logout() {
-    await signOut(auth)
+    await signOut(getFirebaseAuth())
   }
 
   async function resetPassword(email: string) {
-    await sendPasswordResetEmail(auth, email)
+    await sendPasswordResetEmail(getFirebaseAuth(), email)
   }
 
   return (

@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import { FIREBASE_ENABLED } from '@/lib/firebase'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomNav } from '@/components/layout/BottomNav'
 
@@ -43,6 +44,18 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     if (!user && !isPublic) router.replace('/login')
     if (user  &&  isPublic) router.replace('/')
   }, [user, loading, isPublic, router])
+
+  // Firebase not configured → skip auth, show app directly
+  if (!FIREBASE_ENABLED) {
+    if (isPublic) return null
+    return (
+      <>
+        <Sidebar />
+        <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
+        <BottomNav />
+      </>
+    )
+  }
 
   if (loading) return <LoadingScreen />
 

@@ -10,6 +10,15 @@ const firebaseConfig = {
   appId:             process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 }
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
-export const auth = getAuth(app)
+// True only when Firebase env vars are present at build time.
+// When false, auth is bypassed so the app stays accessible.
+export const FIREBASE_ENABLED = !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+
+// Lazy getter — never called at module level so the build doesn't fail
+// without env vars. Only runs in the browser (inside useEffect / event handlers).
+export function getFirebaseAuth() {
+  const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp()
+  return getAuth(app)
+}
+
 export const googleProvider = new GoogleAuthProvider()
