@@ -228,18 +228,23 @@ export function Sidebar() {
               </p>
             </div>
           )}
-          <button
-            onClick={handleLogout}
-            title="Cerrar sesión"
-            className={cn(
-              'shrink-0 flex items-center justify-center rounded-lg transition-colors',
-              'text-zinc-300 hover:text-rose-500 hover:bg-rose-50',
-              'dark:text-zinc-600 dark:hover:text-rose-400 dark:hover:bg-rose-950/30',
-              c ? 'h-6 w-6' : 'h-6 w-6',
-            )}
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
+          {c ? (
+            <button
+              onClick={handleLogout}
+              title="Cerrar sesión"
+              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-lg text-zinc-300 hover:text-rose-500 hover:bg-rose-50 dark:text-zinc-600 dark:hover:text-rose-400 dark:hover:bg-rose-950/30 transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 rounded-lg px-2 py-1 text-xs text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shrink-0"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Salir</span>
+            </button>
+          )}
         </div>
       </div>
     </aside>
