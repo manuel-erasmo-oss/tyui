@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   UserMinus,
@@ -15,7 +15,6 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Plus,
   HandCoins,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -34,7 +33,6 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const router   = useRouter()
 
   const [collapsed, setCollapsed] = useState(false)
   const [mounted,   setMounted]   = useState(false)
@@ -125,32 +123,6 @@ export function Sidebar() {
             ? <ChevronRight className="h-3.5 w-3.5" />
             : <ChevronLeft  className="h-4 w-4" />}
         </button>
-      </div>
-
-      {/* ── Nuevo empleado ───────────────────────────────────────── */}
-      <div
-        className={cn(
-          'border-b border-zinc-200 dark:border-[#252840]',
-          c ? 'flex justify-center px-0 py-3' : 'px-3 py-3',
-        )}
-      >
-        {c ? (
-          <button
-            onClick={() => router.push('/empleados?nuevo=1')}
-            title="Nuevo empleado"
-            className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-zinc-300 dark:border-[#2e3355] text-zinc-500 dark:text-zinc-400 hover:border-[#1B2980] hover:text-[#1B2980] dark:hover:border-indigo-500 dark:hover:text-indigo-400 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <button
-            onClick={() => router.push('/empleados?nuevo=1')}
-            className="flex w-full items-center justify-center gap-1.5 rounded-full border-2 border-zinc-300 dark:border-[#2e3355] py-1.5 text-sm font-semibold text-zinc-600 dark:text-zinc-400 hover:border-[#1B2980] hover:text-[#1B2980] dark:hover:border-indigo-500 dark:hover:text-indigo-400 transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Nuevo
-          </button>
-        )}
       </div>
 
       {/* ── Navigation ───────────────────────────────────────────── */}
