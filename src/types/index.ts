@@ -248,3 +248,27 @@ export interface Licencia {
   montoPagado: number   // salarioDiario × dias
   notas?: string
 }
+
+// ─── Liquidación de empleados (desvinculación) ───────────────────────────────
+export type MotivoLiquidacion =
+  | 'renuncia'
+  | 'despido_sin_causa'
+  | 'despido_con_causa'
+  | 'mutuo_acuerdo'
+  | 'vencimiento_contrato'
+
+export interface RegistroLiquidacion {
+  id: string
+  empleadoId: string
+  motivo: MotivoLiquidacion
+  fechaTerminacion: string   // fecha que el usuario eligió como fecha de salida
+  fechaRegistro: string      // ISO timestamp de cuándo se registró la liquidación en el sistema
+  anosServicio: number
+  cesantia: number
+  preaviso: number
+  asistenciaEconomica: number
+  vacaciones: number
+  regalia: number
+  totalPrestamosDescontados: number
+  totalPagado: number
+}
