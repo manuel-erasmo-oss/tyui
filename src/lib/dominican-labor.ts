@@ -71,6 +71,7 @@ export function calcularNomina(
     diasLaborablesMes = 23.83,
     horasExtras35     = 0,
     horasExtras100    = 0,
+    horasNocturnas    = 0,
     bonificaciones    = 0,
     comisiones        = 0,
     sfsDependientes   = 0,
@@ -88,7 +89,11 @@ export function calcularNomina(
   const importeHE100 = horasExtras100 * salarioHora * 2.00  // 100% recargo (feriados)
   const totalHorasExtras = importeHE35 + importeHE100
 
-  const totalBruto = salarioBruto + totalHorasExtras + bonificaciones + comisiones
+  // Recargo nocturno (práctica estándar TSS) — 15% adicional puro sobre la tarifa
+  // hora regular (el salario base ya cubre la hora regular trabajada)
+  const importeNocturno = horasNocturnas * salarioHora * 0.15
+
+  const totalBruto = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones
 
   // ─── TSS (cada aporte capea sobre su propia base — topes distintos) ───────
   const baseCotizableAFP = Math.min(totalBruto, TOPE_COTIZABLE_AFP)
@@ -149,6 +154,7 @@ export function calcularNomina(
     importeHE35,
     importeHE100,
     totalHorasExtras,
+    importeNocturno,
     bonificaciones,
     comisiones,
     totalBruto,
@@ -196,6 +202,7 @@ export function calcularNominaQuincenal(
     importeHE35:              m.importeHE35 / 2,
     importeHE100:             m.importeHE100 / 2,
     totalHorasExtras:         m.totalHorasExtras / 2,
+    importeNocturno:          m.importeNocturno / 2,
     bonificaciones:           m.bonificaciones / 2,
     comisiones:               m.comisiones / 2,
     totalBruto:               bruto,
@@ -247,4 +254,22 @@ export function getAnosServicio(fechaIngreso: string): number {
 
 export function getMesesServicio(fechaIngreso: string): number {
   return Math.floor(getAnosServicio(fechaIngreso) * 12)
+}
+
+// ─── Asistencia Económica (Art. 82, Código de Trabajo) ───────────────────────
+// Distinta de la cesantía: aplica en terminación de contratos por tiempo
+// determinado/obra, o en casos de terminación sin responsabilidad de las partes.
+export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio: number): number {
+  const salarioDiario = salarioMensual / 30
+  if (anosServicio < 0.25) return 0                              // < 3 meses: no aplica
+  if (anosServicio < 0.5)  return salarioDiario * 5              // 3–6 meses: 5 días
+  if (anosServicio < 1)    return salarioDiario * 10             // 6–12 meses: 10 días
+
+  // 12+ meses: 15 días por cada año cumplido, más los días proporcionales
+  // de los meses del año en curso al momento de otorgarla (acumulativo).
+  const aniosCompletos      = Math.floor(anosServicio)
+  const mesesAnioEnCurso    = Math.floor((anosServicio - aniosCompletos) * 12)
+  const diasPorAniosCompletos = aniosCompletos * 15
+  const diasProporcionales    = (15 / 12) * mesesAnioEnCurso
+  return salarioDiario * (diasPorAniosCompletos + diasProporcionales)
 }

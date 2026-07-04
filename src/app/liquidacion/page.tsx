@@ -4,11 +4,11 @@ import { useState } from 'react'
 import { Header } from '@/components/layout/Header'
 import { useEmpleados } from '@/lib/empleados-context'
 import { usePrestamos } from '@/lib/prestamos-context'
-import { calcularCesantia, calcularPreaviso } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica } from '@/lib/dominican-labor'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
 import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins } from 'lucide-react'
 
-type Motivo = 'renuncia' | 'despido_sin_causa' | 'despido_con_causa' | 'mutuo_acuerdo'
+type Motivo = 'renuncia' | 'despido_sin_causa' | 'despido_con_causa' | 'mutuo_acuerdo' | 'vencimiento_contrato'
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 function exportarCSV(filename: string, headers: string[], rows: (string | number)[][]) {
@@ -29,6 +29,7 @@ const MOTIVO_LABELS: Record<Motivo, string> = {
   despido_sin_causa: 'Despido Sin Causa (Art. 87)',
   despido_con_causa: 'Despido Con Causa (Art. 88)',
   mutuo_acuerdo: 'Mutuo Acuerdo',
+  vencimiento_contrato: 'Vencimiento de Contrato (Art. 74/82)',
 }
 
 const LEGAL_NOTES: Record<Motivo, { title: string; text: string }> = {
@@ -47,6 +48,10 @@ const LEGAL_NOTES: Record<Motivo, { title: string; text: string }> = {
   mutuo_acuerdo: {
     title: 'Acuerdo Bilateral — Mutuo Acuerdo',
     text: 'Los montos son negociables. Se recomienda pagar cesantía + preaviso como base mínima para evitar litigios.',
+  },
+  vencimiento_contrato: {
+    title: 'Art. 74/82 — Vencimiento de Contrato por Tiempo Determinado u Obra',
+    text: 'Al terminar un contrato por tiempo determinado o para una obra o servicio determinado (o en casos de terminación sin responsabilidad de las partes), no aplica cesantía ni preaviso. En su lugar corresponde la Asistencia Económica: 5 días (3–6 meses), 10 días (6–12 meses), o 15 días por cada año cumplido más el proporcional del año en curso (12+ meses), además de vacaciones no gozadas y regalía proporcional.',
   },
 }
 
@@ -95,28 +100,33 @@ export default function LiquidacionPage() {
       ? calcularPreaviso(emp.salarioBase, anosServicio)
       : 0
 
+    const asistenciaEconomica = motivo === 'vencimiento_contrato'
+      ? calcularAsistenciaEconomica(emp.salarioBase, anosServicio)
+      : 0
+
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
     const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac
     const vacaciones = diasVacAcum * (emp.salarioBase / 26)
 
     const regalia = (emp.salarioBase / 12) * mesesCalendario
 
-    const subtotal = cesantia + preaviso + vacaciones + regalia
+    const subtotal = cesantia + preaviso + asistenciaEconomica + vacaciones + regalia
     const totalPrestamos = prestamosADescontar.reduce((s, pid) => {
       const p = prestamosActivos.find(x => x.id === pid)
       return s + (p?.saldoPendiente ?? 0)
     }, 0)
     const total = Math.max(0, subtotal - totalPrestamos)
 
-    return { anosServicio, mesesCicloVac, mesesCalendario, cesantia, preaviso, vacaciones, regalia, subtotal, totalPrestamos, total }
+    return { anosServicio, mesesCicloVac, mesesCalendario, cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, total }
   })()
 
   function handleExportCSV() {
     if (!emp || !resultado || !motivo) return
-    const { cesantia, preaviso, vacaciones, regalia, subtotal, totalPrestamos, total } = resultado
+    const { cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, total } = resultado
     const rows: (string | number)[][] = [
       ['Cesantía', cesantia > 0 ? 'Sí' : 'No', cesantia.toFixed(2)],
       ['Preaviso', preaviso > 0 ? 'Sí' : 'No', preaviso.toFixed(2)],
+      ['Asistencia Económica', asistenciaEconomica > 0 ? 'Sí' : 'No', asistenciaEconomica.toFixed(2)],
       ['Vacaciones No Gozadas', 'Sí', vacaciones.toFixed(2)],
       ['Regalía Proporcional', 'Sí', regalia.toFixed(2)],
       ['Subtotal Prestaciones', '', subtotal.toFixed(2)],
@@ -207,6 +217,7 @@ export default function LiquidacionPage() {
                   <option value="despido_sin_causa">Despido Sin Causa (Art. 87)</option>
                   <option value="despido_con_causa">Despido Con Causa (Art. 88)</option>
                   <option value="mutuo_acuerdo">Mutuo Acuerdo</option>
+                  <option value="vencimiento_contrato">Vencimiento de Contrato (Art. 74/82)</option>
                 </select>
               </div>
 
@@ -291,8 +302,8 @@ export default function LiquidacionPage() {
         {/* ── Results section ───────────────────────────────────────────── */}
         {emp && motivo && resultado && (
           <>
-            {/* 2×2 concept grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Concept grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
               {/* Cesantía */}
               <div className="rounded-xl border border-rose-200 dark:border-rose-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
@@ -332,6 +343,30 @@ export default function LiquidacionPage() {
                 {resultado.preaviso > 0 ? (
                   <p className="mt-3 text-2xl font-bold tabular-nums text-amber-700 dark:text-amber-300">
                     {formatRD(resultado.preaviso, 2)}
+                  </p>
+                ) : (
+                  <div className="mt-3">
+                    <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                      No aplica
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Asistencia Económica */}
+              <div className="rounded-xl border border-violet-200 dark:border-violet-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">Asistencia Económica</p>
+                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">Art. 82 — Código de Trabajo</p>
+                  </div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-500 dark:text-violet-400">
+                    <HandCoins className="h-4 w-4" />
+                  </div>
+                </div>
+                {resultado.asistenciaEconomica > 0 ? (
+                  <p className="mt-3 text-2xl font-bold tabular-nums text-violet-700 dark:text-violet-300">
+                    {formatRD(resultado.asistenciaEconomica, 2)}
                   </p>
                 ) : (
                   <div className="mt-3">
@@ -451,7 +486,7 @@ export default function LiquidacionPage() {
                     <p className="text-xs text-zinc-400 mt-0.5">Pesos Dominicanos</p>
                   </div>
                 </div>
-                <div className="mt-4 border-t border-zinc-800 pt-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="mt-4 border-t border-zinc-800 pt-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                   <div>
                     <p className="text-zinc-500 uppercase tracking-wide">Cesantía</p>
                     <p className={`font-semibold mt-0.5 ${resultado.cesantia > 0 ? 'text-rose-300' : 'text-zinc-600'}`}>
@@ -465,6 +500,12 @@ export default function LiquidacionPage() {
                     </p>
                   </div>
                   <div>
+                    <p className="text-zinc-500 uppercase tracking-wide">Asist. Económica</p>
+                    <p className={`font-semibold mt-0.5 ${resultado.asistenciaEconomica > 0 ? 'text-violet-300' : 'text-zinc-600'}`}>
+                      {resultado.asistenciaEconomica > 0 ? formatRD(resultado.asistenciaEconomica, 0) : '—'}
+                    </p>
+                  </div>
+                  <div>
                     <p className="text-zinc-500 uppercase tracking-wide">Vacaciones</p>
                     <p className="font-semibold mt-0.5 text-sky-300">{formatRD(resultado.vacaciones, 0)}</p>
                   </div>
@@ -473,7 +514,7 @@ export default function LiquidacionPage() {
                     <p className="font-semibold mt-0.5 text-emerald-300">{formatRD(resultado.regalia, 0)}</p>
                   </div>
                   {resultado.totalPrestamos > 0 && (
-                    <div className="col-span-2 md:col-span-4 border-t border-zinc-800 pt-3">
+                    <div className="col-span-2 md:col-span-5 border-t border-zinc-800 pt-3">
                       <p className="text-zinc-500 uppercase tracking-wide">Desc. Préstamos</p>
                       <p className="font-semibold mt-0.5 text-rose-400">
                         ({formatRD(resultado.totalPrestamos, 0)})

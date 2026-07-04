@@ -76,6 +76,7 @@ function labelConcepto(concepto: ConceptoAjuste): string {
   const map: Record<ConceptoAjuste, string> = {
     horas_extras_35:  'H.E. 35%',
     horas_extras_100: 'H.E. 100%',
+    recargo_nocturno: 'Recargo Nocturno',
     comision:         'Comisión',
     bono:             'Bono',
     prestamo:         'Préstamo',
@@ -87,7 +88,7 @@ function labelConcepto(concepto: ConceptoAjuste): string {
 }
 
 function isHorasConcepto(concepto: ConceptoAjuste): boolean {
-  return concepto === 'horas_extras_35' || concepto === 'horas_extras_100'
+  return concepto === 'horas_extras_35' || concepto === 'horas_extras_100' || concepto === 'recargo_nocturno'
 }
 
 // ── calcularConAjustes ────────────────────────────────────────────────────────
@@ -99,11 +100,12 @@ function calcularConAjustes(
 ): ResultadoNomina {
   const horasExtras35   = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
   const horasExtras100  = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
+  const horasNocturnas  = ajustes.filter(a => a.concepto === 'recargo_nocturno').reduce((s, a) => s + a.valor, 0)
   const bonificaciones  = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
   const comisiones      = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
   const sfsDependientes = ajustes.filter(a => a.concepto === 'dependiente_sfs').reduce((s, a) => s + a.valor, 0)
   const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
-  const params: ParametrosNomina = { horasExtras35, horasExtras100, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
+  const params: ParametrosNomina = { horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
     : calcularNomina(empleado, params)
@@ -181,6 +183,7 @@ function descargarComprobantePDF(
     { label: 'Salario Básico', v: nomina.salarioBruto },
     ...(nomina.importeHE35   > 0 ? [{ label: 'H.E. 35% Recargo',  v: nomina.importeHE35 }]   : []),
     ...(nomina.importeHE100  > 0 ? [{ label: 'H.E. 100% Recargo', v: nomina.importeHE100 }]  : []),
+    ...(nomina.importeNocturno > 0 ? [{ label: 'Recargo Nocturno (15%)', v: nomina.importeNocturno }] : []),
     ...(nomina.bonificaciones > 0 ? [{ label: 'Bonificaciones',    v: nomina.bonificaciones }] : []),
     ...(nomina.comisiones     > 0 ? [{ label: 'Comisiones',        v: nomina.comisiones }]     : []),
   ]
@@ -328,6 +331,7 @@ function DetalleNomina({
                 { label: 'Salario Básico',      value: nomina.salarioBruto },
                 { label: 'H.E. 35% Recargo',    value: nomina.importeHE35,    hide: nomina.importeHE35 === 0 },
                 { label: 'H.E. 100% Recargo',   value: nomina.importeHE100,   hide: nomina.importeHE100 === 0 },
+                { label: 'Recargo Nocturno (15%)', value: nomina.importeNocturno, hide: nomina.importeNocturno === 0 },
                 { label: 'Bonificaciones',       value: nomina.bonificaciones, hide: nomina.bonificaciones === 0 },
                 { label: 'Comisiones',           value: nomina.comisiones,     hide: nomina.comisiones === 0 },
               ].filter(r => !r.hide).map(row => (
@@ -647,7 +651,7 @@ export default function NominaPage() {
   }
 
   const anios = [nuevoAnio - 1, nuevoAnio, nuevoAnio + 1]
-  const conceptosIngreso: ConceptoAjuste[]   = ['horas_extras_35', 'horas_extras_100', 'comision', 'bono', 'otro_ingreso']
+  const conceptosIngreso: ConceptoAjuste[]   = ['horas_extras_35', 'horas_extras_100', 'recargo_nocturno', 'comision', 'bono', 'otro_ingreso']
   const conceptosDeduccion: ConceptoAjuste[] = ['prestamo', 'dependiente_sfs', 'otro_descuento']
 
   // ── VISTA: LISTA ─────────────────────────────────────────────────────────────

@@ -16,6 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   HandCoins,
+  Percent,
+  FileClock,
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -28,6 +30,8 @@ const NAV_ITEMS = [
   { href: '/regalia-pascual', icon: Gift,            label: 'Regalía Pascual' },
   { href: '/vacaciones',      icon: CalendarDays,    label: 'Vacaciones' },
   { href: '/prestamos',       icon: HandCoins,       label: 'Préstamos' },
+  { href: '/licencias',       icon: FileClock,       label: 'Licencias' },
+  { href: '/bonificacion',    icon: Percent,         label: 'Bonificación Utilidades' },
   { href: '/liquidacion',     icon: UserMinus,       label: 'Liquidación' },
   { href: '/aumentos',        icon: TrendingUp,      label: 'Aumentos Salariales' },
   { href: '/reportes',        icon: FileBarChart2,   label: 'Reportería' },
