@@ -252,7 +252,14 @@ activos con `saldosInicialesRevisado !== true` uno a uno (lista reactiva vía
 capturado en el primer render de la sesión), pidiendo los 3 datos de saldos
 iniciales o permitiendo marcar "empleado nuevo, no aplica". Estados de fin:
 "Todo al día" (nada pendiente) y "Completado" (recorrido de la sesión
-terminado).
+terminado). También permite **registrar un empleado nuevo desde el propio
+asistente** (botón "Agregar empleado nuevo", visible en todos los estados,
+no solo cuando no hay ningún empleado en el sistema) — usa el mismo
+formulario completo del módulo de Empleados (`EmpleadoFormFields`, ver
+"Integración y rediseño" abajo), con los campos obligatorios/opcionales
+idénticos, y marca `saldosInicialesRevisado: true` al guardar. Corrige el
+callejón sin salida original: una cuenta recién creada sin empleados
+mostraba "Todo al día" sin forma de cargar el primer empleado.
 **Fase 3 (implementado)**: **Importador de Excel**
 (`src/components/carga-inicial/ImportadorExcel.tsx`) para migraciones
 masivas, flujo de 3 pasos:
@@ -296,6 +303,33 @@ al resto del sistema. Cambios:
   justo después del gate de `needsOnboarding`, en ambas ramas
   (`FIREBASE_ENABLED` on/off). La cuenta admin (`esAdmin`) omite este gate,
   igual que omite el onboarding.
+
+**Formulario de empleado extraído a componente compartido (implementado)** —
+para que el Asistente Guiado pudiera registrar empleados nuevos con **toda**
+la información que pide el módulo de Empleados (no una versión reducida),
+se extrajo el formulario completo de `src/app/empleados/page.tsx`
+(antes ~700 líneas duplicables) a tres módulos reutilizables:
+- `src/lib/empleado-form.ts` — lógica pura: tipo `EmpForm`, `EMPTY_EMP_FORM`,
+  `toEmpForm`/`formToEmpleado` (conversión hacia/desde `Empleado`,
+  `formToEmpleado` ahora recibe `sectorEmpresa` como parámetro en vez de leer
+  `useEmpresa()` internamente), `validateEmpForm` (antes un `validate()`
+  interno del modal), catálogos (`BANCOS`, `DOC_TIPOS`, `PAISES`) y helpers
+  (`getPais`, `formatDocNumber`, `labelTipoDoc`, `calcularEdad`,
+  `downloadBase64`).
+- `src/components/empleados/EmpleadoAvatar.tsx` — avatar con foto/iniciales,
+  usado en tablas, drawer y selectores de supervisor.
+- `src/components/empleados/EmpleadoFormFields.tsx` — el cuerpo del
+  formulario en sí (Foto de Perfil, Datos Personales, Documento de
+  Identidad, Datos Laborales, Saldos Iniciales, Datos Bancarios, Contrato
+  Laboral) sin el chrome de ventana flotante (eso se quedó en
+  `EmpleadoFormModal` dentro de `empleados/page.tsx`, que ahora solo
+  renderiza `<EmpleadoFormFields wide={isMax} .../>`). Prop `wide` reemplaza
+  el antiguo toggle `isMax` para controlar la densidad del grid.
+- `AsistenteGuiado.tsx` reutiliza estas mismas piezas para su modo de alta
+  ("Registrar empleado nuevo"), garantizando que un empleado creado desde
+  el asistente tenga exactamente los mismos campos, validaciones y valor
+  por defecto de `categoriaRiesgo` que uno creado desde `/empleados` — un
+  único formulario, sin divergencia entre los dos puntos de entrada.
 
 ### 🔴 Alta prioridad — brechas reales confirmadas
 
