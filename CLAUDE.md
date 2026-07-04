@@ -333,12 +333,21 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
 
 ### 🔴 Alta prioridad — brechas reales confirmadas
 
-- **Desposteo de nómina** — mecanismo de "deshacer" un período `procesada`/`cerrada`
-  y devolverlo a `en_proceso`. Diseño recomendado: acción restringida a un rol
-  administrador, solo permite reabrir el período MÁS RECIENTE de cada tipo/quincena
-  (nunca uno intermedio, evita inconsistencias de acumulados), con bitácora
-  (usuario, fecha, período afectado). Es la pieza que falta en el flujo de estados
-  de `usePeriodos`.
+- ~~Desposteo de nómina~~ — **implementado.** `usePeriodos.reabrir(id, usuarioEmail)`
+  (`src/lib/periodos-context.tsx`) devuelve un período `procesada`/`cerrada` a
+  `en_proceso`, limpiando `empleadosProcesados` para que se puedan reprocesar
+  los empleados. Restringido al período **más reciente** de su mismo
+  `tipo`/`quincena` vía `esPeriodoMasReciente()` (compara mes/año contra toda
+  la serie, sin importar el estado de cada uno — evita reabrir un período
+  intermedio mientras uno posterior ya existe). Cada reapertura queda en
+  `PeriodoNomina.bitacoraDesposteos[]` (fecha, `usuarioEmail`, estado
+  anterior) — el sistema no tiene roles de acceso multiusuario (`RolUsuario`
+  en `Empresa` es solo cosmético) para restringir la acción a nivel de
+  permisos, así que la salvaguarda real es la confirmación explícita + este
+  rastro auditable. UI en `nomina/page.tsx`: botón "Reabrir" (ícono
+  `Unlock`, ámbar) junto a Cerrar/Eliminar en la vista de lista, visible solo
+  cuando el período no está `en_proceso` y es el más reciente de su serie;
+  ícono de reloj con tooltip cuando ya tiene reaperturas registradas.
 - **Auditoría pre-cierre** — antes de que un período pase de `en_proceso` a
   `procesada`, panel con 3-4 validaciones de alto impacto: comparativo bruto/neto
   vs. período anterior (% variación por empleado), empleados con neto negativo o

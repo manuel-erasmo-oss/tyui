@@ -160,6 +160,16 @@ export interface ParametrosNomina {
   categoriaRiesgo?: CategoriaRiesgoSRL
 }
 
+// Registro de auditoría cada vez que se reabre (desposteo) un período que ya
+// estaba en 'procesada' o 'cerrada' — permite rastrear quién y cuándo deshizo
+// un cierre, ya que el sistema no tiene roles de acceso multiusuario (cada
+// cuenta es de un solo usuario) para restringir la acción a nivel de permisos.
+export interface BitacoraDesposteo {
+  fecha: string             // ISO timestamp de cuándo se reabrió
+  usuarioEmail: string
+  estadoAnterior: EstadoPeriodo
+}
+
 export interface PeriodoNomina {
   id: string
   tipo: TipoPeriodo
@@ -179,6 +189,7 @@ export interface PeriodoNomina {
   }
   ajustesPorEmpleado?: Record<string, AjusteLinea[]>
   empleadosProcesados?: string[]
+  bitacoraDesposteos?: BitacoraDesposteo[]
 }
 
 export interface ResumenNomina {

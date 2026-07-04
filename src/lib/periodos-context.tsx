@@ -6,6 +6,20 @@ import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-periodos'
 
+// Compara dos períodos del MISMO tipo/quincena por antigüedad (mes/año).
+// Se usa para restringir el desposteo solo al período más reciente de su
+// serie — reabrir uno intermedio dejaría acumulados inconsistentes en los
+// períodos posteriores que ya se generaron a partir de él.
+function esMasRecienteQue(a: PeriodoNomina, b: PeriodoNomina): boolean {
+  if (a.anio !== b.anio) return a.anio > b.anio
+  return a.mes > b.mes
+}
+
+export function esPeriodoMasReciente(periodo: PeriodoNomina, periodos: PeriodoNomina[]): boolean {
+  const serie = periodos.filter(p => p.tipo === periodo.tipo && p.quincena === periodo.quincena)
+  return serie.every(p => p.id === periodo.id || esMasRecienteQue(periodo, p))
+}
+
 interface PeriodosCtx {
   periodos: PeriodoNomina[]
   generar: (data: Omit<PeriodoNomina, 'id' | 'fechaGeneracion'>) => PeriodoNomina
@@ -13,6 +27,7 @@ interface PeriodosCtx {
   eliminar: (id: string) => void
   actualizarAjustes: (periodoId: string, empleadoId: string, ajustes: AjusteLinea[]) => void
   marcarProcesados: (periodoId: string, empleadoIds: string[]) => void
+  reabrir: (id: string, usuarioEmail: string) => boolean
 }
 
 const Ctx = createContext<PeriodosCtx>({
@@ -22,6 +37,7 @@ const Ctx = createContext<PeriodosCtx>({
   eliminar: () => {},
   actualizarAjustes: () => {},
   marcarProcesados: () => {},
+  reabrir: () => false,
 })
 
 export function PeriodosProvider({ children }: { children: ReactNode }) {
@@ -100,8 +116,40 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  // Desposteo: devuelve un período 'procesada'/'cerrada' a 'en_proceso'.
+  // Restringido al período MÁS RECIENTE de su tipo/quincena (ver
+  // esPeriodoMasReciente) y siempre deja rastro en bitacoraDesposteos.
+  // Devuelve false sin modificar nada si el período no existe, ya está
+  // en_proceso, o no es el más reciente de su serie.
+  function reabrir(id: string, usuarioEmail: string): boolean {
+    const periodo = periodos.find(p => p.id === id)
+    if (!periodo) return false
+    if (periodo.estado === 'en_proceso') return false
+    if (!esPeriodoMasReciente(periodo, periodos)) return false
+
+    setPeriodos(prev => {
+      const next = prev.map(p => {
+        if (p.id !== id) return p
+        const registro = {
+          fecha: new Date().toISOString(),
+          usuarioEmail,
+          estadoAnterior: p.estado,
+        }
+        return {
+          ...p,
+          estado: 'en_proceso' as const,
+          empleadosProcesados: [],
+          bitacoraDesposteos: [...(p.bitacoraDesposteos ?? []), registro],
+        }
+      })
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+    return true
+  }
+
   return (
-    <Ctx.Provider value={{ periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados }}>
+    <Ctx.Provider value={{ periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir }}>
       {children}
     </Ctx.Provider>
   )

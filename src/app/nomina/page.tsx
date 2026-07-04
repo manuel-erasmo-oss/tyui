@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Download,
   Lock,
+  Unlock,
   Trash2,
   ArrowLeft,
   Plus,
@@ -15,15 +16,17 @@ import {
   CheckSquare,
   Square,
   PlayCircle,
+  History,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { usePeriodos } from '@/lib/periodos-context'
+import { usePeriodos, esPeriodoMasReciente } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePrestamos } from '@/lib/prestamos-context'
+import { useAuth } from '@/lib/auth-context'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
 import { formatRD, fullName, formatCedula, formatDate } from '@/lib/utils'
 import jsPDF from 'jspdf'
@@ -426,9 +429,10 @@ function DetalleNomina({
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function NominaPage() {
   const { empleadosActivos } = useEmpleados()
-  const { periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados } = usePeriodos()
+  const { periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir } = usePeriodos()
   const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago } = usePrestamos()
+  const { user } = useAuth()
 
   // View state
   const [periodoAbierto, setPeriodoAbierto] = useState<string | null>(null)
@@ -774,13 +778,24 @@ export default function NominaPage() {
                         {p.totalEmpleados} empleado{p.totalEmpleados !== 1 ? 's' : ''}
                       </p>
                     </div>
-                    {p.estado === 'cerrada' ? (
-                      <Badge variant="neutral"><Lock className="mr-1 h-3 w-3" />Cerrada</Badge>
-                    ) : p.estado === 'procesada' ? (
-                      <Badge variant="success">Procesada</Badge>
-                    ) : (
-                      <Badge variant="warning">En Proceso</Badge>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {(p.bitacoraDesposteos?.length ?? 0) > 0 && (
+                        <span
+                          title={p.bitacoraDesposteos!.map(b =>
+                            `Reabierto el ${formatDate(b.fecha.slice(0, 10))} por ${b.usuarioEmail} (estaba ${b.estadoAnterior})`
+                          ).join('\n')}
+                        >
+                          <History className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />
+                        </span>
+                      )}
+                      {p.estado === 'cerrada' ? (
+                        <Badge variant="neutral"><Lock className="mr-1 h-3 w-3" />Cerrada</Badge>
+                      ) : p.estado === 'procesada' ? (
+                        <Badge variant="success">Procesada</Badge>
+                      ) : (
+                        <Badge variant="warning">En Proceso</Badge>
+                      )}
+                    </div>
                   </div>
 
                   <div className="flex-1 px-5 py-4 space-y-2">
@@ -812,6 +827,21 @@ export default function NominaPage() {
                         className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
                       >
                         <Lock className="h-4 w-4" />
+                      </button>
+                    )}
+                    {p.estado !== 'en_proceso' && esPeriodoMasReciente(p, periodos) && (
+                      <button
+                        onClick={() => {
+                          if (!confirm(
+                            `¿Reabrir "${labelPeriodo(p)}"? Los empleados procesados volverán a marcarse como pendientes y deberás reprocesarlos. Esta acción queda registrada con tu usuario y fecha.`
+                          )) return
+                          const ok = reabrir(p.id, user?.email ?? 'desconocido')
+                          setToast(ok ? 'Período reabierto — vuelve a En Proceso' : 'No se pudo reabrir el período')
+                        }}
+                        title="Reabrir período (desposteo)"
+                        className="rounded-lg border border-amber-200 dark:border-amber-800/50 p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                      >
+                        <Unlock className="h-4 w-4" />
                       </button>
                     )}
                     <button
