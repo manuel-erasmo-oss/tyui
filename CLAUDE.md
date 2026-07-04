@@ -157,6 +157,188 @@ export interface ParametrosNomina {
 4. **Tabular nums** en todas las celdas numéricas (`font-variant-numeric: tabular-nums lining-nums`)
 5. **Footers brand light** (`bg-[#eef0fb]`), nunca negro/zinc-950
 
+## Backlog de Nómina — Análisis de Guía Pública SPN Software
+
+Fuente: guía pública de documentación (`spn.com.do/guia-spn/`) de SPN Software, un
+ERP de nómina/RRHH dominicano maduro. Se analizaron 86 documentos técnicos
+enfocados exclusivamente en **nómina** (RRHH queda para una fase posterior).
+
+**Regla ética aplicada**: los parámetros legales (tasas, fórmulas, topes) son de
+dominio público y se replican tal cual. Los conceptos de producto/funcionalidad
+de SPN se toman solo como referencia de alcance — todo lo listado abajo se debe
+diseñar e implementar con arquitectura, UI y redacción propias de Cielo Cloud,
+nunca copiando texto, pantallas o formatos de SPN.
+
+### ⚠️ Auditar en el motor actual (posibles imprecisiones, no solo features nuevas)
+
+1. **Asistencia Económica (Art. 82)** — confirmar que el motivo `vencimiento_contrato`
+   en Liquidación usa la causal correcta. El Art. 82 real cubre incapacidad/muerte
+   del empleador o trabajador, enfermedad, o quiebra — no vencimiento de contrato
+   a plazo fijo per se.
+2. **Base de cálculo de Cesantía/Preaviso** — evaluar si debería usar el promedio
+   de ingresos de los últimos 12 meses (incluyendo variables: comisiones, horas
+   extra) en vez de solo `salarioBase` fijo, para no subestimar el pago a
+   empleados con ingresos variables significativos.
+3. **Orden de deducción por ausentismo** — auditar que el descuento por ausencias
+   se aplique ANTES de calcular ISR/TSS (reduce la base gravable), no después
+   (se descuenta del neto ya tributado). El orden incorrecto genera una
+   diferencia real de pago (SPN documenta un ejemplo de ~RD$420).
+4. **Salario diario en liquidación para empleados con <1 año de antigüedad** —
+   confirmar el prorrateo correcto (meses completos vs. meses completos +
+   proporción de días del mes en curso).
+5. **Divisor de días trabajados (23.83 vs 30)** — confirmar uso consistente en
+   todos los conceptos que dependen de "días trabajados".
+6. **Práctica de ISR quincenal** — SPN documenta que concentrar el 100% del ISR
+   en la 2ª quincena "tiene más desventajas que un prorrateo equitativo entre
+   ambas quincenas". Nuestra práctica actual (ISR=0 en 1ª, 100% en 2ª) está
+   documentada como estándar pymes DR — revisar si conviene reconsiderar o si
+   se mantiene a propósito.
+7. **Topes TSS derivados del salario mínimo vigente** — confirmar que
+   `TOPE_COTIZABLE_AFP/SFS/SRL` se recalculan si cambia `SALARIO_MINIMO_COTIZABLE_TSS`,
+   en vez de quedar como valores fijos a actualizar manualmente.
+
+### 🔴 Alta prioridad — brechas reales confirmadas
+
+- **Desposteo de nómina** — mecanismo de "deshacer" un período `procesada`/`cerrada`
+  y devolverlo a `en_proceso`. Diseño recomendado: acción restringida a un rol
+  administrador, solo permite reabrir el período MÁS RECIENTE de cada tipo/quincena
+  (nunca uno intermedio, evita inconsistencias de acumulados), con bitácora
+  (usuario, fecha, período afectado). Es la pieza que falta en el flujo de estados
+  de `usePeriodos`.
+- **Auditoría pre-cierre** — antes de que un período pase de `en_proceso` a
+  `procesada`, panel con 3-4 validaciones de alto impacto: comparativo bruto/neto
+  vs. período anterior (% variación por empleado), empleados con neto negativo o
+  descuento que excede el % de ley, empleados nuevos/salientes en el período,
+  cambios de cuenta bancaria.
+- **Trazabilidad de pago post-cierre** — estado adicional `pagada` (boolean/fecha)
+  marcado manualmente al confirmar transferencia ACH, más validación de que el
+  monto ACH generado cuadre con el S. Neto del período.
+- **Avances de salario** — adelantos sin interés ni cuotas obligatorias
+  (distinto de Préstamos): descuento automático en el siguiente período,
+  liquidación automática contra prestaciones si el empleado se desvincula con
+  saldo pendiente.
+- **Empresa asume ISR/TSS del empleado** (grossing-up) — flag configurable por
+  empleado/ajuste: % de AFP/SFS/ISR que la empresa absorbe en vez de descontarlo
+  al empleado, reflejado como línea separada en Costo Empleador.
+- **Aporte voluntario a AFP** — % adicional configurable (solo empleado, o
+  empleado+empresa) sobre el 2.87%/7.10% obligatorio. Dato legal citable: una
+  carta de la DGII (2022) confirma que el aporte voluntario **no reduce la base
+  imponible del ISR** — se calcula después de la retención de ISR, a diferencia
+  del aporte obligatorio.
+- **Saldo a favor del empleado (ISR retenido de más)** — obligación legal real:
+  registro de monto/año/motivo que se reintegra automáticamente descontándose
+  del ISR calculado en períodos subsecuentes hasta agotarse, o contra
+  prestaciones al desvincularse.
+- **Retención consolidada de ISR con otro(s) empleador(es)** — campo de "ingreso
+  de otro empleador" que solo afecta la base imponible de ISR mensual, sin
+  tocar TSS ni el neto pagado.
+- **Licencias con subsidio** (módulo genérico, no tres features separadas) —
+  enfermedad común (60% SISALRIL ambulatoria / 40% hospitalaria), accidente
+  laboral/enfermedad profesional (75% ARL), maternidad (100%, empleador paga y
+  SISALRIL reembolsa). Mismo patrón: % de cobertura configurable + disfrute de
+  sueldo opcional.
+- **Suspensión de contrato** — estado nuevo `suspendido` (distinto de
+  `activo`/liquidado): el empleado sigue vinculado pero no cobra nómina;
+  liquidación de derechos adquiridos a la fecha (regalía/vacaciones
+  proporcionales); reactivación posterior sin alterar `fechaIngreso` (preserva
+  antigüedad).
+- **Prorrateo por reajuste salarial a mitad de período + retroactivo por
+  ingreso tardío** — mismo problema de fondo (fechas de efectividad dentro de
+  un período): detectar automáticamente cambios de `salarioBase` o
+  `fechaIngreso` posteriores al cierre del período anterior, y sugerir
+  (editable) el prorrateo o el ajuste de retroactivo correspondiente.
+- **Reporte de cumplimiento de preaviso en renuncias (Art. 76)** — capturar
+  fecha de notificación de renuncia vs. fecha efectiva, calcular automáticamente
+  si cumplió los días mínimos según antigüedad (7/14/28), mostrar la diferencia.
+- **Conciliación mensual TSS y DGII** — reporte que reproduce los mismos
+  conceptos/totales de la factura oficial de TSS (AFP/SFS/SRL/Infotep separados
+  empleado/empleador) y un equivalente de retención mensual de ISR acumulada,
+  para que contabilidad concilie sin recalcular a mano.
+- **Validador de archivo de transferencia bancaria (ACH)** — reglas de
+  formato/longitud/caracteres por banco, corre sobre el archivo ya generado y
+  señala línea/campo del error antes de enviarlo.
+- **Bandas/niveles salariales** — tabla de niveles (mín/medio/máx) por
+  posición, reporte de "empleados fuera de banda", dashboard de distribución
+  salarial.
+- **Topes legales de horas extras** — alertar si se excede 24h semanales al
+  35% o 80h trimestrales acumuladas (Art. 155 Código de Trabajo).
+- **Checklist/asistente de inicio de año** — actualizar tabla ISR, calendario
+  de feriados, calendario de pago anual; recordatorio de IR-13 (declaración
+  jurada anual de retenciones DGII).
+
+### 🟡 Media prioridad
+
+- Catálogo configurable de tipos de ingreso/descuento (flags de qué computa
+  para prestaciones/ISR/TSS) en vez de lógica hardcodeada.
+- Reglas de manejo de insuficiencia de fondos: qué hacer si el neto no alcanza
+  para cubrir una cuota/descuento programado (omitir cuota, acumular como
+  cuenta por cobrar tras 3 fallos consecutivos).
+- Generalizar el prorrateo de descuentos fijos entre períodos (ya lo hacemos
+  para Dep. SFS quincenal) como helper reutilizable para futuros descuentos
+  recurrentes.
+- Modo de interés simple en Préstamos (alterno a la amortización francesa
+  actual) + tabla de amortización visual con desglose capital/interés.
+- Panel de "Capacidad de Pago" (últimas 4 nóminas + proyección de 4 siguientes
+  incluyendo cuotas pendientes) antes de aprobar un préstamo nuevo.
+- Retribuciones Complementarias (Impuesto Sustitutivo 27%, guía oficial DGII) —
+  para paquetes ejecutivos con beneficios en especie (vehículo, vivienda).
+- Calendario anual de feriados administrable que alimente el cálculo de H.E.
+  100% automáticamente.
+- Importador de horas trabajadas vía CSV/Excel con plantilla y validación previa.
+- Nómina en moneda USD — principio de diseño clave: el motor tributario
+  siempre calcula en RD$; USD es solo una capa de presentación con tasa
+  configurable, nunca la base del cálculo.
+- Reporte "empleados activos sin ingresos en el mes completo" — validación de
+  integridad pre-cierre (prerequisito también de una futura integración TSS).
+- Reporte "Salario vs. Inasistencias" — detalle de días descontados por
+  motivo (licencia/permiso/ausencia) con impacto exacto en el salario.
+- Ampliar procesamiento individual existente con filtros de selección múltiple
+  (departamento, fecha de ingreso, fecha de último cambio salarial).
+- Aumento masivo de salario: selección por criterio + importación Excel +
+  aprobación de segundo usuario antes de impactar nómina.
+- Reporte de antigüedad de plantilla (agrupado por posición/rango de años).
+- Crédito de ISR por gastos educativos (Ley 179-09) — registro manual (no
+  automatizar el 10%/25%, depende de notificación DGII) que se resta del ISR
+  calculado, con su propio renglón en el comprobante.
+
+### 🔵 Baja prioridad / no aplica ahora
+
+- Nóminas semanales o bisemanales — P-SPN-002 confirma que la ley (Art. 198)
+  solo exige pago semanal para personal por hora/día; para asalariados fijos
+  la quincenal ya es superior (evita meses de 4 vs. 5 semanas). Sin demanda
+  específica, no urge.
+- Bono Vacacional — confirmado que **no es un concepto legal**, es un
+  beneficio discrecional que algunas empresas otorgan por su cuenta.
+- Reportes que dependen de arquitectura on-premise con SQL Server/Pentaho
+  (conexión ODBC a vistas, tablas dinámicas Excel en vivo) — no aplican a
+  Cielo Cloud (app estática sin backend de BD expuesto); nuestra exportación
+  CSV/Excel bajo demanda ya cubre la necesidad equivalente.
+- Descuentos por consumos de cafetería — requiere integración con hardware
+  propio (reloj/POS), fuera de alcance.
+- Incentivos por energía renovable (Ley 57-07) — demasiado excepcional
+  (crédito de inversión de capital) para justificar una función dedicada.
+- Importación de préstamos externos de terceros (solo informativo, no se
+  descuenta de nómina) — baja prioridad frente a las funciones centrales de
+  préstamos.
+- Reportes/campos exclusivamente de RRHH (evaluación de desempeño,
+  reclutamiento, control de horas/asistencia biométrica, encuestas, carnet,
+  descripciones de puesto, App Mobile, etc.) — quedan para la fase de RRHH.
+
+### ✅ Confirmado correcto / ya implementado
+
+- **SRL 4 categorías (I-IV) y tasas 1.10/1.15/1.20/1.30%** — coincide
+  exactamente con la documentación de SPN.
+- **Bonificación por Participación en Utilidades (Art. 223)** — ya existe
+  como calculadora standalone en `/bonificacion` (10% utilidad neta, tope
+  45/60 días según antigüedad). Confirmar que la fórmula es coherente con el
+  enfoque de SPN (promedio anual de ingresos computables ÷12 ÷23.83 × días).
+- **Categoría de empresa + salario mínimo aplicable + alerta de empleados por
+  debajo del mínimo** — enfoque validado por el propio flujo que documenta
+  SPN ante un cambio de salario mínimo.
+- **Mensual + quincenal como los dos formatos correctos para RD** — confirmado
+  por P-SPN-002/P-SPN-004 como la combinación recomendada para el caso de uso
+  dominante en pymes dominicanas.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
