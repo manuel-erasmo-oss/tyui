@@ -2,11 +2,11 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { ArrowRight, MoreHorizontal, Building2 } from 'lucide-react'
+import { ArrowRight, MoreHorizontal, Building2, AlertTriangle } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularNomina } from '@/lib/dominican-labor'
-import { fullName } from '@/lib/utils'
+import { calcularNomina, getSalarioMinimoPorCategoria } from '@/lib/dominican-labor'
+import { fullName, formatRD } from '@/lib/utils'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { AgendaNomina } from '@/components/dashboard/AgendaNomina'
@@ -135,6 +135,15 @@ export default function DashboardPage() {
 
   const maxBar = Math.max(...[afpEmpleador, sfsEmpleador, srlEmpleador, infotepEmpleador, totalISR, totalRegalia])
 
+  // ─── Alerta de salario mínimo (según categoría de empresa, Res. 079-2025) ───
+  const salarioMinimoAplicable = empresa.categoriaEmpresa
+    ? getSalarioMinimoPorCategoria(empresa.categoriaEmpresa)
+    : null
+  const empleadosBajoMinimo = salarioMinimoAplicable
+    ? empleadosActivos.filter(e => e.salarioBase < salarioMinimoAplicable)
+    : []
+  const CATEGORIA_LABEL: Record<string, string> = { micro: 'Micro', pequeña: 'Pequeña', mediana: 'Mediana', grande: 'Grande' }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header title={nombreEmpresa} subtitle={periodo} />
@@ -167,6 +176,44 @@ export default function DashboardPage() {
         </div>
 
         <div className="p-4 md:p-6 space-y-4">
+
+          {/* Alerta de salario mínimo */}
+          {empleadosBajoMinimo.length > 0 && salarioMinimoAplicable && (
+            <div className="rounded-xl border border-amber-300 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 px-5 py-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                    {empleadosBajoMinimo.length} empleado{empleadosBajoMinimo.length !== 1 ? 's' : ''} por debajo del salario mínimo
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
+                    Categoría {CATEGORIA_LABEL[empresa.categoriaEmpresa!]} — mínimo legal {formatRD(salarioMinimoAplicable, 0)}/mes (Res. 079-2025)
+                  </p>
+                  <ul className="mt-2.5 space-y-1.5">
+                    {empleadosBajoMinimo.map(e => (
+                      <li key={e.id} className="flex items-center justify-between text-xs">
+                        <span className="text-amber-800 dark:text-amber-300">{fullName(e)}</span>
+                        <span className="tabular-nums font-semibold text-amber-800 dark:text-amber-300">
+                          {formatRD(e.salarioBase, 0)}
+                          <span className="ml-1.5 font-normal text-amber-600 dark:text-amber-500">
+                            (faltan {formatRD(salarioMinimoAplicable - e.salarioBase, 0)})
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-2.5 flex items-center gap-4">
+                    <Link href="/empleados" className="text-xs font-semibold text-amber-800 dark:text-amber-300 hover:underline">
+                      Ir a Empleados →
+                    </Link>
+                    <Link href="/configuracion" className="text-xs text-amber-600 dark:text-amber-500 hover:underline">
+                      ¿Categoría incorrecta? Cámbiala en Configuración
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Row 1 — 3 chart cards */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">

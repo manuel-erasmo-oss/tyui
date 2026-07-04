@@ -13,19 +13,22 @@ const DEFAULT: Empresa = {
 
 interface EmpresaCtx {
   empresa: Empresa
+  cargado: boolean
   guardar: (data: Empresa) => void
 }
 
-const Ctx = createContext<EmpresaCtx>({ empresa: DEFAULT, guardar: () => {} })
+const Ctx = createContext<EmpresaCtx>({ empresa: DEFAULT, cargado: false, guardar: () => {} })
 
 export function EmpresaProvider({ children }: { children: ReactNode }) {
   const [empresa, setEmpresa] = useState<Empresa>(DEFAULT)
+  const [cargado, setCargado] = useState(false)
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY)
       if (raw) setEmpresa({ ...DEFAULT, ...JSON.parse(raw) as Empresa })
     } catch { /* ignore */ }
+    setCargado(true)
   }, [])
 
   function guardar(data: Empresa) {
@@ -33,7 +36,7 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem(KEY, JSON.stringify(data)) } catch { /* ignore */ }
   }
 
-  return <Ctx.Provider value={{ empresa, guardar }}>{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ empresa, cargado, guardar }}>{children}</Ctx.Provider>
 }
 
 export const useEmpresa = () => useContext(Ctx)

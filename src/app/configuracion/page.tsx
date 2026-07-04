@@ -8,7 +8,7 @@ import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle, ImagePlus
 import { useEmpresa } from '@/lib/empresa-context'
 import { Toast } from '@/components/ui/Toast'
 import { cargarDatosDemo } from '@/lib/seed-data'
-import type { Empresa } from '@/types'
+import type { Empresa, CategoriaEmpresa } from '@/types'
 
 interface ParamRow {
   label: string
@@ -138,6 +138,13 @@ const INPUT_CLASS =
   'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10'
 
 const LABEL_CLASS = 'block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1'
+
+const CATEGORIAS_EMPRESA: { value: CategoriaEmpresa; label: string; descripcion: string }[] = [
+  { value: 'micro',   label: 'Micro',   descripcion: '< 10 trabajadores' },
+  { value: 'pequeña', label: 'Pequeña', descripcion: '10–19 trabajadores' },
+  { value: 'mediana', label: 'Mediana', descripcion: '20–49 trabajadores' },
+  { value: 'grande',  label: 'Grande',  descripcion: '50+ trabajadores o capital > RD$2M' },
+]
 
 export default function ConfiguracionPage() {
   const { empresa, guardar } = useEmpresa()
@@ -363,6 +370,38 @@ export default function ConfiguracionPage() {
                   placeholder="Ej. María García Pérez"
                   className={INPUT_CLASS}
                 />
+              </div>
+
+              {/* Categoría de Empresa */}
+              <div>
+                <label className={LABEL_CLASS}>Categoría de la empresa</label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {CATEGORIAS_EMPRESA.map(cat => (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, categoriaEmpresa: cat.value }))}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                        form.categoriaEmpresa === cat.value
+                          ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30'
+                          : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:bg-zinc-50 dark:hover:bg-[#252840]'
+                      }`}
+                    >
+                      <p className={`text-xs font-semibold ${
+                        form.categoriaEmpresa === cat.value
+                          ? 'text-[#1B2980] dark:text-indigo-300'
+                          : 'text-zinc-700 dark:text-zinc-300'
+                      }`}>
+                        {cat.label}
+                      </p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{cat.descripcion}</p>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  Determina el salario mínimo legal aplicable (Res. 079-2025) y las alertas del Dashboard cuando
+                  un empleado gana menos de lo establecido. Actualízala si tu empresa crece de categoría.
+                </p>
               </div>
 
               {/* Modalidad de Nómina */}

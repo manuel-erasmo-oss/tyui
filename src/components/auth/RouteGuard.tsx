@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth-context'
 import { FIREBASE_ENABLED } from '@/lib/firebase'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomNav } from '@/components/layout/BottomNav'
+import { CategoriaEmpresaGate } from '@/components/onboarding/CategoriaEmpresaGate'
 
 const PUBLIC_PATHS = ['/login', '/registro']
 
@@ -51,7 +52,9 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     return (
       <>
         <Sidebar />
-        <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
+        <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">
+          <CategoriaEmpresaGate>{children}</CategoriaEmpresaGate>
+        </main>
         <BottomNav />
       </>
     )
@@ -71,7 +74,9 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   return (
     <>
       <Sidebar />
-      <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
+      <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">
+        <CategoriaEmpresaGate>{children}</CategoriaEmpresaGate>
+      </main>
       <BottomNav />
     </>
   )

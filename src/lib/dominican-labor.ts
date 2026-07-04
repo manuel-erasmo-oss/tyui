@@ -1,4 +1,4 @@
-import type { Empleado, ParametrosNomina, ResultadoNomina } from '@/types'
+import type { CategoriaEmpresa, Empleado, ParametrosNomina, ResultadoNomina } from '@/types'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -34,6 +34,16 @@ export const SALARIO_MINIMO = {
 
 // Salario mínimo cotizable TSS vigente desde 01-feb-2026 (Resolución 079-2025 CNSS)
 export const SALARIO_MINIMO_COTIZABLE_TSS = 23_223.00
+
+// Salario mínimo aplicable según la categoría de la empresa (Res. 079-2025)
+export function getSalarioMinimoPorCategoria(categoria: CategoriaEmpresa): number {
+  switch (categoria) {
+    case 'grande':  return SALARIO_MINIMO.grandesEmpresas
+    case 'mediana': return SALARIO_MINIMO.medianaEmpresa
+    case 'pequeña': return SALARIO_MINIMO.pequeñasEmpresas
+    case 'micro':   return SALARIO_MINIMO.microempresas
+  }
+}
 
 export const TOPE_COTIZABLE_AFP = SALARIO_MINIMO_COTIZABLE_TSS * 20  // RD$464,460 — 20× salario mínimo
 export const TOPE_COTIZABLE_SFS = SALARIO_MINIMO_COTIZABLE_TSS * 10  // RD$232,230 — 10× salario mínimo

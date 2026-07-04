@@ -179,6 +179,8 @@ export interface ResumenNomina {
   totalRegaliaPascual: number
 }
 
+export type CategoriaEmpresa = 'micro' | 'pequeña' | 'mediana' | 'grande'
+
 export interface Empresa {
   nombre: string
   rnc: string
@@ -189,6 +191,7 @@ export interface Empresa {
   representanteLegal: string
   modalidadNomina?: 'mensual' | 'quincenal'
   logo?: string // base64 data URL
+  categoriaEmpresa?: CategoriaEmpresa // define el salario mínimo aplicable (Res. 079-2025)
 }
 
 export type EstadoPrestamo = 'activo' | 'pagado' | 'cancelado'

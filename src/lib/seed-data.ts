@@ -95,6 +95,7 @@ export function cargarDatosDemo(): void {
     email: 'admin@distribcaribe.com.do',
     representanteLegal: 'Carmen Rosa Peña Soto',
     modalidadNomina: 'mensual',
+    categoriaEmpresa: 'pequeña',
   }
 
   // ── 2. Empleados (same as MOCK — already in context) ─────────────────────────
