@@ -447,7 +447,7 @@ al resto del sistema. Cambios:
 
 | Hash | Descripción |
 |---|---|
-| _(pendiente)_ | refactor: integrar Carga Inicial en Configuración + prompt post-onboarding + rediseño premium |
+| `ffa2740` | refactor: integrar Carga Inicial en Configuración + prompt post-onboarding |
 | `c87ae7f` | feat: importador Excel para carga inicial de saldos (Fase 3) |
 | `45d5245` | feat: asistente guiado de saldos iniciales (Fase 2) |
 | `9595bf4` | feat: contenedor Carga Inicial (Fase 2+3) — base para asistente guiado + importador Excel |
