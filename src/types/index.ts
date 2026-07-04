@@ -97,6 +97,8 @@ export interface Empleado {
   regaliaPagadaEsteAnio?: number       // monto de regalía ya pagado en el año en curso, antes de la migración
   salarioHistoricoReferencia?: number  // salario promedio de referencia (Cesantía/Preaviso/Asistencia Económica)
                                         // mientras se acumulan 12 meses reales de nómina procesada en el sistema
+  saldosInicialesRevisado?: boolean    // true una vez que el Asistente de Carga Inicial confirmó este
+                                        // empleado (con datos o marcado "no aplica, empleado nuevo")
 }
 
 export interface ResultadoNomina {

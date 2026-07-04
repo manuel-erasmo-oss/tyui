@@ -19,6 +19,7 @@ import {
   Percent,
   FileClock,
   LogOut,
+  UploadCloud,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
@@ -26,6 +27,7 @@ import { useAuth } from '@/lib/auth-context'
 const NAV_ITEMS = [
   { href: '/',                icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/empleados',       icon: Users,           label: 'Empleados' },
+  { href: '/carga-inicial',   icon: UploadCloud,     label: 'Carga Inicial' },
   { href: '/nomina',          icon: Calculator,      label: 'Procesar Nómina' },
   { href: '/regalia-pascual', icon: Gift,            label: 'Regalía Pascual' },
   { href: '/vacaciones',      icon: CalendarDays,    label: 'Vacaciones' },
