@@ -245,12 +245,27 @@ no de la fecha de alta en el sistema. Lo que sí requería solución (implementa
   (aviso visual) cuando `fechaIngreso` es de hace más de 45 días — sugiere que
   es una migración, no una contratación nueva.
 
-**Fase 2 (pendiente)**: asistente guiado que recorra los empleados activos uno
-a uno pidiendo estos 3 datos, con opción "empleado nuevo, no aplica".
-**Fase 3 (pendiente)**: importador de Excel — plantilla descargable con datos
-maestros + saldos iniciales, vista previa con validación de errores antes de
-aplicar, para migraciones masivas (decenas de empleados de una vez). Merece su
-propio ciclo de desarrollo por el trabajo de parseo/validación de archivos.
+**Fase 2 (implementado)**: `/carga-inicial` — página contenedora con selector
+de modo (`src/app/carga-inicial/page.tsx`) que enlaza a las dos rutas de carga:
+- **Asistente Guiado** (`src/components/carga-inicial/AsistenteGuiado.tsx`):
+  recorre los empleados activos con `saldosInicialesRevisado !== true` uno a
+  uno (lista reactiva vía `useMemo` sobre `empleadosActivos`, con "X de Y"
+  estable gracias a un total capturado en el primer render de la sesión),
+  pidiendo los 3 datos de saldos iniciales o permitiendo marcar "empleado
+  nuevo, no aplica". Estados de fin: "Todo al día" (nada pendiente) y
+  "Completado" (recorrido de la sesión terminado).
+**Fase 3 (implementado)**: `src/components/carga-inicial/ImportadorExcel.tsx`
+— importador de Excel para migraciones masivas, flujo de 3 pasos:
+1. Descarga de plantilla `.xlsx` (vía `xlsx`, mismo patrón que
+   `src/lib/excel-export.ts`) con las 10 columnas exactas + 2 filas de ejemplo.
+2. Carga del archivo lleno (`.xlsx`/`.xls`/`.csv`), parseo con
+   `XLSX.read`/`sheet_to_json`, tratado siempre como datos (nunca ejecuta
+   fórmulas/macros).
+3. Vista previa fila por fila con acción detectada automáticamente por cédula
+   (existente → "Actualizar saldos" solo en los 3 campos de saldos iniciales;
+   nueva → "Crear empleado nuevo" con validación de los campos obligatorios) y
+   estado ✅/❌ con el motivo exacto del error; confirmación aplica solo las
+   filas válidas y marca `saldosInicialesRevisado: true` en cada una.
 
 ### 🔴 Alta prioridad — brechas reales confirmadas
 
@@ -402,6 +417,10 @@ propio ciclo de desarrollo por el trabajo de parseo/validación de archivos.
 
 | Hash | Descripción |
 |---|---|
+| `c87ae7f` | feat: importador Excel para carga inicial de saldos (Fase 3) |
+| `45d5245` | feat: asistente guiado de saldos iniciales (Fase 2) |
+| `9595bf4` | feat: contenedor Carga Inicial (Fase 2+3) — base para asistente guiado + importador Excel |
+| `9529399` | feat: Saldos Iniciales — empleados con historial previo a Cielo Cloud (Fase 1) |
 | `85e6323` | fix: cuota dep SFS monto fijo RD$1,919.78 (Res. 624-02 CNSS) |
 | `2844cca` | feat: sfsDependientes como descuento de primera clase en nómina |
 | `ae1219d` | feat: auto-calculate SFS quota per Resolución 624-02 CNSS |
