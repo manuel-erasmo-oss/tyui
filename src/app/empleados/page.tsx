@@ -10,7 +10,7 @@ import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getCategoriaSRLPorSector } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getCategoriaSRLPorSector, getDivisorSalarioDiario } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
   fullName, contratoBadgeClass, contratoLabel, CONTRATO_DGT_INFO,
@@ -1113,8 +1113,8 @@ function EmpleadoDrawer({
   const [depFechaNac, setDepFechaNac] = useState('')
   const depCuotaMensual = cuotaDependienteSFS()
   const anos      = getAnosServicio(empleado.fechaIngreso)
-  const cesantia  = calcularCesantia(empleado.salarioBase, anos)
-  const preaviso  = calcularPreaviso(empleado.salarioBase, anos)
+  const cesantia  = calcularCesantia(empleado.salarioBase, anos, getDivisorSalarioDiario(empleado))
+  const preaviso  = calcularPreaviso(empleado.salarioBase, anos, getDivisorSalarioDiario(empleado))
   const supervisor = todosEmpleados.find(e => e.id === empleado.supervisorId)
   const pais       = empleado.nacionalidad ? getPais(empleado.nacionalidad) : undefined
   const isMax      = winState === 'maximized'

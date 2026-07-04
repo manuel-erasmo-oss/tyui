@@ -114,22 +114,23 @@ export default function LiquidacionPage() {
     // salario contractual. Vacaciones y Regalía siguen usando el salario base
     // actual, como corresponde a esos conceptos.
     const salarioOrdinario = calcularSalarioPromedioUltimos12Meses(emp, periodos, fechaTerm)
+    const divisorDiario    = getDivisorSalarioDiario(emp)
 
     const cesantia = (motivo === 'despido_sin_causa' || motivo === 'mutuo_acuerdo')
-      ? calcularCesantia(salarioOrdinario, anosServicio)
+      ? calcularCesantia(salarioOrdinario, anosServicio, divisorDiario)
       : 0
 
     const preaviso = (motivo === 'despido_sin_causa' || motivo === 'mutuo_acuerdo')
-      ? calcularPreaviso(salarioOrdinario, anosServicio)
+      ? calcularPreaviso(salarioOrdinario, anosServicio, divisorDiario)
       : 0
 
     const asistenciaEconomica = motivo === 'vencimiento_contrato'
-      ? calcularAsistenciaEconomica(salarioOrdinario, anosServicio)
+      ? calcularAsistenciaEconomica(salarioOrdinario, anosServicio, divisorDiario)
       : 0
 
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
     const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac
-    const vacaciones = diasVacAcum * (emp.salarioBase / getDivisorSalarioDiario(emp))
+    const vacaciones = diasVacAcum * (emp.salarioBase / divisorDiario)
 
     const regalia = (emp.salarioBase / 12) * mesesCalendario
 

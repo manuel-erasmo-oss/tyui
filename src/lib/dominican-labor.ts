@@ -271,8 +271,10 @@ export function calcularNominaQuincenal(
 }
 
 // ─── Cesantía (Art. 80, Código de Trabajo Ley 16-92) ─────────────────────────
-export function calcularCesantia(salarioMensual: number, anosServicio: number): number {
-  const salarioDiario = salarioMensual / 30
+// Salario diario = salario mensual ÷ divisor laboral (23.83 ordinario, 26
+// régimen intermitente) — NO ÷30 días calendario. Usa getDivisorSalarioDiario().
+export function calcularCesantia(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): number {
+  const salarioDiario = salarioMensual / divisor
   if (anosServicio < 0.25) return 0
   if (anosServicio < 0.5)  return salarioDiario * 6                          // 3–6 meses: 6 días
   if (anosServicio < 1)    return salarioDiario * 13                         // 6–12 meses: 13 días
@@ -281,8 +283,8 @@ export function calcularCesantia(salarioMensual: number, anosServicio: number): 
 }
 
 // ─── Preaviso (Art. 76, Código de Trabajo) ───────────────────────────────────
-export function calcularPreaviso(salarioMensual: number, anosServicio: number): number {
-  const salarioDiario = salarioMensual / 30
+export function calcularPreaviso(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): number {
+  const salarioDiario = salarioMensual / divisor
   if (anosServicio < 0.25) return 0
   if (anosServicio < 0.5)  return salarioDiario * 7   // 3–6 meses: 7 días
   if (anosServicio < 1)    return salarioDiario * 14  // 6–12 meses: 14 días
@@ -303,8 +305,9 @@ export function getMesesServicio(fechaIngreso: string): number {
 // ─── Asistencia Económica (Art. 82, Código de Trabajo) ───────────────────────
 // Distinta de la cesantía: aplica en terminación de contratos por tiempo
 // determinado/obra, o en casos de terminación sin responsabilidad de las partes.
-export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio: number): number {
-  const salarioDiario = salarioMensual / 30
+// Salario diario = salario mensual ÷ divisor laboral (23.83/26), no ÷30.
+export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): number {
+  const salarioDiario = salarioMensual / divisor
   if (anosServicio < 0.25) return 0                              // < 3 meses: no aplica
   if (anosServicio < 0.5)  return salarioDiario * 5              // 3–6 meses: 5 días
   if (anosServicio < 1)    return salarioDiario * 10             // 6–12 meses: 10 días

@@ -204,11 +204,14 @@ nunca copiando texto, pantallas o formatos de SPN.
    formulario de empleado, con nota legal) y `getDivisorSalarioDiario()` en
    `dominican-labor.ts`: usa 23.83 para régimen ordinario, 26 para régimen
    intermitente. Aplicado en `calcularNomina` (vacaciones mensuales),
-   `liquidacion/page.tsx` y `vacaciones/page.tsx`. El divisor 30 de
-   Cesantía/Preaviso/Asistencia Económica no cambia — es correcto para ambos
-   regímenes. `nomina/page.tsx` avisa cuando se cargan horas extra a un
-   empleado en régimen intermitente, recordando que solo cuenta el exceso
-   sobre 10h/día o 60h/semana, no los umbrales ordinarios.
+   `liquidacion/page.tsx`, `vacaciones/page.tsx` y también en
+   `calcularCesantia`/`calcularPreaviso`/`calcularAsistenciaEconomica`
+   (corrección posterior: el salario diario de estas 3 prestaciones también
+   debe salir del divisor laboral 23.83/26, NO de 30 días calendario — el ÷30
+   inicial era incorrecto, corregido con segunda aclaración del usuario).
+   `nomina/page.tsx` avisa cuando se cargan horas extra a un empleado en
+   régimen intermitente, recordando que solo cuenta el exceso sobre 10h/día o
+   60h/semana, no los umbrales ordinarios.
 6. **Práctica de ISR quincenal** — **pendiente decisión del usuario.** SPN
    documenta que concentrar el 100% del ISR en la 2ª quincena "tiene más
    desventajas que un prorrateo equitativo entre ambas quincenas". Nuestra
