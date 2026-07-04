@@ -10,12 +10,13 @@ import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getCategoriaSRLPorSector } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
   fullName, contratoBadgeClass, contratoLabel, CONTRATO_DGT_INFO,
 } from '@/lib/utils'
 import { usePeriodos } from '@/lib/periodos-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import type { Empleado, TipoContrato, Banco, TipoDocumento, Dependiente, ParentescoDependiente, PeriodoNomina, AjusteLinea, TipoPeriodo, ResultadoNomina } from '@/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -1681,6 +1682,7 @@ function EmpleadoDrawer({
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function EmpleadosPage() {
   const { empleados, add, update, remove } = useEmpleados()
+  const { empresa } = useEmpresa()
   const [busqueda, setBusqueda]             = useState('')
   const [departamento, setDepartamento]     = useState('Todos')
   const [mostrarInactivos, setMostrarInactivos] = useState(false)
@@ -1742,7 +1744,7 @@ export default function EmpleadosPage() {
       telefono:        form.telefono.trim() || undefined,
       banco:           (form.banco as Banco) || undefined,
       numeroCuenta:    form.numeroCuenta.trim() || undefined,
-      categoriaRiesgo: 'I',
+      categoriaRiesgo: getCategoriaSRLPorSector(empresa.sectorEmpresa),
     }
   }
 

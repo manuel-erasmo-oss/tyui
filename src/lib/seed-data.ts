@@ -96,6 +96,11 @@ export function cargarDatosDemo(): void {
     representanteLegal: 'Carmen Rosa Peña Soto',
     modalidadNomina: 'mensual',
     categoriaEmpresa: 'pequeña',
+    sectorEmpresa: 'oficinas_comercio',
+    numeroEmpleadosAprox: '10-19',
+    zonaFranca: false,
+    rolUsuario: 'dueño',
+    onboardingCompleto: true,
   }
 
   // ── 2. Empleados (same as MOCK — already in context) ─────────────────────────

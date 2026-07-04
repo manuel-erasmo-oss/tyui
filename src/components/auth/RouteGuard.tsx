@@ -3,10 +3,11 @@
 import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import { FIREBASE_ENABLED } from '@/lib/firebase'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomNav } from '@/components/layout/BottomNav'
-import { CategoriaEmpresaGate } from '@/components/onboarding/CategoriaEmpresaGate'
+import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import { EmailVerificationGate } from '@/components/auth/EmailVerificationGate'
 
 const PUBLIC_PATHS = ['/login', '/registro']
@@ -35,9 +36,10 @@ function LoadingScreen() {
 }
 
 export function RouteGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth()
-  const router            = useRouter()
-  const pathname          = usePathname()
+  const { user, loading }  = useAuth()
+  const { empresa, cargado: empresaCargada } = useEmpresa()
+  const router              = useRouter()
+  const pathname            = usePathname()
 
   const isPublic = PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
 
@@ -47,15 +49,17 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     if (user  &&  isPublic) router.replace('/')
   }, [user, loading, isPublic, router])
 
-  // Firebase not configured → skip auth, show app directly
+  const needsOnboarding = empresaCargada && !empresa.onboardingCompleto
+
+  // Firebase not configured → skip auth, only gate on onboarding
   if (!FIREBASE_ENABLED) {
     if (isPublic) return null
+    if (!empresaCargada) return <LoadingScreen />
+    if (needsOnboarding) return <OnboardingWizard />
     return (
       <>
         <Sidebar />
-        <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">
-          <CategoriaEmpresaGate>{children}</CategoriaEmpresaGate>
-        </main>
+        <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
         <BottomNav />
       </>
     )
@@ -69,17 +73,21 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     return <div className="flex flex-1 overflow-y-auto">{children}</div>
   }
 
-  // Protected pages — require auth + show app chrome
   if (!user) return null
 
+  const esCuentaPassword = user.providerData.some(p => p.providerId === 'password')
+  const needsVerification = esCuentaPassword && !user.emailVerified
+
+  // Verificación de correo y onboarding se muestran a pantalla completa, sin sidebar
+  if (needsVerification) return <EmailVerificationGate />
+  if (!empresaCargada)   return <LoadingScreen />
+  if (needsOnboarding)   return <OnboardingWizard />
+
+  // Protected pages — fully set up, show app chrome
   return (
     <>
       <Sidebar />
-      <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">
-        <EmailVerificationGate>
-          <CategoriaEmpresaGate>{children}</CategoriaEmpresaGate>
-        </EmailVerificationGate>
-      </main>
+      <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
       <BottomNav />
     </>
   )

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, MoreHorizontal, Building2, AlertTriangle } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularNomina, getSalarioMinimoPorCategoria } from '@/lib/dominican-labor'
+import { calcularNomina, getSalarioMinimoAplicable } from '@/lib/dominican-labor'
 import { fullName, formatRD } from '@/lib/utils'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
@@ -135,14 +135,13 @@ export default function DashboardPage() {
 
   const maxBar = Math.max(...[afpEmpleador, sfsEmpleador, srlEmpleador, infotepEmpleador, totalISR, totalRegalia])
 
-  // ─── Alerta de salario mínimo (según categoría de empresa, Res. 079-2025) ───
-  const salarioMinimoAplicable = empresa.categoriaEmpresa
-    ? getSalarioMinimoPorCategoria(empresa.categoriaEmpresa)
-    : null
+  // ─── Alerta de salario mínimo (según categoría de empresa o zona franca) ───
+  const salarioMinimoAplicable = getSalarioMinimoAplicable(empresa)
   const empleadosBajoMinimo = salarioMinimoAplicable
     ? empleadosActivos.filter(e => e.salarioBase < salarioMinimoAplicable)
     : []
   const CATEGORIA_LABEL: Record<string, string> = { micro: 'Micro', pequeña: 'Pequeña', mediana: 'Mediana', grande: 'Grande' }
+  const categoriaAlertaLabel = empresa.zonaFranca ? 'Zona Franca' : (empresa.categoriaEmpresa ? CATEGORIA_LABEL[empresa.categoriaEmpresa] : '')
 
   return (
     <div className="flex flex-col overflow-hidden h-full">
@@ -187,7 +186,7 @@ export default function DashboardPage() {
                     {empleadosBajoMinimo.length} empleado{empleadosBajoMinimo.length !== 1 ? 's' : ''} por debajo del salario mínimo
                   </p>
                   <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
-                    Categoría {CATEGORIA_LABEL[empresa.categoriaEmpresa!]} — mínimo legal {formatRD(salarioMinimoAplicable, 0)}/mes (Res. 079-2025)
+                    {empresa.zonaFranca ? categoriaAlertaLabel : `Categoría ${categoriaAlertaLabel}`} — mínimo legal {formatRD(salarioMinimoAplicable, 0)}/mes
                   </p>
                   <ul className="mt-2.5 space-y-1.5">
                     {empleadosBajoMinimo.map(e => (

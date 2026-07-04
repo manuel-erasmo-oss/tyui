@@ -181,6 +181,14 @@ export interface ResumenNomina {
 
 export type CategoriaEmpresa = 'micro' | 'pequeña' | 'mediana' | 'grande'
 
+// Sector principal de operación — determina la categoría SRL por defecto de los empleados
+export type SectorEmpresa = 'oficinas_comercio' | 'industria_liviana' | 'industria_pesada' | 'construccion_mineria'
+
+// Rol de quien administra el sistema — personaliza copy/enfoque, no restringe acceso
+export type RolUsuario = 'dueño' | 'contador' | 'rrhh' | 'otro'
+
+export type RangoEmpleados = '1-9' | '10-19' | '20-49' | '50+'
+
 export interface Empresa {
   nombre: string
   rnc: string
@@ -192,6 +200,11 @@ export interface Empresa {
   modalidadNomina?: 'mensual' | 'quincenal'
   logo?: string // base64 data URL
   categoriaEmpresa?: CategoriaEmpresa // define el salario mínimo aplicable (Res. 079-2025)
+  sectorEmpresa?: SectorEmpresa
+  numeroEmpleadosAprox?: RangoEmpleados
+  zonaFranca?: boolean // opera bajo régimen de zona franca — salario mínimo distinto
+  rolUsuario?: RolUsuario
+  onboardingCompleto?: boolean
 }
 
 export type EstadoPrestamo = 'activo' | 'pagado' | 'cancelado'

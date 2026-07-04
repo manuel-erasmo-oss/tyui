@@ -5,21 +5,14 @@ import { useRouter } from 'next/navigation'
 import { MailCheck, RefreshCw, LogOut } from 'lucide-react'
 import { useAuth } from '@/lib/auth-context'
 
-interface Props {
-  children: React.ReactNode
-}
-
-export function EmailVerificationGate({ children }: Props) {
+export function EmailVerificationGate() {
   const { user, sendVerification, refreshUser, logout } = useAuth()
   const router = useRouter()
   const [sending, setSending]   = useState(false)
   const [sent, setSent]         = useState(false)
   const [checking, setChecking] = useState(false)
 
-  const esCuentaPassword = user?.providerData.some(p => p.providerId === 'password') ?? false
-
-  // Google ya verifica el correo por su cuenta — solo bloqueamos cuentas email/contraseña
-  if (!user || !esCuentaPassword || user.emailVerified) return <>{children}</>
+  if (!user) return null
 
   async function handleReenviar() {
     setSending(true)

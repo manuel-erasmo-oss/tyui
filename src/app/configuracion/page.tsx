@@ -8,7 +8,7 @@ import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle, ImagePlus
 import { useEmpresa } from '@/lib/empresa-context'
 import { Toast } from '@/components/ui/Toast'
 import { cargarDatosDemo } from '@/lib/seed-data'
-import type { Empresa, CategoriaEmpresa } from '@/types'
+import type { Empresa, CategoriaEmpresa, SectorEmpresa, RolUsuario } from '@/types'
 
 interface ParamRow {
   label: string
@@ -144,6 +144,20 @@ const CATEGORIAS_EMPRESA: { value: CategoriaEmpresa; label: string; descripcion:
   { value: 'pequeña', label: 'Pequeña', descripcion: '10–19 trabajadores' },
   { value: 'mediana', label: 'Mediana', descripcion: '20–49 trabajadores' },
   { value: 'grande',  label: 'Grande',  descripcion: '50+ trabajadores o capital > RD$2M' },
+]
+
+const SECTORES_EMPRESA: { value: SectorEmpresa; label: string; descripcion: string }[] = [
+  { value: 'oficinas_comercio',    label: 'Oficinas y Comercio',    descripcion: 'SRL Cat. I — 1.10%' },
+  { value: 'industria_liviana',    label: 'Industria Liviana',      descripcion: 'SRL Cat. II — 1.15%' },
+  { value: 'industria_pesada',     label: 'Industria Pesada',       descripcion: 'SRL Cat. III — 1.20%' },
+  { value: 'construccion_mineria', label: 'Construcción y Minería', descripcion: 'SRL Cat. IV — 1.30%' },
+]
+
+const ROLES_USUARIO: { value: RolUsuario; label: string }[] = [
+  { value: 'dueño',    label: 'Dueño / Gerente General' },
+  { value: 'contador', label: 'Contador / Enc. Nómina' },
+  { value: 'rrhh',     label: 'Recursos Humanos' },
+  { value: 'otro',     label: 'Otro' },
 ]
 
 export default function ConfiguracionPage() {
@@ -402,6 +416,69 @@ export default function ConfiguracionPage() {
                   Determina el salario mínimo legal aplicable (Res. 079-2025) y las alertas del Dashboard cuando
                   un empleado gana menos de lo establecido. Actualízala si tu empresa crece de categoría.
                 </p>
+              </div>
+
+              {/* Zona Franca */}
+              <label className="flex items-center gap-2.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3.5 py-2.5 cursor-pointer w-fit">
+                <input
+                  type="checkbox"
+                  checked={form.zonaFranca ?? false}
+                  onChange={e => setForm(prev => ({ ...prev, zonaFranca: e.target.checked }))}
+                  className="h-4 w-4 rounded accent-[#1B2980]"
+                />
+                <span className="text-sm text-zinc-700 dark:text-zinc-300">Opera bajo régimen de zona franca</span>
+              </label>
+
+              {/* Sector Principal */}
+              <div>
+                <label className={LABEL_CLASS}>Sector principal de operación</label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {SECTORES_EMPRESA.map(s => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, sectorEmpresa: s.value }))}
+                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                        form.sectorEmpresa === s.value
+                          ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30'
+                          : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:bg-zinc-50 dark:hover:bg-[#252840]'
+                      }`}
+                    >
+                      <p className={`text-xs font-semibold ${
+                        form.sectorEmpresa === s.value
+                          ? 'text-[#1B2980] dark:text-indigo-300'
+                          : 'text-zinc-700 dark:text-zinc-300'
+                      }`}>
+                        {s.label}
+                      </p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{s.descripcion}</p>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  Define la categoría de riesgo laboral (SRL) sugerida por defecto para los nuevos empleados que agregues.
+                </p>
+              </div>
+
+              {/* Rol del usuario */}
+              <div>
+                <label className={LABEL_CLASS}>Tu rol en la empresa</label>
+                <div className="flex flex-wrap gap-2">
+                  {ROLES_USUARIO.map(r => (
+                    <button
+                      key={r.value}
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, rolUsuario: r.value }))}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        form.rolUsuario === r.value
+                          ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30 text-[#1B2980] dark:text-indigo-300'
+                          : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#252840]'
+                      }`}
+                    >
+                      {r.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Modalidad de Nómina */}

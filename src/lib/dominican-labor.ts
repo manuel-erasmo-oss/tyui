@@ -1,4 +1,4 @@
-import type { CategoriaEmpresa, Empleado, ParametrosNomina, ResultadoNomina } from '@/types'
+import type { CategoriaEmpresa, CategoriaRiesgoSRL, Empleado, Empresa, ParametrosNomina, ResultadoNomina, SectorEmpresa } from '@/types'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -43,6 +43,26 @@ export function getSalarioMinimoPorCategoria(categoria: CategoriaEmpresa): numbe
     case 'pequeña': return SALARIO_MINIMO.pequeñasEmpresas
     case 'micro':   return SALARIO_MINIMO.microempresas
   }
+}
+
+// Salario mínimo realmente aplicable a la empresa — considera zona franca (resolución distinta)
+// antes que la categoría general por tamaño
+export function getSalarioMinimoAplicable(empresa: Pick<Empresa, 'categoriaEmpresa' | 'zonaFranca'>): number | null {
+  if (empresa.zonaFranca) return SALARIO_MINIMO.zonaFranca
+  if (empresa.categoriaEmpresa) return getSalarioMinimoPorCategoria(empresa.categoriaEmpresa)
+  return null
+}
+
+// Sector principal de operación → categoría SRL sugerida por defecto para nuevos empleados
+export const SECTOR_A_CATEGORIA_SRL: Record<SectorEmpresa, CategoriaRiesgoSRL> = {
+  oficinas_comercio:   'I',
+  industria_liviana:   'II',
+  industria_pesada:    'III',
+  construccion_mineria: 'IV',
+}
+
+export function getCategoriaSRLPorSector(sector?: SectorEmpresa): CategoriaRiesgoSRL {
+  return sector ? SECTOR_A_CATEGORIA_SRL[sector] : 'I'
 }
 
 export const TOPE_COTIZABLE_AFP = SALARIO_MINIMO_COTIZABLE_TSS * 20  // RD$464,460 — 20× salario mínimo
