@@ -190,6 +190,8 @@ export interface PeriodoNomina {
   ajustesPorEmpleado?: Record<string, AjusteLinea[]>
   empleadosProcesados?: string[]
   bitacoraDesposteos?: BitacoraDesposteo[]
+  pagada?: boolean       // true una vez confirmada la transferencia ACH del período cerrado
+  fechaPago?: string     // fecha en que se confirmó el pago (ISO date), solo si pagada === true
 }
 
 export interface ResumenNomina {

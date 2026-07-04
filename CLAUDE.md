@@ -348,14 +348,29 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   `Unlock`, ámbar) junto a Cerrar/Eliminar en la vista de lista, visible solo
   cuando el período no está `en_proceso` y es el más reciente de su serie;
   ícono de reloj con tooltip cuando ya tiene reaperturas registradas.
-- **Auditoría pre-cierre** — antes de que un período pase de `en_proceso` a
-  `procesada`, panel con 3-4 validaciones de alto impacto: comparativo bruto/neto
-  vs. período anterior (% variación por empleado), empleados con neto negativo o
-  descuento que excede el % de ley, empleados nuevos/salientes en el período,
-  cambios de cuenta bancaria.
-- **Trazabilidad de pago post-cierre** — estado adicional `pagada` (boolean/fecha)
-  marcado manualmente al confirmar transferencia ACH, más validación de que el
-  monto ACH generado cuadre con el S. Neto del período.
+- ~~Auditoría pre-cierre~~ — **implementado.** Cuando la acción de "Procesar"
+  completaría el período (pasaría de `en_proceso` a `procesada` — se detecta
+  comparando los ids a procesar contra `noProcessados`/`pendientes`), se
+  intercepta con un modal (`nomina/page.tsx`) en vez de procesar directo:
+  compara bruto por empleado contra el período anterior de la misma serie
+  (`periodoAnterior()`, recalculado con `calcularConAjustes` sobre los
+  ajustes históricos — mismo enfoque que ya usa "Historial Nómina"), marca
+  neto negativo, descuentos discrecionales (préstamo/otro_descuento) que
+  superan 30% del bruto (regla de negocio interna, rotulada como tal en la
+  UI — no es un tope establecido por el Código de Trabajo), empleados nuevos
+  este mes (por `fechaIngreso`), y empleados desvinculados recientemente
+  (cruzando `RegistroLiquidacion.fechaTerminacion` contra el mes actual/
+  anterior). Botón "Continuar y procesar" para confirmar. **No implementado
+  todavía**: cambios de cuenta bancaria (requeriría guardar un snapshot
+  histórico de banco/cuenta por período, que hoy no existe).
+- ~~Trazabilidad de pago post-cierre~~ — **implementado.**
+  `usePeriodos.marcarPagada(id, fechaPago)` agrega `PeriodoNomina.pagada` +
+  `fechaPago`. Botón "Marcar como pagada" (ícono `Wallet`) en periodos
+  `cerrada`, badge verde con fecha una vez confirmado. **No implementado
+  todavía**: la validación cruzada contra el archivo ACH generado, porque
+  depende del "Validador de archivo de transferencia bancaria (ACH)" (otra
+  brecha de este mismo backlog, aún sin construir) — no hay archivo ACH que
+  validar todavía.
 - **Avances de salario** — adelantos sin interés ni cuotas obligatorias
   (distinto de Préstamos): descuento automático en el siguiente período,
   liquidación automática contra prestaciones si el empleado se desvincula con

@@ -17,15 +17,17 @@ import {
   Square,
   PlayCircle,
   History,
+  ShieldCheck,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { usePeriodos, esPeriodoMasReciente } from '@/lib/periodos-context'
+import { usePeriodos, esPeriodoMasReciente, periodoAnterior } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePrestamos } from '@/lib/prestamos-context'
+import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useAuth } from '@/lib/auth-context'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
 import { formatRD, fullName, formatCedula, formatDate } from '@/lib/utils'
@@ -428,10 +430,11 @@ function DetalleNomina({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function NominaPage() {
-  const { empleadosActivos } = useEmpleados()
-  const { periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir } = usePeriodos()
+  const { empleados, empleadosActivos } = useEmpleados()
+  const { periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir, marcarPagada } = usePeriodos()
   const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago } = usePrestamos()
+  const { liquidaciones } = useLiquidaciones()
   const { user } = useAuth()
 
   // View state
@@ -452,6 +455,10 @@ export default function NominaPage() {
 
   // Selección para procesamiento masivo
   const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set())
+
+  // Auditoría pre-cierre: ids en espera de confirmación antes de completar
+  // el período (pasar de en_proceso a procesada)
+  const [auditoriaIds, setAuditoriaIds] = useState<string[] | null>(null)
 
   // Modal + toast
   const [detalleModal, setDetalleModal] = useState<{ emp: Empleado; nom: ResultadoNomina } | null>(null)
@@ -621,8 +628,22 @@ export default function NominaPage() {
 
   function handleProcesarEmpleado(empId: string) {
     if (!periodoActual) return
+    const procesadosActuales = new Set(periodoActual.empleadosProcesados ?? [])
+    const pendientes = empleadosActivos.filter(e => !procesadosActuales.has(e.id))
+    if (pendientes.length > 0 && pendientes.every(e => e.id === empId)) {
+      setAuditoriaIds([empId])
+      return
+    }
     marcarProcesados(periodoActual.id, [empId])
     setSelectedEmps(prev => { const s = new Set(prev); s.delete(empId); return s })
+  }
+
+  function confirmarAuditoria() {
+    if (!periodoActual || !auditoriaIds) return
+    marcarProcesados(periodoActual.id, auditoriaIds)
+    setSelectedEmps(new Set())
+    setToast('Todos los empleados procesados')
+    setAuditoriaIds(null)
   }
 
   function handleProcesarSeleccionados() {
@@ -630,6 +651,15 @@ export default function NominaPage() {
     const ids = selectedEmps.size > 0
       ? [...selectedEmps]
       : empleadosActivos.map(e => e.id)
+    // Si esta acción completaría el período (pasaría de en_proceso a
+    // procesada), se intercepta con la auditoría pre-cierre en vez de
+    // procesar directamente.
+    const procesadosActuales = new Set(periodoActual.empleadosProcesados ?? [])
+    const pendientes = empleadosActivos.filter(e => !procesadosActuales.has(e.id))
+    if (pendientes.length > 0 && pendientes.every(e => ids.includes(e.id))) {
+      setAuditoriaIds(ids)
+      return
+    }
     marcarProcesados(periodoActual.id, ids)
     setSelectedEmps(new Set())
     setToast(selectedEmps.size > 0 ? `${ids.length} empleado(s) procesado(s)` : 'Todos los empleados procesados')
@@ -811,6 +841,27 @@ export default function NominaPage() {
                         {formatRD(p.totales.costoTotal, 0)}
                       </span>
                     </div>
+                    {p.estado === 'cerrada' && (
+                      p.pagada ? (
+                        <div className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                          <Wallet className="h-3.5 w-3.5" />
+                          Pagada el {formatDate(p.fechaPago!)}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            const hoy = new Date().toISOString().slice(0, 10)
+                            if (!confirm(`¿Confirmar que "${labelPeriodo(p)}" ya fue pagado (transferencia ACH enviada) el ${formatDate(hoy)}?`)) return
+                            marcarPagada(p.id, hoy)
+                            setToast('Período marcado como pagado')
+                          }}
+                          className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
+                        >
+                          <Wallet className="h-3.5 w-3.5" />
+                          Marcar como pagada
+                        </button>
+                      )
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 px-5 py-3 border-t border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
@@ -1306,6 +1357,175 @@ export default function NominaPage() {
           />
         </>
       )}
+
+      {auditoriaIds && (() => {
+        const anterior = periodoAnterior(periodoActual, periodos)
+        const UMBRAL_VARIACION = 20
+        const UMBRAL_DESCUENTO = 30
+
+        const filas = empleadosActivos
+          .filter(e => auditoriaIds.includes(e.id))
+          .map(e => {
+            const actual = nominas.find(n => n.empleado.id === e.id)!.resultado
+            let variacionBrutoPct: number | null = null
+            if (anterior) {
+              const ajustesAnt = anterior.ajustesPorEmpleado?.[e.id]
+              if (ajustesAnt !== undefined) {
+                const prev = calcularConAjustes(e, ajustesAnt, anterior.tipo, anterior.quincena ?? 1)
+                if (prev.totalBruto > 0) {
+                  variacionBrutoPct = ((actual.totalBruto - prev.totalBruto) / prev.totalBruto) * 100
+                }
+              }
+            }
+            const fi = new Date(e.fechaIngreso)
+            const esNuevo = fi.getFullYear() === periodoActual.anio && (fi.getMonth() + 1) === periodoActual.mes
+            const descuentoDiscrecional = (ajustesPorEmp[e.id] ?? [])
+              .filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento')
+              .reduce((s, a) => s + a.valor, 0)
+            const descuentoDiscrecionalPct = actual.totalBruto > 0 ? (descuentoDiscrecional / actual.totalBruto) * 100 : 0
+            return {
+              empleado: e,
+              neto: actual.salarioNeto,
+              variacionBrutoPct,
+              netoNegativo: actual.salarioNeto < 0,
+              descuentoDiscrecionalPct,
+              esNuevo,
+            }
+          })
+
+        const filasConAlerta = filas.filter(f =>
+          f.netoNegativo ||
+          (f.variacionBrutoPct !== null && Math.abs(f.variacionBrutoPct) > UMBRAL_VARIACION) ||
+          f.descuentoDiscrecionalPct > UMBRAL_DESCUENTO ||
+          f.esNuevo
+        )
+
+        const salientes = anterior
+          ? liquidaciones.filter(l => {
+              const ft = new Date(l.fechaTerminacion)
+              const enAnterior = ft.getFullYear() === anterior.anio && (ft.getMonth() + 1) === anterior.mes
+              const enActual   = ft.getFullYear() === periodoActual.anio && (ft.getMonth() + 1) === periodoActual.mes
+              return enAnterior || enActual
+            })
+          : []
+
+        const sinAlertas = filasConAlerta.length === 0 && salientes.length === 0
+
+        return (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in"
+              onClick={() => setAuditoriaIds(null)}
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl bg-white dark:bg-[#141722] shadow-2xl animate-modal-in flex flex-col">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-[#1d2035]">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-[#1B2980] dark:text-indigo-400" />
+                    <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Auditoría pre-cierre</h2>
+                  </div>
+                  <button onClick={() => setAuditoriaIds(null)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Esta acción completará el período — pasará de <strong>En Proceso</strong> a{' '}
+                    <strong>Procesada</strong>. Revisa antes de continuar
+                    {anterior ? ` (comparado con ${labelPeriodo(anterior)})` : ''}.
+                  </p>
+
+                  {sinAlertas ? (
+                    <div className="flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      No se detectaron variaciones ni empleados fuera de lo esperado.
+                    </div>
+                  ) : (
+                    <>
+                      {filasConAlerta.length > 0 && (
+                        <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="bg-zinc-50 dark:bg-[#1a1d2e] text-left text-zinc-500 dark:text-zinc-400">
+                                <th className="px-3 py-2 font-medium">Empleado</th>
+                                <th className="px-3 py-2 font-medium text-right">Neto</th>
+                                <th className="px-3 py-2 font-medium">Alerta</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-zinc-100 dark:divide-[#1d2035]">
+                              {filasConAlerta.map(f => (
+                                <tr key={f.empleado.id}>
+                                  <td className="px-3 py-2 font-medium text-zinc-800 dark:text-zinc-200">{fullName(f.empleado)}</td>
+                                  <td className={`px-3 py-2 text-right tabular-nums ${f.netoNegativo ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-zinc-600 dark:text-zinc-300'}`}>
+                                    {formatRD(f.neto, 0)}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <div className="flex flex-wrap gap-1">
+                                      {f.netoNegativo && <Badge variant="danger">Neto negativo</Badge>}
+                                      {f.variacionBrutoPct !== null && Math.abs(f.variacionBrutoPct) > UMBRAL_VARIACION && (
+                                        <Badge variant="warning">
+                                          {f.variacionBrutoPct > 0 ? '+' : ''}{f.variacionBrutoPct.toFixed(0)}% bruto
+                                        </Badge>
+                                      )}
+                                      {f.descuentoDiscrecionalPct > UMBRAL_DESCUENTO && (
+                                        <Badge variant="warning">Descuentos {f.descuentoDiscrecionalPct.toFixed(0)}% del bruto</Badge>
+                                      )}
+                                      {f.esNuevo && <Badge variant="info">Nuevo este mes</Badge>}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {salientes.length > 0 && (
+                        <div className="rounded-lg border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
+                          <p className="mb-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                            Empleados desvinculados recientemente
+                          </p>
+                          <ul className="space-y-0.5 text-xs text-amber-700 dark:text-amber-400">
+                            {salientes.map(l => {
+                              const emp = empleados.find(e => e.id === l.empleadoId)
+                              return (
+                                <li key={l.id}>
+                                  {emp ? fullName(emp) : 'Empleado'} — liquidado el {formatDate(l.fechaTerminacion)}
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                    El umbral de descuentos discrecionales (préstamos/otros) es una regla de negocio interna
+                    de Cielo Cloud, no un límite establecido por el Código de Trabajo — revísalo con criterio propio.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4">
+                  <button
+                    onClick={() => setAuditoriaIds(null)}
+                    className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={confirmarAuditoria}
+                    className="rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-4 py-2 text-sm font-semibold text-white transition-colors"
+                  >
+                    Continuar y procesar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }

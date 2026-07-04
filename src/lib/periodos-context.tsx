@@ -20,6 +20,17 @@ export function esPeriodoMasReciente(periodo: PeriodoNomina, periodos: PeriodoNo
   return serie.every(p => p.id === periodo.id || esMasRecienteQue(periodo, p))
 }
 
+// El período inmediatamente anterior en la misma serie (tipo/quincena) —
+// usado por la auditoría pre-cierre para comparar bruto/neto por empleado.
+export function periodoAnterior(periodo: PeriodoNomina, periodos: PeriodoNomina[]): PeriodoNomina | undefined {
+  const anteriores = periodos.filter(p =>
+    p.tipo === periodo.tipo && p.quincena === periodo.quincena && p.id !== periodo.id &&
+    (p.anio < periodo.anio || (p.anio === periodo.anio && p.mes < periodo.mes))
+  )
+  if (anteriores.length === 0) return undefined
+  return anteriores.reduce((a, b) => esMasRecienteQue(a, b) ? a : b)
+}
+
 interface PeriodosCtx {
   periodos: PeriodoNomina[]
   generar: (data: Omit<PeriodoNomina, 'id' | 'fechaGeneracion'>) => PeriodoNomina
@@ -28,6 +39,7 @@ interface PeriodosCtx {
   actualizarAjustes: (periodoId: string, empleadoId: string, ajustes: AjusteLinea[]) => void
   marcarProcesados: (periodoId: string, empleadoIds: string[]) => void
   reabrir: (id: string, usuarioEmail: string) => boolean
+  marcarPagada: (id: string, fechaPago: string) => void
 }
 
 const Ctx = createContext<PeriodosCtx>({
@@ -38,6 +50,7 @@ const Ctx = createContext<PeriodosCtx>({
   actualizarAjustes: () => {},
   marcarProcesados: () => {},
   reabrir: () => false,
+  marcarPagada: () => {},
 })
 
 export function PeriodosProvider({ children }: { children: ReactNode }) {
@@ -148,8 +161,18 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
     return true
   }
 
+  // Trazabilidad de pago: marca un período cerrado como pagado tras
+  // confirmar la transferencia ACH correspondiente.
+  function marcarPagada(id: string, fechaPago: string) {
+    setPeriodos(prev => {
+      const next = prev.map(p => p.id === id ? { ...p, pagada: true, fechaPago } : p)
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
+
   return (
-    <Ctx.Provider value={{ periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir }}>
+    <Ctx.Provider value={{ periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir, marcarPagada }}>
       {children}
     </Ctx.Provider>
   )
