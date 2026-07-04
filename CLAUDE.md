@@ -212,12 +212,12 @@ nunca copiando texto, pantallas o formatos de SPN.
    `nomina/page.tsx` avisa cuando se cargan horas extra a un empleado en
    régimen intermitente, recordando que solo cuenta el exceso sobre 10h/día o
    60h/semana, no los umbrales ordinarios.
-6. **Práctica de ISR quincenal** — **pendiente decisión del usuario.** SPN
-   documenta que concentrar el 100% del ISR en la 2ª quincena "tiene más
-   desventajas que un prorrateo equitativo entre ambas quincenas". Nuestra
-   práctica actual (ISR=0 en 1ª, 100% en 2ª) está documentada como estándar
-   pymes DR — es una decisión de producto/negocio que afecta a todos los
-   clientes quincenales, no se cambió sin confirmación explícita.
+6. ~~Práctica de ISR quincenal~~ — **revisado y confirmado correcto.** La
+   retención de ISR depende del ingreso gravable de TODO el mes, que no se
+   conoce completo hasta que el mes cierra — por eso se calcula y retiene en
+   la 2ª quincena (con el mes ya cerrado), no prorrateado a ciegas entre
+   ambas. En nómina mensual no aplica el dilema porque el pago es único e
+   inmediato. Confirmado con el usuario; no requiere cambio.
 7. ~~Topes TSS derivados del salario mínimo vigente~~ — **confirmado correcto.**
    `TOPE_COTIZABLE_AFP/SFS/SRL` ya son expresiones derivadas de
    `SALARIO_MINIMO_COTIZABLE_TSS` (no valores fijos independientes) — se
