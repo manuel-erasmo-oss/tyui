@@ -505,6 +505,7 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
 
 | Hash | Descripción |
 |---|---|
+| `7e9463a` | feat: auditoría pre-cierre y trazabilidad de pago de nómina |
 | `ccb60bc` | feat: desposteo de nómina — reabrir el período más reciente |
 | `8ad36bd` | feat: registrar empleados nuevos desde el Asistente Guiado |
 | `ffa2740` | refactor: integrar Carga Inicial en Configuración + prompt post-onboarding |
