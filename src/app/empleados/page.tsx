@@ -270,6 +270,9 @@ interface EmpForm {
   contratoLaboral: string
   contratoLaboralNombre: string
   regimenIntermitente: boolean
+  saldoVacacionesInicial: string
+  regaliaPagadaEsteAnio: string
+  salarioHistoricoReferencia: string
 }
 
 const EMPTY: EmpForm = {
@@ -282,6 +285,7 @@ const EMPTY: EmpForm = {
   fotoPerfil: '', documentoIdentidad: '', documentoIdentidadNombre: '',
   contratoLaboral: '', contratoLaboralNombre: '',
   regimenIntermitente: false,
+  saldoVacacionesInicial: '', regaliaPagadaEsteAnio: '', salarioHistoricoReferencia: '',
 }
 
 function toForm(e: Empleado): EmpForm {
@@ -302,6 +306,9 @@ function toForm(e: Empleado): EmpForm {
     contratoLaboral: e.contratoLaboral ?? '',
     contratoLaboralNombre: e.contratoLaboralNombre ?? '',
     regimenIntermitente: e.regimenIntermitente ?? false,
+    saldoVacacionesInicial: e.saldoVacacionesInicial != null ? String(e.saldoVacacionesInicial) : '',
+    regaliaPagadaEsteAnio: e.regaliaPagadaEsteAnio != null ? String(e.regaliaPagadaEsteAnio) : '',
+    salarioHistoricoReferencia: e.salarioHistoricoReferencia != null ? String(e.salarioHistoricoReferencia) : '',
   }
 }
 
@@ -995,6 +1002,57 @@ function EmpleadoFormModal({
                   </div>
                 </div>
               </section>
+
+              {/* Saldos Iniciales — empleados con historial previo a Cielo Cloud */}
+              {(() => {
+                const diasDesdeIngreso = form.fechaIngreso
+                  ? (Date.now() - new Date(form.fechaIngreso).getTime()) / (1000 * 3600 * 24)
+                  : 0
+                const pareceMigracion = diasDesdeIngreso > 45
+                return (
+                  <section>
+                    <h3 className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                      Saldos Iniciales
+                    </h3>
+                    <p className="mb-3 text-[11px] text-zinc-400 dark:text-zinc-500">
+                      Solo si este empleado ya trabajaba en la empresa antes de usar Cielo Cloud.
+                      {pareceMigracion && (
+                        <span className="ml-1 text-amber-600 dark:text-amber-400 font-medium">
+                          La fecha de ingreso sugiere que aplica — complétalos para no partir de cero.
+                        </span>
+                      )}
+                    </p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className={labelCls}>Vacaciones Pendientes (días)</label>
+                        <input type="number" min="0" step="0.5" className={inputCls}
+                          value={form.saldoVacacionesInicial}
+                          onChange={e => set('saldoVacacionesInicial', e.target.value)}
+                          placeholder="0" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Regalía Pagada Este Año (RD$)</label>
+                        <input type="number" min="0" className={inputCls}
+                          value={form.regaliaPagadaEsteAnio}
+                          onChange={e => set('regaliaPagadaEsteAnio', e.target.value)}
+                          placeholder="0" />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Salario Histórico de Referencia (RD$)</label>
+                        <input type="number" min="0" className={inputCls}
+                          value={form.salarioHistoricoReferencia}
+                          onChange={e => set('salarioHistoricoReferencia', e.target.value)}
+                          placeholder="Opcional" />
+                      </div>
+                    </div>
+                    <p className="mt-1.5 text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                      El salario histórico se usa para Cesantía/Preaviso/Asistencia Económica solo
+                      mientras el empleado no acumule 12 meses de nómina procesada en Cielo Cloud —
+                      después se recalcula con datos reales del sistema.
+                    </p>
+                  </section>
+                )
+              })()}
 
               {/* Datos Bancarios */}
               <section>
@@ -1771,6 +1829,9 @@ export default function EmpleadosPage() {
       numeroCuenta:    form.numeroCuenta.trim() || undefined,
       categoriaRiesgo: getCategoriaSRLPorSector(empresa.sectorEmpresa),
       regimenIntermitente: form.regimenIntermitente,
+      saldoVacacionesInicial:     form.saldoVacacionesInicial     ? Number(form.saldoVacacionesInicial)     : undefined,
+      regaliaPagadaEsteAnio:      form.regaliaPagadaEsteAnio      ? Number(form.regaliaPagadaEsteAnio)      : undefined,
+      salarioHistoricoReferencia: form.salarioHistoricoReferencia ? Number(form.salarioHistoricoReferencia) : undefined,
     }
   }
 

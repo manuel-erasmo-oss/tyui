@@ -223,6 +223,35 @@ nunca copiando texto, pantallas o formatos de SPN.
    `SALARIO_MINIMO_COTIZABLE_TSS` (no valores fijos independientes) — se
    recalculan automáticamente si ese valor cambia. Sin acción necesaria.
 
+## Saldos Iniciales — empleados con historial previo a Cielo Cloud
+
+Toda empresa que adopta Cielo Cloud llega con empleados que ya tienen antigüedad
+real (3, 10 años). La antigüedad (`getAnosServicio`, tramos de cesantía/preaviso,
+14 vs 18 días de vacaciones) ya funciona bien porque parte de `fechaIngreso` real,
+no de la fecha de alta en el sistema. Lo que sí requería solución (implementado):
+
+- **`Empleado.saldoVacacionesInicial`** (días) — se suma al cálculo de días
+  acumulados en `vacaciones/page.tsx` y `liquidacion/page.tsx`, en vez de asumir
+  que nunca se ha disfrutado ninguna vacación.
+- **`Empleado.regaliaPagadaEsteAnio`** (RD$) — se resta (piso en 0) del acumulado
+  de Regalía Pascual en `regalia-pascual/page.tsx` y de la regalía proporcional
+  en `liquidacion/page.tsx`, para no sobreestimar lo pendiente ni arriesgar pago
+  doble si la empresa migra a mitad de año.
+- **`Empleado.salarioHistoricoReferencia`** (RD$) — usado por
+  `calcularSalarioPromedioUltimos12Meses()` como sustituto del salario base
+  SOLO mientras el empleado no acumule 12 meses reales de nómina procesada en
+  Cielo Cloud (después se recalcula con datos reales del propio sistema).
+- Formulario de empleado: sección "Saldos Iniciales" con detección automática
+  (aviso visual) cuando `fechaIngreso` es de hace más de 45 días — sugiere que
+  es una migración, no una contratación nueva.
+
+**Fase 2 (pendiente)**: asistente guiado que recorra los empleados activos uno
+a uno pidiendo estos 3 datos, con opción "empleado nuevo, no aplica".
+**Fase 3 (pendiente)**: importador de Excel — plantilla descargable con datos
+maestros + saldos iniciales, vista previa con validación de errores antes de
+aplicar, para migraciones masivas (decenas de empleados de una vez). Merece su
+propio ciclo de desarrollo por el trabajo de parseo/validación de archivos.
+
 ### 🔴 Alta prioridad — brechas reales confirmadas
 
 - **Desposteo de nómina** — mecanismo de "deshacer" un período `procesada`/`cerrada`

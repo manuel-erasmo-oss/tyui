@@ -15,7 +15,9 @@ export default function RegaliaPage() {
   const filas = empleadosActivos.map(e => {
     const mesesServicio      = Math.min(getMesesServicio(e.fechaIngreso), mesActual)
     const mesesAcumulados    = Math.min(mesesServicio, 12)
-    const acumulado          = (e.salarioBase / 12) * mesesAcumulados
+    // Neto de lo ya pagado antes de la migración a Cielo Cloud (empleados con historial previo)
+    const acumuladoBruto     = (e.salarioBase / 12) * mesesAcumulados
+    const acumulado          = Math.max(0, acumuladoBruto - (e.regaliaPagadaEsteAnio ?? 0))
     const proyeccionAnual    = e.salarioBase  // 1 salario completo
     const porcentaje         = (mesesAcumulados / 12) * 100
     return { empleado: e, mesesAcumulados, acumulado, proyeccionAnual, porcentaje }

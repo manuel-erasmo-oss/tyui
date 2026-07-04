@@ -379,7 +379,11 @@ export function calcularSalarioPromedioUltimos12Meses(
     totalPorMes.set(key, (totalPorMes.get(key) ?? 0) + resultado.totalBruto)
   }
 
-  if (totalPorMes.size === 0) return empleado.salarioBase
+  // Sin historial real en el sistema (recién migrado): usa el salario
+  // histórico de referencia capturado en la carga inicial, si existe.
+  if (totalPorMes.size === 0) {
+    return Math.max(empleado.salarioHistoricoReferencia ?? empleado.salarioBase, empleado.salarioBase)
+  }
 
   const sumaTotal = [...totalPorMes.values()].reduce((s, v) => s + v, 0)
   const promedio   = sumaTotal / totalPorMes.size

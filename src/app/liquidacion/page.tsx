@@ -129,10 +129,13 @@ export default function LiquidacionPage() {
       : 0
 
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
-    const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac
+    // + saldo inicial: empleados con historial previo a Cielo Cloud (migración)
+    const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac + (emp.saldoVacacionesInicial ?? 0)
     const vacaciones = diasVacAcum * (emp.salarioBase / divisorDiario)
 
-    const regalia = (emp.salarioBase / 12) * mesesCalendario
+    // Regalía del año en curso, neta de lo ya pagado antes de la migración
+    const regaliaBruta = (emp.salarioBase / 12) * mesesCalendario
+    const regalia = Math.max(0, regaliaBruta - (emp.regaliaPagadaEsteAnio ?? 0))
 
     const subtotal = cesantia + preaviso + asistenciaEconomica + vacaciones + regalia
     const totalPrestamos = prestamosADescontar.reduce((s, pid) => {

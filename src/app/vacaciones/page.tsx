@@ -20,7 +20,8 @@ export default function VacacionesPage() {
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
     // Fraccional, sin truncar — prorratea el mes en curso proporcionalmente
     const mesesServicio   = anos < 1 ? anos * 12 : ((anos % 1) * 12 || 12)
-    const diasAcumulados  = (diasAnuales / 12) * mesesServicio
+    // + saldo inicial: empleados con historial previo a Cielo Cloud (migración)
+    const diasAcumulados  = (diasAnuales / 12) * mesesServicio + (e.saldoVacacionesInicial ?? 0)
     const valorDiario     = e.salarioBase / getDivisorSalarioDiario(e)
     const valorAcumulado  = diasAcumulados * valorDiario
     const puedeGozar      = anos >= 1

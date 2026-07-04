@@ -89,6 +89,14 @@ export interface Empleado {
   // mozos/camareros, barberos/manicuristas, empleados de bombas de gasolina, etc.
   // Cambia el divisor del salario diario (26 en vez de 23.83).
   regimenIntermitente?: boolean
+
+  // ─── Saldos iniciales (empleados con historial previo a Cielo Cloud) ───────
+  // Se capturan una vez, al migrar un empleado con antigüedad real, para que
+  // los cálculos no asuman "cero historial" solo porque el sistema es nuevo.
+  saldoVacacionesInicial?: number      // días de vacaciones pendientes reconocidos a la fecha de la carga
+  regaliaPagadaEsteAnio?: number       // monto de regalía ya pagado en el año en curso, antes de la migración
+  salarioHistoricoReferencia?: number  // salario promedio de referencia (Cesantía/Preaviso/Asistencia Económica)
+                                        // mientras se acumulan 12 meses reales de nómina procesada en el sistema
 }
 
 export interface ResultadoNomina {
