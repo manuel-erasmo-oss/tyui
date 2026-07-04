@@ -7,6 +7,7 @@ import { PeriodosProvider } from '@/lib/periodos-context'
 import { EmpresaProvider } from '@/lib/empresa-context'
 import { PrestamosProvider } from '@/lib/prestamos-context'
 import { LicenciasProvider } from '@/lib/licencias-context'
+import { LiquidacionesProvider } from '@/lib/liquidaciones-context'
 import { AuthProvider } from '@/lib/auth-context'
 import { RouteGuard } from '@/components/auth/RouteGuard'
 
@@ -41,9 +42,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <EmpleadosProvider>
                 <PrestamosProvider>
                   <LicenciasProvider>
-                    <PeriodosProvider>
-                      <RouteGuard>{children}</RouteGuard>
-                    </PeriodosProvider>
+                    <LiquidacionesProvider>
+                      <PeriodosProvider>
+                        <RouteGuard>{children}</RouteGuard>
+                      </PeriodosProvider>
+                    </LiquidacionesProvider>
                   </LicenciasProvider>
                 </PrestamosProvider>
               </EmpleadosProvider>

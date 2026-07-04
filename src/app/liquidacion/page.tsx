@@ -1,14 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Header } from '@/components/layout/Header'
+import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
 import { usePrestamos } from '@/lib/prestamos-context'
+import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica } from '@/lib/dominican-labor'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
-import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins } from 'lucide-react'
+import type { MotivoLiquidacion } from '@/types'
+import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History } from 'lucide-react'
 
-type Motivo = 'renuncia' | 'despido_sin_causa' | 'despido_con_causa' | 'mutuo_acuerdo' | 'vencimiento_contrato'
+type Motivo = MotivoLiquidacion
 
 // ── CSV export ────────────────────────────────────────────────────────────────
 function exportarCSV(filename: string, headers: string[], rows: (string | number)[][]) {
@@ -59,15 +62,24 @@ const INPUT_CLASS =
   'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none'
 
 export default function LiquidacionPage() {
-  const { empleadosActivos } = useEmpleados()
+  const { empleadosActivos, empleados, update } = useEmpleados()
   const { getPrestamosActivos, registrarPago } = usePrestamos()
+  const { liquidaciones, registrar } = useLiquidaciones()
   const [empleadoId, setEmpleadoId] = useState<string>('')
   const [motivo, setMotivo] = useState<Motivo | ''>('')
   const [fechaTerminacion, setFechaTerminacion] = useState<string>(
     new Date().toISOString().split('T')[0]
   )
   const [prestamosADescontar, setPrestamosADescontar] = useState<string[]>([])
-  const [, setToast] = useState<string | null>(null)
+  const [confirmFinalizar, setConfirmFinalizar] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+
+  const empMap = useMemo(() => Object.fromEntries(empleados.map(e => [e.id, e])), [empleados])
+  const liquidacionesOrdenadas = useMemo(
+    () => [...liquidaciones].sort((a, b) => b.fechaRegistro.localeCompare(a.fechaRegistro)),
+    [liquidaciones]
+  )
+  const totalPagadoGeneral = liquidaciones.reduce((s, l) => s + l.totalPagado, 0)
 
   // ── Calculation ────────────────────────────────────────────────────────────
   const emp = empleadosActivos.find(e => e.id === empleadoId) ?? null
@@ -145,7 +157,8 @@ export default function LiquidacionPage() {
   }
 
   function handleFinalizarLiquidacion() {
-    if (!emp || !resultado) return
+    if (!emp || !resultado || !motivo) return
+
     // Register loan payments as liquidation payments
     for (const pid of prestamosADescontar) {
       const p = prestamosActivos.find(x => x.id === pid)
@@ -156,7 +169,37 @@ export default function LiquidacionPage() {
         esLiquidacion: true,
       })
     }
+
+    // Persist the liquidation record — this is the source of truth for
+    // the termination details (motivo, montos, fecha)
+    registrar({
+      empleadoId: emp.id,
+      motivo,
+      fechaTerminacion,
+      anosServicio: resultado.anosServicio,
+      cesantia: resultado.cesantia,
+      preaviso: resultado.preaviso,
+      asistenciaEconomica: resultado.asistenciaEconomica,
+      vacaciones: resultado.vacaciones,
+      regalia: resultado.regalia,
+      totalPrestamosDescontados: resultado.totalPrestamos,
+      totalPagado: resultado.total,
+    })
+
+    // Mark the employee as inactive — this is the only state that needs to
+    // change on Empleado; automatically removes them from empleadosActivos
+    // across nómina, dashboard y reportes
+    update(emp.id, { activo: false })
+
     handleExportCSV()
+
+    setToast(`Liquidación registrada — ${fullName(emp)} marcado como inactivo`)
+    setConfirmFinalizar(false)
+
+    // Reset form — the employee will disappear from empleadosActivos
+    setEmpleadoId('')
+    setMotivo('')
+    setPrestamosADescontar([])
   }
 
   const legalNote = motivo ? LEGAL_NOTES[motivo] : null
@@ -534,15 +577,13 @@ export default function LiquidacionPage() {
                 <Download className="h-4 w-4" />
                 Exportar CSV
               </button>
-              {prestamosADescontar.length > 0 && (
-                <button
-                  onClick={handleFinalizarLiquidacion}
-                  className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
-                >
-                  <Download className="h-4 w-4" />
-                  Finalizar y Exportar
-                </button>
-              )}
+              <button
+                onClick={() => setConfirmFinalizar(true)}
+                className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Finalizar y Exportar
+              </button>
             </div>
           </>
         )}
@@ -579,7 +620,119 @@ export default function LiquidacionPage() {
           </div>
         )}
 
+        {/* ── Liquidaciones registradas ─────────────────────────────────── */}
+        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+          <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4 flex items-center gap-2">
+            <History className="h-4 w-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Liquidaciones Registradas</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fecha Terminación</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Motivo</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Pagado</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                {liquidacionesOrdenadas.length === 0 && (
+                  <tr>
+                    <td colSpan={4}>
+                      <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
+                          <History className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" />
+                        </div>
+                        <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">Sin liquidaciones registradas</p>
+                        <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
+                          Al finalizar una liquidación quedará registrada aquí y el empleado pasará a inactivo.
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {liquidacionesOrdenadas.map(l => {
+                  const empL = empMap[l.empleadoId]
+                  return (
+                    <tr key={l.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
+                      <td className="px-5 py-3.5">
+                        {empL ? (
+                          <div>
+                            <p className="font-medium text-[#1B2980] dark:text-indigo-400">{fullName(empL)}</p>
+                            <p className="text-xs text-zinc-400 dark:text-zinc-500">{empL.cargo}</p>
+                          </div>
+                        ) : (
+                          <span className="text-zinc-400 dark:text-zinc-500 text-xs">Empleado eliminado</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
+                        {formatDate(l.fechaTerminacion)}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                          {MOTIVO_LABELS[l.motivo]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
+                        {formatRD(l.totalPagado, 2)}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              {liquidacionesOrdenadas.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
+                    <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">
+                      TOTAL — {liquidacionesOrdenadas.length} liquidación(es)
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
+                      {formatRD(totalPagadoGeneral, 2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+
       </div>
+
+      {/* ── Confirm finalizar dialog ───────────────────────────────────── */}
+      {confirmFinalizar && emp && resultado && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-backdrop-in">
+          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-2xl animate-modal-in">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">¿Finalizar liquidación?</p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Esto registrará la liquidación de <span className="font-medium text-zinc-700 dark:text-zinc-300">{fullName(emp)}</span> por
+                  {' '}{formatRD(resultado.total, 2)} y marcará al empleado como inactivo en todo el sistema
+                  (nómina, dashboard y reportes). Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmFinalizar(false)}
+                className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleFinalizarLiquidacion}
+                className="rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors"
+              >
+                Sí, finalizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   )
 }
