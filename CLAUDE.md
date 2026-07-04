@@ -526,6 +526,7 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
 
 | Hash | Descripción |
 |---|---|
+| `a8b9c52` | feat: envío de comprobantes de pago por correo (individual y masivo) |
 | `7e9463a` | feat: auditoría pre-cierre y trazabilidad de pago de nómina |
 | `ccb60bc` | feat: desposteo de nómina — reabrir el período más reciente |
 | `8ad36bd` | feat: registrar empleados nuevos desde el Asistente Guiado |
