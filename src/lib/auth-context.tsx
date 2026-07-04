@@ -10,6 +10,8 @@ import {
   getRedirectResult,
   signOut,
   sendPasswordResetEmail,
+  sendEmailVerification,
+  reload,
   updateProfile,
 } from 'firebase/auth'
 import { getFirebaseAuth, googleProvider, FIREBASE_ENABLED } from './firebase'
@@ -17,21 +19,25 @@ import { getFirebaseAuth, googleProvider, FIREBASE_ENABLED } from './firebase'
 interface AuthCtx {
   user: User | null
   loading: boolean
-  signIn:        (email: string, password: string) => Promise<void>
-  signUp:        (email: string, password: string, nombre: string) => Promise<void>
-  signInGoogle:  () => Promise<void>
-  logout:        () => Promise<void>
-  resetPassword: (email: string) => Promise<void>
+  signIn:            (email: string, password: string) => Promise<void>
+  signUp:            (email: string, password: string, nombre: string) => Promise<void>
+  signInGoogle:      () => Promise<void>
+  logout:            () => Promise<void>
+  resetPassword:     (email: string) => Promise<void>
+  sendVerification:  () => Promise<void>
+  refreshUser:       () => Promise<void>
 }
 
 const Ctx = createContext<AuthCtx>({
   user: null,
   loading: true,
-  signIn:        async () => {},
-  signUp:        async () => {},
-  signInGoogle:  async () => {},
-  logout:        async () => {},
-  resetPassword: async () => {},
+  signIn:            async () => {},
+  signUp:            async () => {},
+  signInGoogle:      async () => {},
+  logout:            async () => {},
+  resetPassword:     async () => {},
+  sendVerification:  async () => {},
+  refreshUser:       async () => {},
 })
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -61,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = getFirebaseAuth()
     const cred = await createUserWithEmailAndPassword(auth, email, password)
     await updateProfile(cred.user, { displayName: nombre })
+    await sendEmailVerification(cred.user)
   }
 
   async function signInGoogle() {
@@ -75,8 +82,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendPasswordResetEmail(getFirebaseAuth(), email)
   }
 
+  async function sendVerification() {
+    const cu = getFirebaseAuth().currentUser
+    if (cu) await sendEmailVerification(cu)
+  }
+
+  async function refreshUser() {
+    const cu = getFirebaseAuth().currentUser
+    if (!cu) return
+    await reload(cu)
+    // Firebase mutates `cu` in place — spread into a new object so React detects the change
+    setUser({ ...cu } as User)
+  }
+
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signUp, signInGoogle, logout, resetPassword }}>
+    <Ctx.Provider value={{ user, loading, signIn, signUp, signInGoogle, logout, resetPassword, sendVerification, refreshUser }}>
       {children}
     </Ctx.Provider>
   )

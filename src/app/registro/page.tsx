@@ -207,7 +207,9 @@ export default function RegistroPage() {
                 </div>
               </div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">¡Cuenta creada!</h2>
-              <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">Redirigiendo al dashboard…</p>
+              <p className="mt-2 text-sm text-zinc-400 dark:text-zinc-500">
+                Te enviamos un correo de verificación. Ábrelo para activar tu cuenta.
+              </p>
             </div>
           ) : (
             <>

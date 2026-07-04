@@ -7,6 +7,7 @@ import { FIREBASE_ENABLED } from '@/lib/firebase'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { CategoriaEmpresaGate } from '@/components/onboarding/CategoriaEmpresaGate'
+import { EmailVerificationGate } from '@/components/auth/EmailVerificationGate'
 
 const PUBLIC_PATHS = ['/login', '/registro']
 
@@ -75,7 +76,9 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     <>
       <Sidebar />
       <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">
-        <CategoriaEmpresaGate>{children}</CategoriaEmpresaGate>
+        <EmailVerificationGate>
+          <CategoriaEmpresaGate>{children}</CategoriaEmpresaGate>
+        </EmailVerificationGate>
       </main>
       <BottomNav />
     </>
