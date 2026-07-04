@@ -9,6 +9,7 @@ import { cargarDatosDemo } from '@/lib/seed-data'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { BottomNav } from '@/components/layout/BottomNav'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
+import { PromptConfiguracionInicial } from '@/components/onboarding/PromptConfiguracionInicial'
 import { EmailVerificationGate } from '@/components/auth/EmailVerificationGate'
 
 const PUBLIC_PATHS = ['/login', '/registro']
@@ -50,12 +51,15 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const esAdmin  = user?.email === ADMIN_EMAIL
 
   useEffect(() => {
+    if (!FIREBASE_ENABLED) return
     if (loading) return
     if (!user && !isPublic) router.replace('/login')
     if (user  &&  isPublic) router.replace('/')
   }, [user, loading, isPublic, router])
 
   const needsOnboarding = empresaCargada && !empresa.onboardingCompleto
+  const needsConfiguracionInicial =
+    empresaCargada && empresa.onboardingCompleto && !empresa.configuracionInicialOfrecida && !esAdmin
 
   // Cuenta admin de uso personal — precarga datos demo y salta el onboarding
   useEffect(() => {
@@ -69,6 +73,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     if (isPublic) return null
     if (!empresaCargada) return <LoadingScreen />
     if (needsOnboarding) return <OnboardingWizard />
+    if (needsConfiguracionInicial) return <PromptConfiguracionInicial />
     return (
       <>
         <Sidebar />
@@ -96,6 +101,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   if (!empresaCargada)   return <LoadingScreen />
   // Admin: mientras se precargan los datos demo y recarga la página, solo loading
   if (needsOnboarding)    return esAdmin ? <LoadingScreen /> : <OnboardingWizard />
+  if (needsConfiguracionInicial) return <PromptConfiguracionInicial />
 
   // Protected pages — fully set up, show app chrome
   return (

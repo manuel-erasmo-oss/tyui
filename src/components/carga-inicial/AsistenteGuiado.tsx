@@ -94,10 +94,10 @@ export function AsistenteGuiado({ onFinish }: Props) {
   const anos = getAnosServicio(empleadoActual.fechaIngreso)
 
   return (
-    <div key={empleadoActual.id} className="animate-modal-in rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-sm">
+    <div key={empleadoActual.id} className="animate-modal-in rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-white dark:bg-[#141722] p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_16px_40px_-20px_rgba(27,41,128,0.25)] dark:shadow-[0_16px_40px_-20px_rgba(0,0,0,0.6)]">
       {/* Progreso */}
       <div className="mb-5 flex items-center justify-between">
-        <span className="text-xs font-medium text-zinc-400 dark:text-zinc-500">
+        <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
           Empleado {revisados + 1} de {totalInicial} pendientes
         </span>
         <button
@@ -109,18 +109,21 @@ export function AsistenteGuiado({ onFinish }: Props) {
       </div>
       <div className="mb-6 h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-[#1a1d2e]">
         <div
-          className="h-full rounded-full bg-[#1B2980] transition-all duration-300"
+          className="h-full rounded-full bg-gradient-to-r from-[#1B2980] to-[#2f3fa8] transition-all duration-300"
           style={{ width: `${(revisados / totalInicial) * 100}%` }}
         />
       </div>
 
       {/* Empleado actual */}
-      <div className="mb-6 flex items-center gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400">
-          <UserRound className="h-5 w-5" />
+      <div className="mb-6 flex items-center gap-3.5">
+        <div className="relative shrink-0">
+          <div className="absolute inset-0 rounded-2xl bg-[#1B2980]/25 blur-lg dark:bg-indigo-500/25" />
+          <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] text-white shadow-lg shadow-[#1B2980]/30">
+            <UserRound className="h-5 w-5" />
+          </div>
         </div>
         <div>
-          <p className="text-sm font-semibold text-[#1B2980] dark:text-indigo-300">
+          <p className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">
             {fullName(empleadoActual)}
           </p>
           <p className="text-xs text-zinc-400 dark:text-zinc-500">
@@ -167,8 +170,8 @@ export function AsistenteGuiado({ onFinish }: Props) {
         </div>
       </div>
 
-      <div className="mt-3 flex items-start gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+      <div className="mt-4 flex items-start gap-2 rounded-xl bg-zinc-50 dark:bg-[#1a1d2e] px-3.5 py-2.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+        <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-zinc-400 dark:text-zinc-500" />
         <span>
           El salario histórico se usa solo para Cesantía/Preaviso mientras este empleado no acumule
           12 meses reales de nómina procesada en Cielo Cloud — después el sistema recalcula con datos propios.
@@ -185,7 +188,7 @@ export function AsistenteGuiado({ onFinish }: Props) {
         </button>
         <button
           onClick={guardarYContinuar}
-          className="flex items-center gap-2 rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-4 py-2 text-sm font-medium text-white transition-colors"
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] hover:from-[#151f66] hover:to-[#1B2980] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#1B2980]/25 transition-all"
         >
           Guardar y Continuar <ArrowRight className="h-4 w-4" />
         </button>
@@ -196,18 +199,21 @@ export function AsistenteGuiado({ onFinish }: Props) {
 
 function TodoAlDia({ onFinish }: { onFinish: () => void }) {
   return (
-    <div className="animate-modal-in flex flex-col items-center justify-center gap-3 rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] py-16 px-6 text-center shadow-sm">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400">
-        <CheckCircle2 className="h-7 w-7" />
+    <div className="animate-modal-in flex flex-col items-center justify-center gap-3 rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-white dark:bg-[#141722] py-16 px-6 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04),0_16px_40px_-20px_rgba(27,41,128,0.25)] dark:shadow-[0_16px_40px_-20px_rgba(0,0,0,0.6)]">
+      <div className="relative">
+        <div className="absolute inset-0 rounded-full bg-[#1B2980]/20 blur-xl dark:bg-indigo-500/20" />
+        <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] text-white shadow-lg shadow-[#1B2980]/30">
+          <CheckCircle2 className="h-7 w-7" />
+        </div>
       </div>
-      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">¡Todo al día!</p>
+      <p className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">¡Todo al día!</p>
       <p className="max-w-xs text-xs text-zinc-500 dark:text-zinc-400">
         No hay empleados activos pendientes por revisar. Ya confirmaste o marcaste como
         &quot;no aplica&quot; los saldos iniciales de todos.
       </p>
       <button
         onClick={onFinish}
-        className="mt-2 rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-4 py-2 text-sm font-medium text-white transition-colors"
+        className="mt-2 rounded-xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] hover:from-[#151f66] hover:to-[#1B2980] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#1B2980]/25 transition-all"
       >
         Volver
       </button>
@@ -217,11 +223,14 @@ function TodoAlDia({ onFinish }: { onFinish: () => void }) {
 
 function Completado({ cantidad, onFinish }: { cantidad: number; onFinish: () => void }) {
   return (
-    <div className="animate-modal-in flex flex-col items-center justify-center gap-3 rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] py-16 px-6 text-center shadow-sm">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400">
-        <PartyPopper className="h-7 w-7" />
+    <div className="animate-modal-in flex flex-col items-center justify-center gap-3 rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-white dark:bg-[#141722] py-16 px-6 text-center shadow-[0_1px_2px_rgba(15,23,42,0.04),0_16px_40px_-20px_rgba(27,41,128,0.25)] dark:shadow-[0_16px_40px_-20px_rgba(0,0,0,0.6)]">
+      <div className="relative">
+        <div className="absolute inset-0 rounded-full bg-[#1B2980]/20 blur-xl dark:bg-indigo-500/20" />
+        <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] text-white shadow-lg shadow-[#1B2980]/30">
+          <PartyPopper className="h-7 w-7" />
+        </div>
       </div>
-      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+      <p className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">
         Listo, revisaste {cantidad} {cantidad === 1 ? 'empleado' : 'empleados'}
       </p>
       <p className="max-w-xs text-xs text-zinc-500 dark:text-zinc-400">
@@ -230,7 +239,7 @@ function Completado({ cantidad, onFinish }: { cantidad: number; onFinish: () => 
       </p>
       <button
         onClick={onFinish}
-        className="mt-2 rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-4 py-2 text-sm font-medium text-white transition-colors"
+        className="mt-2 rounded-xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] hover:from-[#151f66] hover:to-[#1B2980] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#1B2980]/25 transition-all"
       >
         Volver
       </button>

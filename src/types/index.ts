@@ -221,6 +221,8 @@ export interface Empresa {
   zonaFranca?: boolean // opera bajo régimen de zona franca — salario mínimo distinto
   rolUsuario?: RolUsuario
   onboardingCompleto?: boolean
+  configuracionInicialOfrecida?: boolean  // true una vez que se le presentó (y resolvió, con o sin
+                                           // datos) la invitación a cargar saldos iniciales tras el onboarding
 }
 
 export type EstadoPrestamo = 'activo' | 'pagado' | 'cancelado'

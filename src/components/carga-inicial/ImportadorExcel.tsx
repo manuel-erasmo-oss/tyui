@@ -4,7 +4,7 @@ import { useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import {
   Download, Upload, CheckCircle2, XCircle, FileSpreadsheet,
-  ArrowLeft, ArrowRight, PartyPopper, Loader2,
+  ArrowLeft, ArrowRight, PartyPopper, Loader2, Check,
 } from 'lucide-react'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
@@ -50,6 +50,43 @@ interface FilaImportacion {
 }
 
 type Paso = 'plantilla' | 'subir' | 'previa' | 'exito'
+
+const PASOS: { key: Exclude<Paso, 'exito'>; label: string }[] = [
+  { key: 'plantilla', label: 'Plantilla' },
+  { key: 'subir', label: 'Subir archivo' },
+  { key: 'previa', label: 'Confirmar' },
+]
+
+function PasoIndicador({ actual }: { actual: Paso }) {
+  const idx = PASOS.findIndex(p => p.key === actual)
+  return (
+    <div className="flex items-center">
+      {PASOS.map((p, i) => (
+        <div key={p.key} className="flex items-center">
+          <div className="flex flex-col items-center gap-1.5">
+            <div
+              className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                i < idx
+                  ? 'bg-emerald-500 text-white'
+                  : i === idx
+                    ? 'bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] text-white shadow-md shadow-[#1B2980]/30'
+                    : 'bg-zinc-100 dark:bg-[#1a1d2e] text-zinc-400 dark:text-zinc-600'
+              }`}
+            >
+              {i < idx ? <Check className="h-3.5 w-3.5" /> : i + 1}
+            </div>
+            <span className={`text-[10px] font-medium whitespace-nowrap ${i === idx ? 'text-[#1B2980] dark:text-indigo-400' : 'text-zinc-400 dark:text-zinc-500'}`}>
+              {p.label}
+            </span>
+          </div>
+          {i < PASOS.length - 1 && (
+            <div className={`mx-2 mb-4 h-px w-10 sm:w-16 ${i < idx ? 'bg-emerald-400' : 'bg-zinc-200 dark:bg-[#252840]'}`} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function celdaTexto(v: unknown): string {
   if (v === null || v === undefined) return ''
@@ -272,19 +309,12 @@ export function ImportadorExcel({ onFinish }: Props) {
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 space-y-5">
+    <div className="rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-white dark:bg-[#141722] p-7 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_16px_40px_-20px_rgba(27,41,128,0.25)] dark:shadow-[0_16px_40px_-20px_rgba(0,0,0,0.6)] space-y-6">
 
       {/* Paso indicator */}
       {paso !== 'exito' && (
-        <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
-          {(['plantilla', 'subir', 'previa'] as Paso[]).map((p, i) => (
-            <div key={p} className="flex items-center gap-2">
-              {i > 0 && <span className="text-zinc-300 dark:text-zinc-700">/</span>}
-              <span className={paso === p ? 'font-semibold text-[#1B2980] dark:text-indigo-400' : ''}>
-                {i + 1}. {p === 'plantilla' ? 'Descargar plantilla' : p === 'subir' ? 'Subir archivo' : 'Vista previa'}
-              </span>
-            </div>
-          ))}
+        <div className="flex justify-center border-b border-zinc-100 dark:border-[#1d2035] pb-6">
+          <PasoIndicador actual={paso} />
         </div>
       )}
 
@@ -292,11 +322,14 @@ export function ImportadorExcel({ onFinish }: Props) {
       {paso === 'plantilla' && (
         <div className="space-y-4">
           <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-              <FileSpreadsheet className="h-5 w-5" />
+            <div className="relative shrink-0">
+              <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-lg" />
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30">
+                <FileSpreadsheet className="h-5 w-5" />
+              </div>
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Descarga la plantilla Excel</p>
+              <p className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">Descarga la plantilla Excel</p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-xl">
                 Contiene las columnas exactas que necesitamos, con 2 filas de ejemplo. Bórralas antes de
                 llenar los datos reales de tus empleados. Si la cédula de una fila ya existe en el
@@ -308,7 +341,7 @@ export function ImportadorExcel({ onFinish }: Props) {
 
           <button
             onClick={descargarPlantilla}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#1B2980] hover:bg-[#151f66] text-white text-sm font-medium px-4 py-2.5 transition-colors"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] hover:from-[#151f66] hover:to-[#1B2980] text-white text-sm font-semibold px-5 py-2.5 shadow-lg shadow-[#1B2980]/25 transition-all"
           >
             <Download className="h-4 w-4" />
             Descargar Plantilla Excel
@@ -329,11 +362,14 @@ export function ImportadorExcel({ onFinish }: Props) {
       {paso === 'subir' && (
         <div className="space-y-4">
           <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400">
-              <Upload className="h-5 w-5" />
+            <div className="relative shrink-0">
+              <div className="absolute inset-0 rounded-2xl bg-[#1B2980]/25 blur-lg dark:bg-indigo-500/25" />
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] text-white shadow-lg shadow-[#1B2980]/30">
+                <Upload className="h-5 w-5" />
+              </div>
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Sube tu archivo lleno</p>
+              <p className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">Sube tu archivo lleno</p>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed max-w-xl">
                 Aceptamos .xlsx, .xls o .csv. Antes de aplicar ningún cambio te mostraremos una vista
                 previa fila por fila para que confirmes.
@@ -387,26 +423,22 @@ export function ImportadorExcel({ onFinish }: Props) {
       {/* PASO 3: Vista previa y confirmación */}
       {paso === 'previa' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-lg bg-[#eef0fb] dark:bg-indigo-950/30 px-4 py-3">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Filas válidas</p>
-              <p className="text-lg font-semibold text-[#1B2980] dark:text-indigo-400 tabular-nums">{filasValidas.length}</p>
+          <div className="grid grid-cols-3 divide-x divide-zinc-100 dark:divide-[#1d2035] rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-zinc-50/60 dark:bg-[#1a1d2e]/40 overflow-hidden">
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Filas válidas</p>
+              <p className="mt-1 text-xl font-bold text-[#1B2980] dark:text-indigo-400 tabular-nums">{filasValidas.length}</p>
             </div>
-            <div className="rounded-lg bg-rose-50 dark:bg-rose-950/30 px-4 py-3">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Con errores</p>
-              <p className="text-lg font-semibold text-rose-600 dark:text-rose-400 tabular-nums">{filasConError.length}</p>
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Con errores</p>
+              <p className="mt-1 text-xl font-bold text-rose-600 dark:text-rose-400 tabular-nums">{filasConError.length}</p>
             </div>
-            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">Se importarán</p>
-              <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">{filasValidas.length} empleados</p>
+            <div className="px-5 py-4">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Se importarán</p>
+              <p className="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">{filasValidas.length}</p>
             </div>
           </div>
 
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            {filasValidas.length} fila{filasValidas.length === 1 ? '' : 's'} válida{filasValidas.length === 1 ? '' : 's'}, {filasConError.length} con error{filasConError.length === 1 ? '' : 'es'}, se importarán {filasValidas.length} empleados.
-          </p>
-
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-[#252840]">
+          <div className="overflow-x-auto rounded-2xl border border-zinc-200 dark:border-[#252840]">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] text-left text-xs text-zinc-500 dark:text-zinc-400">
@@ -480,7 +512,7 @@ export function ImportadorExcel({ onFinish }: Props) {
               <button
                 onClick={confirmarImportacion}
                 disabled={filasValidas.length === 0}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#1B2980] hover:bg-[#151f66] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2.5 transition-colors"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] hover:from-[#151f66] hover:to-[#1B2980] disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2.5 shadow-lg shadow-[#1B2980]/25 transition-all"
               >
                 <CheckCircle2 className="h-4 w-4" />
                 Confirmar Importación
@@ -493,10 +525,13 @@ export function ImportadorExcel({ onFinish }: Props) {
       {/* Éxito */}
       {paso === 'exito' && (
         <div className="flex flex-col items-center gap-3 py-8 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-            <PartyPopper className="h-7 w-7" />
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full bg-emerald-500/20 blur-xl" />
+            <div className="relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30">
+              <PartyPopper className="h-7 w-7" />
+            </div>
           </div>
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          <p className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">
             Se importaron/actualizaron {importados} empleado{importados === 1 ? '' : 's'}
           </p>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm">
@@ -504,7 +539,7 @@ export function ImportadorExcel({ onFinish }: Props) {
           </p>
           <button
             onClick={() => { resetArchivo(); onFinish() }}
-            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#1B2980] hover:bg-[#151f66] text-white text-sm font-medium px-4 py-2.5 transition-colors"
+            className="mt-2 inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] hover:from-[#151f66] hover:to-[#1B2980] text-white text-sm font-semibold px-5 py-2.5 shadow-lg shadow-[#1B2980]/25 transition-all"
           >
             Volver
           </button>

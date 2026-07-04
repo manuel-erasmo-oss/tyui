@@ -4,11 +4,12 @@ import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/Header'
 import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE_AFP, TOPE_COTIZABLE_SFS, TOPE_COTIZABLE_SRL } from '@/lib/dominican-labor'
 import { formatRD } from '@/lib/utils'
-import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2 } from 'lucide-react'
+import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2, History } from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useAuth } from '@/lib/auth-context'
 import { Toast } from '@/components/ui/Toast'
 import { cargarDatosDemo } from '@/lib/seed-data'
+import { ConfiguracionInicialFlow } from '@/components/carga-inicial/ConfiguracionInicialFlow'
 import type { Empresa, CategoriaEmpresa, SectorEmpresa, RolUsuario } from '@/types'
 
 interface ParamRow {
@@ -517,6 +518,19 @@ export default function ConfiguracionPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </section>
+
+        {/* Configuración Inicial — saldos de empleados con historial previo */}
+        <section>
+          <div className="mb-3 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-950/40">
+              <History className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
+            </div>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Configuración Inicial</h2>
+          </div>
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
+            <ConfiguracionInicialFlow />
           </div>
         </section>
 

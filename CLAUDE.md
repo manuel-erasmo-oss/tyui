@@ -245,17 +245,17 @@ no de la fecha de alta en el sistema. Lo que sí requería solución (implementa
   (aviso visual) cuando `fechaIngreso` es de hace más de 45 días — sugiere que
   es una migración, no una contratación nueva.
 
-**Fase 2 (implementado)**: `/carga-inicial` — página contenedora con selector
-de modo (`src/app/carga-inicial/page.tsx`) que enlaza a las dos rutas de carga:
-- **Asistente Guiado** (`src/components/carga-inicial/AsistenteGuiado.tsx`):
-  recorre los empleados activos con `saldosInicialesRevisado !== true` uno a
-  uno (lista reactiva vía `useMemo` sobre `empleadosActivos`, con "X de Y"
-  estable gracias a un total capturado en el primer render de la sesión),
-  pidiendo los 3 datos de saldos iniciales o permitiendo marcar "empleado
-  nuevo, no aplica". Estados de fin: "Todo al día" (nada pendiente) y
-  "Completado" (recorrido de la sesión terminado).
-**Fase 3 (implementado)**: `src/components/carga-inicial/ImportadorExcel.tsx`
-— importador de Excel para migraciones masivas, flujo de 3 pasos:
+**Fase 2 (implementado)**: **Asistente Guiado**
+(`src/components/carga-inicial/AsistenteGuiado.tsx`) — recorre los empleados
+activos con `saldosInicialesRevisado !== true` uno a uno (lista reactiva vía
+`useMemo` sobre `empleadosActivos`, con "X de Y" estable gracias a un total
+capturado en el primer render de la sesión), pidiendo los 3 datos de saldos
+iniciales o permitiendo marcar "empleado nuevo, no aplica". Estados de fin:
+"Todo al día" (nada pendiente) y "Completado" (recorrido de la sesión
+terminado).
+**Fase 3 (implementado)**: **Importador de Excel**
+(`src/components/carga-inicial/ImportadorExcel.tsx`) para migraciones
+masivas, flujo de 3 pasos:
 1. Descarga de plantilla `.xlsx` (vía `xlsx`, mismo patrón que
    `src/lib/excel-export.ts`) con las 10 columnas exactas + 2 filas de ejemplo.
 2. Carga del archivo lleno (`.xlsx`/`.xls`/`.csv`), parseo con
@@ -266,6 +266,36 @@ de modo (`src/app/carga-inicial/page.tsx`) que enlaza a las dos rutas de carga:
    nueva → "Crear empleado nuevo" con validación de los campos obligatorios) y
    estado ✅/❌ con el motivo exacto del error; confirmación aplica solo las
    filas válidas y marca `saldosInicialesRevisado: true` en cada una.
+
+**Integración y rediseño (implementado)** — feedback de producto: Carga
+Inicial no debía sentirse como un módulo aislado ni verse repetitivo frente
+al resto del sistema. Cambios:
+- `src/components/carga-inicial/ConfiguracionInicialFlow.tsx` — componente
+  compartido que reemplaza la antigua página standalone `/carga-inicial`
+  (eliminada, junto con su entrada en el Sidebar). Contiene el selector de
+  modo (Asistente Guiado / Importador Excel) + una franja de estadísticas
+  (`divide-x`, tipografía editorial) en vez de 3 `StatCard` repetidas.
+- Ahora vive embebido como sección **"Configuración Inicial"** dentro de
+  `/configuracion` (mismo patrón de sección que "Perfil de la Empresa"), y
+  también se reutiliza en el prompt post-onboarding (ver abajo) — un solo
+  componente, dos superficies.
+- **Lenguaje visual premium** aplicado a esta feature específicamente (no al
+  resto del sistema, que sigue el principio de mínimo color en tablas):
+  badges de icono `rounded-2xl` con gradiente `from-[#1B2980] to-[#2f3fa8]` +
+  halo (`blur-lg`/`blur-xl` del mismo color detrás), cards con
+  `hover:-translate-y-0.5` y sombra tintada de marca, stepper numerado con
+  círculos conectados (en vez de texto "1. Paso / 2. Paso") en
+  `ImportadorExcel`, y CTAs con gradiente + `shadow-lg shadow-[#1B2980]/25`.
+- **Prompt post-onboarding** (`src/components/onboarding/PromptConfiguracionInicial.tsx`):
+  pantalla completa (mismo tratamiento visual que `OnboardingWizard`) que se
+  muestra una sola vez, justo después de terminar el onboarding, preguntando
+  si la empresa ya operaba antes de Cielo Cloud — lleva directo al flujo de
+  Configuración Inicial o permite posponerlo. Controlado por el nuevo campo
+  `Empresa.configuracionInicialOfrecida` (se marca `true` al resolver, para
+  no repetir el prompt en sesiones futuras); cableado en `RouteGuard.tsx`
+  justo después del gate de `needsOnboarding`, en ambas ramas
+  (`FIREBASE_ENABLED` on/off). La cuenta admin (`esAdmin`) omite este gate,
+  igual que omite el onboarding.
 
 ### 🔴 Alta prioridad — brechas reales confirmadas
 
@@ -417,6 +447,7 @@ de modo (`src/app/carga-inicial/page.tsx`) que enlaza a las dos rutas de carga:
 
 | Hash | Descripción |
 |---|---|
+| _(pendiente)_ | refactor: integrar Carga Inicial en Configuración + prompt post-onboarding + rediseño premium |
 | `c87ae7f` | feat: importador Excel para carga inicial de saldos (Fase 3) |
 | `45d5245` | feat: asistente guiado de saldos iniciales (Fase 2) |
 | `9595bf4` | feat: contenedor Carga Inicial (Fase 2+3) — base para asistente guiado + importador Excel |
