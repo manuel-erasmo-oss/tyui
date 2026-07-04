@@ -5,32 +5,39 @@ import type { Empleado, ParametrosNomina, ResultadoNomina } from '@/types'
 const TRAMOS_ISR = [
   { hasta: 416_220.00, tasa: 0.00, fijo: 0 },
   { hasta: 624_329.00, tasa: 0.15, fijo: 0 },
-  { hasta: 867_123.00, tasa: 0.20, fijo: 31_216.35 },
-  { hasta: Infinity,   tasa: 0.25, fijo: 79_775.15 },
+  { hasta: 867_123.00, tasa: 0.20, fijo: 31_216.00 },
+  { hasta: Infinity,   tasa: 0.25, fijo: 79_776.00 },
 ] as const
 
 // ─── TSS Contribution Rates ───────────────────────────────────────────────────
 // Source: CNSS, Ley 87-01 y reglamentos vigentes
 export const TASAS_TSS = {
-  afpEmpleado:   0.0287,
-  afpEmpleador:  0.0710,
-  sfsEmpleado:   0.0304,
-  sfsEmpleador:  0.0709,
-  srlBajo:       0.0110,  // oficinas, servicios, comercio
-  srlMedio:      0.0220,  // industria media
-  srlAlto:       0.0325,  // construcción, minería, alto riesgo
+  afpEmpleado:     0.0287,
+  afpEmpleador:    0.0710,
+  sfsEmpleado:     0.0304,
+  sfsEmpleador:    0.0709,
+  srlCategoriaI:   0.0110,  // I — oficinas y comercio
+  srlCategoriaII:  0.0115,  // II — industria liviana
+  srlCategoriaIII: 0.0120,  // III — industria pesada
+  srlCategoriaIV:  0.0130,  // IV — construcción y minería (alto riesgo)
+  infotepEmpleador: 0.01,   // Infotep — aporte obligatorio del empleador
 } as const
 
-// ─── Salarios Mínimos (Comité Nacional de Salarios, 2024) ─────────────────────
+// ─── Salarios Mínimos vigentes desde 01-feb-2026 (Resolución 079-2025, Ministerio de Industria, Comercio y Mipymes) ─
 export const SALARIO_MINIMO = {
-  grandesEmpresas:  21_000,
-  pequeñasEmpresas: 18_430,
-  microempresas:    13_620,
-  zonaFranca:       15_800,
+  grandesEmpresas:  29_988.00,
+  medianaEmpresa:   27_489.60,
+  pequeñasEmpresas: 18_421.20,
+  microempresas:    16_993.20,
+  zonaFranca:       15_800,     // sin cambios — resolución distinta
 } as const
 
-// Tope salario cotizable TSS = 20 × salario mínimo grandes empresas
-export const TOPE_COTIZABLE = SALARIO_MINIMO.grandesEmpresas * 20  // RD$ 420,000
+// Salario mínimo cotizable TSS vigente desde 01-feb-2026 (Resolución 079-2025 CNSS)
+export const SALARIO_MINIMO_COTIZABLE_TSS = 23_223.00
+
+export const TOPE_COTIZABLE_AFP = SALARIO_MINIMO_COTIZABLE_TSS * 20  // RD$464,460 — 20× salario mínimo
+export const TOPE_COTIZABLE_SFS = SALARIO_MINIMO_COTIZABLE_TSS * 10  // RD$232,230 — 10× salario mínimo
+export const TOPE_COTIZABLE_SRL = SALARIO_MINIMO_COTIZABLE_TSS * 4   // RD$92,892  — 4× salario mínimo
 
 // Resolución 624-02 CNSS: cuota fija mensual por dependiente adicional (vigente 2024-2025)
 export const CUOTA_DEP_SFS_MENSUAL = 1_919.78
@@ -68,7 +75,7 @@ export function calcularNomina(
     comisiones        = 0,
     sfsDependientes   = 0,
     otrosDescuentos   = 0,
-    categoriaRiesgo   = empleado.categoriaRiesgo ?? 'bajo',
+    categoriaRiesgo   = empleado.categoriaRiesgo ?? 'I',
   } = params
 
   // Salario proporcional a días trabajados
@@ -83,20 +90,30 @@ export function calcularNomina(
 
   const totalBruto = salarioBruto + totalHorasExtras + bonificaciones + comisiones
 
-  // ─── TSS (capped at tope cotizable) ───────────────────────────────────────
-  const salarioCotizable = Math.min(totalBruto, TOPE_COTIZABLE)
+  // ─── TSS (cada aporte capea sobre su propia base — topes distintos) ───────
+  const baseCotizableAFP = Math.min(totalBruto, TOPE_COTIZABLE_AFP)
+  const baseCotizableSFS = Math.min(totalBruto, TOPE_COTIZABLE_SFS)
+  const baseCotizableSRL = Math.min(totalBruto, TOPE_COTIZABLE_SRL)
 
-  const afpEmpleado  = salarioCotizable * TASAS_TSS.afpEmpleado
-  const sfsEmpleado  = salarioCotizable * TASAS_TSS.sfsEmpleado
-  const afpEmpleador = salarioCotizable * TASAS_TSS.afpEmpleador
-  const sfsEmpleador = salarioCotizable * TASAS_TSS.sfsEmpleador
+  // Salario cotizable mostrado en UI = base AFP (la más alta de las tres, más representativa)
+  const salarioCotizable = baseCotizableAFP
 
-  const tasaSRL = categoriaRiesgo === 'alto'
-    ? TASAS_TSS.srlAlto
-    : categoriaRiesgo === 'medio'
-    ? TASAS_TSS.srlMedio
-    : TASAS_TSS.srlBajo
-  const srlEmpleador = salarioCotizable * tasaSRL
+  const afpEmpleado  = baseCotizableAFP * TASAS_TSS.afpEmpleado
+  const sfsEmpleado  = baseCotizableSFS * TASAS_TSS.sfsEmpleado
+  const afpEmpleador = baseCotizableAFP * TASAS_TSS.afpEmpleador
+  const sfsEmpleador = baseCotizableSFS * TASAS_TSS.sfsEmpleador
+
+  const tasaSRL = categoriaRiesgo === 'IV'
+    ? TASAS_TSS.srlCategoriaIV
+    : categoriaRiesgo === 'III'
+    ? TASAS_TSS.srlCategoriaIII
+    : categoriaRiesgo === 'II'
+    ? TASAS_TSS.srlCategoriaII
+    : TASAS_TSS.srlCategoriaI
+  const srlEmpleador = baseCotizableSRL * tasaSRL
+
+  // ─── Infotep — aporte obligatorio del empleador (1% del salario cotizable) ─
+  const infotepEmpleador = baseCotizableAFP * TASAS_TSS.infotepEmpleador
 
   // ─── ISR Retención (DGII, Ley 11-92 art. 309) ─────────────────────────────
   // Base gravable = total bruto - AFP empleado - SFS empleado (deducibles)
@@ -107,7 +124,7 @@ export function calcularNomina(
   // ─── Totales ───────────────────────────────────────────────────────────────
   const totalDescuentos       = afpEmpleado + sfsEmpleado + isrMensual + sfsDependientes + otrosDescuentos
   const salarioNeto           = totalBruto - totalDescuentos
-  const totalAportesEmpleador = afpEmpleador + sfsEmpleador + srlEmpleador
+  const totalAportesEmpleador = afpEmpleador + sfsEmpleador + srlEmpleador + infotepEmpleador
   const totalCostoEmpleador   = totalBruto + totalAportesEmpleador
 
   // ─── Provisiones ──────────────────────────────────────────────────────────
@@ -146,6 +163,7 @@ export function calcularNomina(
     afpEmpleador,
     sfsEmpleador,
     srlEmpleador,
+    infotepEmpleador,
     totalAportesEmpleador,
     totalCostoEmpleador,
     regaliaPascual,
@@ -192,6 +210,7 @@ export function calcularNominaQuincenal(
     afpEmpleador:             m.afpEmpleador / 2,
     sfsEmpleador:             m.sfsEmpleador / 2,
     srlEmpleador:             m.srlEmpleador / 2,
+    infotepEmpleador:         m.infotepEmpleador / 2,
     totalAportesEmpleador:    m.totalAportesEmpleador / 2,
     totalCostoEmpleador:      bruto + m.totalAportesEmpleador / 2,
     regaliaPascual:           m.regaliaPascual / 2,
@@ -203,21 +222,20 @@ export function calcularNominaQuincenal(
 // ─── Cesantía (Art. 80, Código de Trabajo Ley 16-92) ─────────────────────────
 export function calcularCesantia(salarioMensual: number, anosServicio: number): number {
   const salarioDiario = salarioMensual / 30
-  if (anosServicio < 0.25)  return 0
-  if (anosServicio < 0.5)   return salarioDiario * 6                         // 3–6 meses: 6 días
-  if (anosServicio < 1)     return salarioDiario * 13                        // 6–12 meses: 13 días
-  if (anosServicio < 5)     return salarioDiario * 21 * Math.floor(anosServicio) // 1–5 años: 21 días/año
-  if (anosServicio < 10)    return salarioDiario * 23 * Math.floor(anosServicio) // 5–10 años: 23 días/año
-  return salarioDiario * 25 * Math.floor(anosServicio)                       // 10+ años: 25 días/año
+  if (anosServicio < 0.25) return 0
+  if (anosServicio < 0.5)  return salarioDiario * 6                          // 3–6 meses: 6 días
+  if (anosServicio < 1)    return salarioDiario * 13                         // 6–12 meses: 13 días
+  if (anosServicio < 5)    return salarioDiario * 21 * Math.floor(anosServicio) // 1–5 años: 21 días/año
+  return salarioDiario * 23 * Math.floor(anosServicio)                      // 5+ años: 23 días/año
 }
 
 // ─── Preaviso (Art. 76, Código de Trabajo) ───────────────────────────────────
 export function calcularPreaviso(salarioMensual: number, anosServicio: number): number {
   const salarioDiario = salarioMensual / 30
-  if (anosServicio < 0.25) return salarioDiario * 7   // < 3 meses: 7 días
-  if (anosServicio < 0.5)  return salarioDiario * 14  // 3–6 meses: 14 días
-  if (anosServicio < 1)    return salarioDiario * 28  // 6–12 meses: 28 días
-  return salarioDiario * 45                           // > 1 año: 45 días (máximo)
+  if (anosServicio < 0.25) return 0
+  if (anosServicio < 0.5)  return salarioDiario * 7   // 3–6 meses: 7 días
+  if (anosServicio < 1)    return salarioDiario * 14  // 6–12 meses: 14 días
+  return salarioDiario * 28                           // 12+ meses: 28 días fijo
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

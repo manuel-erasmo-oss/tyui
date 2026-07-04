@@ -252,6 +252,7 @@ function descargarComprobantePDF(
     { label: 'AFP Empleador (7.10%)', v: nomina.afpEmpleador },
     { label: 'SFS Empleador (7.09%)', v: nomina.sfsEmpleador },
     { label: 'SRL Empleador',         v: nomina.srlEmpleador },
+    { label: 'Infotep (1.00%)',       v: nomina.infotepEmpleador },
   ]
   aportes.forEach(a => {
     doc.setFont('helvetica', 'normal')
@@ -388,6 +389,10 @@ function DetalleNomina({
             <div className="flex justify-between text-xs">
               <span className="text-zinc-600 dark:text-zinc-400">SRL Empleador</span>
               <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.srlEmpleador)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-zinc-600 dark:text-zinc-400">Infotep (1.00%)</span>
+              <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.infotepEmpleador)}</span>
             </div>
             <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-1.5 flex justify-between text-xs font-bold">
               <span className="dark:text-zinc-200">Costo Total Empresa</span>
@@ -560,13 +565,13 @@ export default function NominaPage() {
         r.totalBruto.toFixed(2), r.afpEmpleado.toFixed(2), r.sfsEmpleado.toFixed(2),
         r.isrMensual.toFixed(2), r.sfsDependientes.toFixed(2), r.totalDescuentos.toFixed(2),
         r.salarioNeto.toFixed(2), r.afpEmpleador.toFixed(2), r.sfsEmpleador.toFixed(2),
-        r.srlEmpleador.toFixed(2), r.totalCostoEmpleador.toFixed(2),
+        r.srlEmpleador.toFixed(2), r.infotepEmpleador.toFixed(2), r.totalCostoEmpleador.toFixed(2),
       ]
     })
     const slug = periodoActualLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
     exportarCSV(
       `nomina-${slug}.csv`,
-      ['Empleado','Cargo','Departamento','S. Bruto','AFP Emp','SFS Emp','ISR','SFS Dep.','Total Desc.','S. Neto','AFP Empr','SFS Empr','SRL','Costo Total'],
+      ['Empleado','Cargo','Departamento','S. Bruto','AFP Emp','SFS Emp','ISR','SFS Dep.','Total Desc.','S. Neto','AFP Empr','SFS Empr','SRL','Infotep','Costo Total'],
       rows,
     )
     setToast('Nómina exportada correctamente')
@@ -918,7 +923,7 @@ export default function NominaPage() {
           <StatCard
             label="Aportes TSS Empresa"
             value={formatRD(totales.aportes, 0)}
-            sub="AFP + SFS + SRL"
+            sub="AFP + SFS + SRL + Infotep"
             icon={TrendingUp}
             iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
           />
@@ -1226,7 +1231,7 @@ export default function NominaPage() {
             <Info className="mt-0.5 h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0" />
             <div className="text-xs text-[#151f66] dark:text-indigo-200 space-y-0.5">
               <p className="font-semibold">Normativa aplicada</p>
-              <p>AFP 2.87% emp / 7.10% empr · SFS 3.04% emp / 7.09% empr · SRL 1.10% empr · Tope TSS RD$420,000</p>
+              <p>AFP 2.87% emp / 7.10% empr (tope RD$464,460) · SFS 3.04% emp / 7.09% empr (tope RD$232,230) · SRL 1.10%–1.30% empr según categoría (tope RD$92,892) · Infotep 1.00% empr</p>
               {periodoActual.tipo === 'quincenal'
                 ? <p>Quincenal: 1ª quincena = anticipo sin ISR · 2ª quincena = ISR mensual completo liquidado · Ley 11-92 Art. 309</p>
                 : <p>ISR calculado sobre base anual según tramos DGII vigentes · Ley 11-92 Art. 309</p>

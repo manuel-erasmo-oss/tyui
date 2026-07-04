@@ -507,8 +507,9 @@ function ReporteNomina({
     afpEmpl:        acc.afpEmpl        + res.afpEmpleador,
     sfsEmpl:        acc.sfsEmpl        + res.sfsEmpleador,
     srlEmpl:        acc.srlEmpl        + res.srlEmpleador,
+    infotepEmpl:    acc.infotepEmpl    + res.infotepEmpleador,
     costo:          acc.costo          + res.totalCostoEmpleador,
-  }), { bruto: 0, afpEmp: 0, sfsEmp: 0, isr: 0, descuentos: 0, neto: 0, afpEmpl: 0, sfsEmpl: 0, srlEmpl: 0, costo: 0 }), [filas])
+  }), { bruto: 0, afpEmp: 0, sfsEmp: 0, isr: 0, descuentos: 0, neto: 0, afpEmpl: 0, sfsEmpl: 0, srlEmpl: 0, infotepEmpl: 0, costo: 0 }), [filas])
 
   function generar() {
     setLoading(true)
@@ -522,7 +523,7 @@ function ReporteNomina({
 
     autoTable(doc, {
       startY: 44,
-      head: [['Nombre','Cargo','Bruto','AFP Emp.','SFS Emp.','ISR','Tot. Desc.','Neto','AFP Empl.','SFS Empl.','SRL','Costo Total']],
+      head: [['Nombre','Cargo','Bruto','AFP Emp.','SFS Emp.','ISR','Tot. Desc.','Neto','AFP Empl.','SFS Empl.','SRL','Infotep','Costo Total']],
       body: filas.map(({ emp, res }) => [
         fullName(emp), emp.cargo,
         res.totalBruto.toFixed(2),
@@ -534,6 +535,7 @@ function ReporteNomina({
         res.afpEmpleador.toFixed(2),
         res.sfsEmpleador.toFixed(2),
         res.srlEmpleador.toFixed(2),
+        res.infotepEmpleador.toFixed(2),
         res.totalCostoEmpleador.toFixed(2),
       ]),
       foot: [[
@@ -547,6 +549,7 @@ function ReporteNomina({
         totales.afpEmpl.toFixed(2),
         totales.sfsEmpl.toFixed(2),
         totales.srlEmpl.toFixed(2),
+        totales.infotepEmpl.toFixed(2),
         totales.costo.toFixed(2),
       ]],
       theme: 'striped',
@@ -559,7 +562,7 @@ function ReporteNomina({
         2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
         5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' },
         8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
-        11: { halign: 'right' },
+        11: { halign: 'right' }, 12: { halign: 'right' },
       },
       didDrawPage: (data) => {
         doc.setFontSize(7)
@@ -581,16 +584,16 @@ function ReporteNomina({
         nombre: 'Nómina',
         titulo: 'Reporte de Nómina por Período',
         subtitulo: periodoLabel(periodo),
-        encabezados: ['Nombre','Cargo','Bruto','AFP Emp.','SFS Emp.','ISR','Tot. Desc.','Neto','AFP Empl.','SFS Empl.','SRL','Costo Total'],
+        encabezados: ['Nombre','Cargo','Bruto','AFP Emp.','SFS Emp.','ISR','Tot. Desc.','Neto','AFP Empl.','SFS Empl.','SRL','Infotep','Costo Total'],
         filas: filas.map(({ emp, res }) => [
           fullName(emp), emp.cargo,
           res.totalBruto, res.afpEmpleado, res.sfsEmpleado, res.isrMensual,
           res.totalDescuentos, res.salarioNeto, res.afpEmpleador, res.sfsEmpleador,
-          res.srlEmpleador, res.totalCostoEmpleador,
+          res.srlEmpleador, res.infotepEmpleador, res.totalCostoEmpleador,
         ]),
         totales: ['TOTALES','', totales.bruto, totales.afpEmp, totales.sfsEmp, totales.isr,
-          totales.descuentos, totales.neto, totales.afpEmpl, totales.sfsEmpl, totales.srlEmpl, totales.costo],
-        anchos: [32, 22, 16, 14, 14, 14, 14, 16, 14, 14, 12, 16],
+          totales.descuentos, totales.neto, totales.afpEmpl, totales.sfsEmpl, totales.srlEmpl, totales.infotepEmpl, totales.costo],
+        anchos: [32, 22, 16, 14, 14, 14, 14, 16, 14, 14, 12, 12, 16],
       }],
     })
   }
@@ -651,6 +654,7 @@ function ReporteNomina({
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">AFP Empl.</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">SFS Empl.</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">SRL</th>
+                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">Infotep</th>
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 whitespace-nowrap">Costo Total</th>
                 </tr>
               </thead>
@@ -670,6 +674,7 @@ function ReporteNomina({
                     <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.afpEmpleador, 0)}</td>
                     <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.sfsEmpleador, 0)}</td>
                     <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.srlEmpleador, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.infotepEmpleador, 0)}</td>
                     <td className="px-4 py-3 tabular-nums text-indigo-700 dark:text-indigo-400 font-semibold whitespace-nowrap">{formatRD(res.totalCostoEmpleador, 0)}</td>
                   </tr>
                 ))}
@@ -686,6 +691,7 @@ function ReporteNomina({
                   <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl, 0)}</td>
                   <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl, 0)}</td>
                   <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.srlEmpl, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.infotepEmpl, 0)}</td>
                   <td className="px-4 py-3 tabular-nums text-indigo-200 whitespace-nowrap">{formatRD(totales.costo, 0)}</td>
                 </tr>
               </tfoot>
@@ -1135,7 +1141,7 @@ function ReporteTSS({
     return empleados.filter(e => e.activo).map(emp => {
       const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
       const res = calcularConPeriodo(emp, ajustes, periodo)
-      const totalTSS = res.afpEmpleado + res.sfsEmpleado + res.afpEmpleador + res.sfsEmpleador + res.srlEmpleador
+      const totalTSS = res.afpEmpleado + res.sfsEmpleado + res.afpEmpleador + res.sfsEmpleador + res.srlEmpleador + res.infotepEmpleador
       return { emp, res, totalTSS }
     })
   }, [periodo, generado, empleados])
@@ -1181,9 +1187,10 @@ function ReporteTSS({
     afpEmpl:     acc.afpEmpl     + res.afpEmpleador,
     sfsEmpl:     acc.sfsEmpl     + res.sfsEmpleador,
     srl:         acc.srl         + res.srlEmpleador,
+    infotep:     acc.infotep     + res.infotepEmpleador,
     totalTSS:    acc.totalTSS    + totalTSS,
     isr:         acc.isr         + res.isrMensual,
-  }), { cotizable: 0, afpEmp: 0, sfsEmp: 0, afpEmpl: 0, sfsEmpl: 0, srl: 0, totalTSS: 0, isr: 0 }), [filas])
+  }), { cotizable: 0, afpEmp: 0, sfsEmp: 0, afpEmpl: 0, sfsEmpl: 0, srl: 0, infotep: 0, totalTSS: 0, isr: 0 }), [filas])
 
   function generar() {
     setLoading(true)
@@ -1197,18 +1204,18 @@ function ReporteTSS({
 
     autoTable(doc, {
       startY: 44,
-      head: [['Nombre','Cédula','S. Cotizable','AFP Emp.','SFS Emp.','AFP Empl.','SFS Empl.','SRL Empl.','Total TSS','ISR Retenido']],
+      head: [['Nombre','Cédula','S. Cotizable','AFP Emp.','SFS Emp.','AFP Empl.','SFS Empl.','SRL Empl.','Infotep','Total TSS','ISR Retenido']],
       body: filas.map(({ emp, res, totalTSS }) => [
         fullName(emp), formatCedula(emp.cedula),
         res.salarioCotizable.toFixed(2),
         res.afpEmpleado.toFixed(2), res.sfsEmpleado.toFixed(2),
-        res.afpEmpleador.toFixed(2), res.sfsEmpleador.toFixed(2), res.srlEmpleador.toFixed(2),
+        res.afpEmpleador.toFixed(2), res.sfsEmpleador.toFixed(2), res.srlEmpleador.toFixed(2), res.infotepEmpleador.toFixed(2),
         totalTSS.toFixed(2), res.isrMensual.toFixed(2),
       ]),
       foot: [['TOTALES','',
         totales.cotizable.toFixed(2),
         totales.afpEmp.toFixed(2), totales.sfsEmp.toFixed(2),
-        totales.afpEmpl.toFixed(2), totales.sfsEmpl.toFixed(2), totales.srl.toFixed(2),
+        totales.afpEmpl.toFixed(2), totales.sfsEmpl.toFixed(2), totales.srl.toFixed(2), totales.infotep.toFixed(2),
         totales.totalTSS.toFixed(2), totales.isr.toFixed(2),
       ]],
       theme: 'striped',
@@ -1219,7 +1226,7 @@ function ReporteTSS({
       columnStyles: {
         2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
         5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' },
-        8: { halign: 'right' }, 9: { halign: 'right' },
+        8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
       },
       didDrawPage: (data) => {
         doc.setFontSize(7); doc.setTextColor(150)
@@ -1239,16 +1246,16 @@ function ReporteTSS({
         nombre: 'TSS',
         titulo: 'Reporte TSS / IR-2',
         subtitulo: periodoLabel(periodo),
-        encabezados: ['Nombre','Cédula','S. Cotizable','AFP Emp.','SFS Emp.','AFP Empl.','SFS Empl.','SRL Empl.','Total TSS','ISR Retenido'],
+        encabezados: ['Nombre','Cédula','S. Cotizable','AFP Emp.','SFS Emp.','AFP Empl.','SFS Empl.','SRL Empl.','Infotep','Total TSS','ISR Retenido'],
         filas: filas.map(({ emp, res, totalTSS }) => [
           fullName(emp), formatCedula(emp.cedula),
           res.salarioCotizable, res.afpEmpleado, res.sfsEmpleado,
-          res.afpEmpleador, res.sfsEmpleador, res.srlEmpleador,
+          res.afpEmpleador, res.sfsEmpleador, res.srlEmpleador, res.infotepEmpleador,
           totalTSS, res.isrMensual,
         ]),
         totales: ['TOTALES','', totales.cotizable, totales.afpEmp, totales.sfsEmp,
-          totales.afpEmpl, totales.sfsEmpl, totales.srl, totales.totalTSS, totales.isr],
-        anchos: [30, 18, 16, 14, 14, 14, 14, 12, 16, 14],
+          totales.afpEmpl, totales.sfsEmpl, totales.srl, totales.infotep, totales.totalTSS, totales.isr],
+        anchos: [30, 18, 16, 14, 14, 14, 14, 12, 12, 16, 14],
       }],
     })
   }
@@ -1302,8 +1309,8 @@ function ReporteTSS({
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">TSS Empleador</p>
-              <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(totales.afpEmpl + totales.sfsEmpl + totales.srl, 0)}</p>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">AFP + SFS + SRL empresa</p>
+              <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(totales.afpEmpl + totales.sfsEmpl + totales.srl + totales.infotep, 0)}</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">AFP + SFS + SRL + Infotep empresa</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">ISR Retenido</p>
@@ -1330,6 +1337,7 @@ function ReporteTSS({
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">AFP Empl.</th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">SFS Empl.</th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">SRL Empl.</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">Infotep</th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 whitespace-nowrap">Total TSS</th>
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-violet-500 dark:text-violet-400 whitespace-nowrap">ISR</th>
                   </tr>
@@ -1348,6 +1356,7 @@ function ReporteTSS({
                       <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.afpEmpleador, 0)}</td>
                       <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.sfsEmpleador, 0)}</td>
                       <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.srlEmpleador, 0)}</td>
+                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.infotepEmpleador, 0)}</td>
                       <td className="px-4 py-3 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{formatRD(totalTSS, 0)}</td>
                       <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-400 whitespace-nowrap">{formatRD(res.isrMensual, 0)}</td>
                     </tr>
@@ -1362,6 +1371,7 @@ function ReporteTSS({
                     <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl, 0)}</td>
                     <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl, 0)}</td>
                     <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.srl, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.infotep, 0)}</td>
                     <td className="px-4 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.totalTSS, 0)}</td>
                     <td className="px-4 py-3 tabular-nums text-violet-300 whitespace-nowrap">{formatRD(totales.isr, 0)}</td>
                   </tr>

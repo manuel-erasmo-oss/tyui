@@ -1719,7 +1719,7 @@ export default function EmpleadosPage() {
       telefono:        form.telefono.trim() || undefined,
       banco:           (form.banco as Banco) || undefined,
       numeroCuenta:    form.numeroCuenta.trim() || undefined,
-      categoriaRiesgo: 'bajo',
+      categoriaRiesgo: 'I',
     }
   }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Header } from '@/components/layout/Header'
-import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE } from '@/lib/dominican-labor'
+import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE_AFP, TOPE_COTIZABLE_SFS, TOPE_COTIZABLE_SRL } from '@/lib/dominican-labor'
 import { formatRD } from '@/lib/utils'
 import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2 } from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
@@ -43,28 +43,52 @@ const PARAMS_TSS: ParamRow[] = [
     fuente: 'CNSS — Ley 87-01',
   },
   {
-    label: 'SRL Riesgo Bajo',
-    value: `${(TASAS_TSS.srlBajo * 100).toFixed(2)}%`,
-    descripcion: 'Seguro de Riesgos Laborales — oficinas/servicios (solo empleador)',
+    label: 'SRL Categoría I',
+    value: `${(TASAS_TSS.srlCategoriaI * 100).toFixed(2)}%`,
+    descripcion: 'Seguro de Riesgos Laborales — oficinas y comercio (solo empleador)',
     fuente: 'CNSS — Ley 87-01',
   },
   {
-    label: 'SRL Riesgo Medio',
-    value: `${(TASAS_TSS.srlMedio * 100).toFixed(2)}%`,
-    descripcion: 'Seguro de Riesgos Laborales — industria (solo empleador)',
+    label: 'SRL Categoría II',
+    value: `${(TASAS_TSS.srlCategoriaII * 100).toFixed(2)}%`,
+    descripcion: 'Seguro de Riesgos Laborales — industria liviana (solo empleador)',
     fuente: 'CNSS — Ley 87-01',
   },
   {
-    label: 'SRL Riesgo Alto',
-    value: `${(TASAS_TSS.srlAlto * 100).toFixed(2)}%`,
-    descripcion: 'Seguro de Riesgos Laborales — construcción/minería (solo empleador)',
+    label: 'SRL Categoría III',
+    value: `${(TASAS_TSS.srlCategoriaIII * 100).toFixed(2)}%`,
+    descripcion: 'Seguro de Riesgos Laborales — industria pesada (solo empleador)',
     fuente: 'CNSS — Ley 87-01',
   },
   {
-    label: 'Tope Salario Cotizable',
-    value: formatRD(TOPE_COTIZABLE, 0),
-    descripcion: '20 veces el salario mínimo del sector privado (grandes empresas)',
-    fuente: 'CNSS',
+    label: 'SRL Categoría IV',
+    value: `${(TASAS_TSS.srlCategoriaIV * 100).toFixed(2)}%`,
+    descripcion: 'Seguro de Riesgos Laborales — construcción y minería, alto riesgo (solo empleador)',
+    fuente: 'CNSS — Ley 87-01',
+  },
+  {
+    label: 'Infotep',
+    value: `${(TASAS_TSS.infotepEmpleador * 100).toFixed(2)}%`,
+    descripcion: 'Aporte obligatorio del empleador para formación técnico-profesional',
+    fuente: 'INFOTEP — Ley 116-80',
+  },
+  {
+    label: 'Tope Cotizable AFP',
+    value: formatRD(TOPE_COTIZABLE_AFP, 0),
+    descripcion: '20 veces el salario mínimo cotizable TSS',
+    fuente: 'CNSS — Resolución 079-2025',
+  },
+  {
+    label: 'Tope Cotizable SFS',
+    value: formatRD(TOPE_COTIZABLE_SFS, 0),
+    descripcion: '10 veces el salario mínimo cotizable TSS',
+    fuente: 'CNSS — Resolución 079-2025',
+  },
+  {
+    label: 'Tope Cotizable SRL',
+    value: formatRD(TOPE_COTIZABLE_SRL, 0),
+    descripcion: '4 veces el salario mínimo cotizable TSS',
+    fuente: 'CNSS — Resolución 079-2025',
   },
 ]
 
@@ -76,10 +100,11 @@ const PARAMS_ISR: ParamRow[] = [
 ]
 
 const PARAMS_SALARIOS: ParamRow[] = [
-  { label: 'Grandes Empresas', value: formatRD(SALARIO_MINIMO.grandesEmpresas, 0), descripcion: 'Más de 50 trabajadores o capital > RD$ 2M', fuente: 'Comité Nac. de Salarios 2024' },
-  { label: 'Pequeñas Empresas', value: formatRD(SALARIO_MINIMO.pequeñasEmpresas, 0), descripcion: '10 a 49 trabajadores', fuente: 'Comité Nac. de Salarios 2024' },
-  { label: 'Microempresas', value: formatRD(SALARIO_MINIMO.microempresas, 0), descripcion: 'Menos de 10 trabajadores', fuente: 'Comité Nac. de Salarios 2024' },
-  { label: 'Zona Franca', value: formatRD(SALARIO_MINIMO.zonaFranca, 0), descripcion: 'Trabajadores en zonas francas industriales', fuente: 'Comité Nac. de Salarios 2024' },
+  { label: 'Grandes Empresas', value: formatRD(SALARIO_MINIMO.grandesEmpresas, 0), descripcion: 'Más de 50 trabajadores o capital > RD$ 2M', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
+  { label: 'Mediana Empresa', value: formatRD(SALARIO_MINIMO.medianaEmpresa, 0), descripcion: '20 a 49 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
+  { label: 'Pequeñas Empresas', value: formatRD(SALARIO_MINIMO.pequeñasEmpresas, 0), descripcion: '10 a 19 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
+  { label: 'Microempresas', value: formatRD(SALARIO_MINIMO.microempresas, 0), descripcion: 'Menos de 10 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
+  { label: 'Zona Franca', value: formatRD(SALARIO_MINIMO.zonaFranca, 0), descripcion: 'Trabajadores en zonas francas industriales', fuente: 'Comité Nac. de Salarios' },
 ]
 
 function ParamTable({ rows }: { rows: ParamRow[] }) {

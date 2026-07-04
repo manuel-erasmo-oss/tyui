@@ -32,25 +32,38 @@
 | AFP Empleador | 7.10% | Ley 87-01 |
 | SFS Empleado | 3.04% | Ley 87-01 |
 | SFS Empleador | 7.09% | Ley 87-01 |
-| SRL Bajo | 1.10% | CNSS (oficinas/comercio) |
-| SRL Medio | 2.20% | CNSS (industria) |
-| SRL Alto | 3.25% | CNSS (construcción/minería) |
-| Tope cotizable | RD$420,000 | 20 × salario mínimo grandes empresas |
+| SRL Categoría I | 1.10% | CNSS (oficinas y comercio) |
+| SRL Categoría II | 1.15% | CNSS (industria liviana) |
+| SRL Categoría III | 1.20% | CNSS (industria pesada) |
+| SRL Categoría IV | 1.30% | CNSS (construcción y minería, alto riesgo) |
+| Infotep | 1.00% (solo empleador) | Ley 116-80 |
+| Salario mínimo cotizable TSS | RD$23,223.00 | Resolución 079-2025 CNSS (vigente 01-feb-2026) |
+| Tope cotizable AFP | RD$464,460 | 20 × salario mínimo cotizable TSS |
+| Tope cotizable SFS | RD$232,230 | 10 × salario mínimo cotizable TSS |
+| Tope cotizable SRL | RD$92,892 | 4 × salario mínimo cotizable TSS |
 | **Dep. SFS adicional** | **RD$1,919.78/mes fijo** | **Resolución 624-02 CNSS (vigente 2024-2025)** |
 | ISR tramo 1 | 0% hasta RD$416,220 anual | DGII Ley 11-92 art. 296 |
 | ISR tramo 2 | 15% hasta RD$624,329 | DGII Ley 11-92 |
-| ISR tramo 3 | 20% hasta RD$867,123 | DGII Ley 11-92 |
-| ISR tramo 4 | 25% sobre exceso | DGII Ley 11-92 |
+| ISR tramo 3 | 20% hasta RD$867,123 (fijo RD$31,216.00) | DGII Ley 11-92 |
+| ISR tramo 4 | 25% sobre exceso (fijo RD$79,776.00) | DGII Ley 11-92 |
 | Semana laboral | 44 horas | Art. 147 Código de Trabajo |
 | H.E. 35% | tarifa hora × 1.35 | Art. 203 Código de Trabajo |
 | H.E. 100% | tarifa hora × 2.00 | Art. 203 (feriados) |
 | Vacaciones ≤5 años | 14 días laborables | Art. 177 Código de Trabajo |
 | Vacaciones >5 años | 18 días laborables | Art. 177 Código de Trabajo |
 | Regalía Pascual | salarioBase / 12 | Art. 219 Código de Trabajo |
+| Cesantía 3–6 meses | 6 días | Art. 80 Ley 16-92 |
+| Cesantía 6–12 meses | 13 días | Art. 80 Ley 16-92 |
 | Cesantía 1–5 años | 21 días/año | Art. 80 Ley 16-92 |
-| Cesantía 5–10 años | 23 días/año | Art. 80 Ley 16-92 |
-| Cesantía 10+ años | 25 días/año | Art. 80 Ley 16-92 |
-| Preaviso >1 año | 45 días (máximo) | Art. 76 Ley 16-92 |
+| Cesantía 5+ años | 23 días/año (sin tramo adicional) | Art. 80 Ley 16-92 |
+| Preaviso 3–6 meses | 7 días | Art. 76 Ley 16-92 |
+| Preaviso 6–12 meses | 14 días | Art. 76 Ley 16-92 |
+| Preaviso 12+ meses | 28 días fijo (nunca 45) | Art. 76 Ley 16-92 |
+| Salario mínimo grandes empresas | RD$29,988.00 | Resolución 079-2025 (vigente 01-feb-2026) |
+| Salario mínimo mediana empresa | RD$27,489.60 | Resolución 079-2025 (vigente 01-feb-2026) |
+| Salario mínimo pequeñas empresas | RD$18,421.20 | Resolución 079-2025 (vigente 01-feb-2026) |
+| Salario mínimo microempresas | RD$16,993.20 | Resolución 079-2025 (vigente 01-feb-2026) |
+| Salario mínimo zona franca | RD$15,800 | sin cambios — resolución distinta |
 
 ### Quincenal
 - 1ª quincena: bruto/2, TSS/2, **ISR = 0** (anticipo — práctica estándar pymes DR)

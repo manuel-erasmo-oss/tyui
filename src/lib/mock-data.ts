@@ -16,7 +16,7 @@ export const EMPLEADOS: Empleado[] = [
     telefono: '809-555-0101',
     banco: 'Banco Popular',
     numeroCuenta: '200-12345-6',
-    categoriaRiesgo: 'bajo',
+    categoriaRiesgo: 'I',
   },
   {
     id: '2',
@@ -33,7 +33,7 @@ export const EMPLEADOS: Empleado[] = [
     telefono: '829-555-0202',
     banco: 'BanReservas',
     numeroCuenta: '180-98765-4',
-    categoriaRiesgo: 'bajo',
+    categoriaRiesgo: 'I',
   },
   {
     id: '3',
@@ -50,7 +50,7 @@ export const EMPLEADOS: Empleado[] = [
     telefono: '849-555-0303',
     banco: 'BHD León',
     numeroCuenta: '310-11223-3',
-    categoriaRiesgo: 'bajo',
+    categoriaRiesgo: 'I',
   },
   {
     id: '4',
@@ -67,7 +67,7 @@ export const EMPLEADOS: Empleado[] = [
     telefono: '809-555-0404',
     banco: 'Scotiabank',
     numeroCuenta: '490-55667-7',
-    categoriaRiesgo: 'bajo',
+    categoriaRiesgo: 'I',
   },
   {
     id: '5',
@@ -84,7 +84,7 @@ export const EMPLEADOS: Empleado[] = [
     telefono: '829-555-0505',
     banco: 'BanReservas',
     numeroCuenta: '180-77889-0',
-    categoriaRiesgo: 'bajo',
+    categoriaRiesgo: 'I',
   },
   {
     id: '6',
@@ -101,7 +101,7 @@ export const EMPLEADOS: Empleado[] = [
     telefono: '849-555-0606',
     banco: 'Banco Popular',
     numeroCuenta: '200-44556-1',
-    categoriaRiesgo: 'medio',
+    categoriaRiesgo: 'II',
   },
   {
     id: '7',
@@ -118,7 +118,7 @@ export const EMPLEADOS: Empleado[] = [
     telefono: '809-555-0707',
     banco: 'BHD León',
     numeroCuenta: '310-99001-5',
-    categoriaRiesgo: 'bajo',
+    categoriaRiesgo: 'I',
   },
   {
     id: '8',
@@ -135,7 +135,7 @@ export const EMPLEADOS: Empleado[] = [
     telefono: '849-555-0808',
     banco: 'BanReservas',
     numeroCuenta: '180-33445-8',
-    categoriaRiesgo: 'medio',
+    categoriaRiesgo: 'II',
   },
 ]
 

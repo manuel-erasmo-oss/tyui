@@ -1,5 +1,5 @@
 export type TipoContrato = 'indefinido' | 'tiempo_determinado' | 'obra_servicio'
-export type CategoriaRiesgoSRL = 'bajo' | 'medio' | 'alto'
+export type CategoriaRiesgoSRL = 'I' | 'II' | 'III' | 'IV'
 export type TipoDocumento = 'cedula' | 'pasaporte' | 'residencia' | 'permiso_trabajo'
 export type Banco =
   | 'Banco Popular'
@@ -107,6 +107,7 @@ export interface ResultadoNomina {
   afpEmpleador: number
   sfsEmpleador: number
   srlEmpleador: number
+  infotepEmpleador: number
   totalAportesEmpleador: number
 
   // Costo total empleador

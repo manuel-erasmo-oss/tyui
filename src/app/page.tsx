@@ -86,9 +86,10 @@ export default function DashboardPage() {
   const totalISR          = nominas.reduce((s, n) => s + n.isrMensual, 0)
   const totalTSSEmpleador = nominas.reduce((s, n) => s + n.totalAportesEmpleador, 0)
   const totalRegalia      = nominas.reduce((s, n) => s + n.regaliaPascual, 0)
-  const afpEmpleador      = empleadosActivos.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0710, 0)
-  const sfsEmpleador      = empleadosActivos.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0709, 0)
-  const srlEmpleador      = empleadosActivos.reduce((s, e) => s + Math.min(e.salarioBase, 420_000) * 0.0110, 0)
+  const afpEmpleador      = nominas.reduce((s, n) => s + n.afpEmpleador, 0)
+  const sfsEmpleador      = nominas.reduce((s, n) => s + n.sfsEmpleador, 0)
+  const srlEmpleador      = nominas.reduce((s, n) => s + n.srlEmpleador, 0)
+  const infotepEmpleador  = nominas.reduce((s, n) => s + n.infotepEmpleador, 0)
   const costoTotal        = totalBruto + totalTSSEmpleador
 
   const periodo = `${MES_LARGO[hoy.getMonth()]} ${hoy.getFullYear()}`
@@ -124,14 +125,15 @@ export default function DashboardPage() {
   const deltaNeto  = prevNeto  > 0 ? ((LINE_DATA[4].valor    - prevNeto)  / prevNeto)  * 100 : 0
 
   const DONUT_DATA = [
-    { name: 'Salario neto',  value: totalNeto,   color: '#1B2980' },
-    { name: 'AFP empleador', value: afpEmpleador, color: '#0891b2' },
-    { name: 'SFS empleador', value: sfsEmpleador, color: '#7c3aed' },
-    { name: 'SRL',           value: srlEmpleador, color: '#d97706' },
-    { name: 'ISR retenido',  value: totalISR,     color: '#e11d48' },
+    { name: 'Salario neto',  value: totalNeto,        color: '#1B2980' },
+    { name: 'AFP empleador', value: afpEmpleador,      color: '#0891b2' },
+    { name: 'SFS empleador', value: sfsEmpleador,      color: '#7c3aed' },
+    { name: 'SRL',           value: srlEmpleador,      color: '#d97706' },
+    { name: 'Infotep',       value: infotepEmpleador,  color: '#65a30d' },
+    { name: 'ISR retenido',  value: totalISR,          color: '#e11d48' },
   ]
 
-  const maxBar = Math.max(...[afpEmpleador, sfsEmpleador, srlEmpleador, totalISR, totalRegalia])
+  const maxBar = Math.max(...[afpEmpleador, sfsEmpleador, srlEmpleador, infotepEmpleador, totalISR, totalRegalia])
 
   return (
     <div className="flex flex-col overflow-hidden h-full">
@@ -218,6 +220,7 @@ export default function DashboardPage() {
                   { label: 'AFP empleador',  value: afpEmpleador,      color: '#0891b2', badge: null },
                   { label: 'SFS empleador',  value: sfsEmpleador,      color: '#7c3aed', badge: null },
                   { label: 'SRL empleador',  value: srlEmpleador,      color: '#d97706', badge: null },
+                  { label: 'Infotep',        value: infotepEmpleador,  color: '#65a30d', badge: null },
                   { label: 'ISR retenido',   value: totalISR,          color: '#e11d48', badge: '10 jul' },
                   { label: 'Regalía prov.',  value: totalRegalia,      color: '#059669', badge: 'dic' },
                 ].map(row => (
