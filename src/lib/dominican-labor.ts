@@ -81,6 +81,20 @@ export const HORAS_SEMANA = 44                     // Art. 147: semana de 44h
 export const DIAS_VACACIONES_HASTA_5_ANOS = 14     // Art. 177: 14 días laborables
 export const DIAS_VACACIONES_MAS_5_ANOS = 18       // Art. 177: 18 días laborables
 
+// ─── Régimen de trabajo intermitente (Resolución 04-93, Ministerio de Trabajo) ─
+// Jornada de hasta 10h/día y 60h/semana sin generar horas extras bajo esos
+// umbrales (portería, vigilancia, ascensoristas, mozos, barberos, bombas de
+// gasolina, etc.) — distinto del régimen ordinario (8h/día, 44h/semana).
+export const HORAS_DIA_REGIMEN_INTERMITENTE    = 10
+export const HORAS_SEMANA_REGIMEN_INTERMITENTE = 60
+export const DIVISOR_DIA_ORDINARIO     = 23.83  // salario mensual ÷ días laborables promedio
+export const DIVISOR_DIA_INTERMITENTE  = 26     // salario mensual ÷ 26 (régimen intermitente)
+
+// Divisor correcto del salario diario según el régimen de jornada del empleado
+export function getDivisorSalarioDiario(empleado: Pick<Empleado, 'regimenIntermitente'>): number {
+  return empleado.regimenIntermitente ? DIVISOR_DIA_INTERMITENTE : DIVISOR_DIA_ORDINARIO
+}
+
 // ─── Cálculo ISR anual ────────────────────────────────────────────────────────
 export function calcularISRAnual(ingresoGravableAnual: number): number {
   if (ingresoGravableAnual <= TRAMOS_ISR[0].hasta) return 0
@@ -174,8 +188,8 @@ export function calcularNomina(
     ? DIAS_VACACIONES_MAS_5_ANOS
     : DIAS_VACACIONES_HASTA_5_ANOS
   const vacacionesMensualesDias  = diasVacacionesAnuales / 12
-  // Valor diario = salario mensual / 26 días laborables promedio
-  const valorDiario              = empleado.salarioBase / 26
+  // Valor diario: 23.83 en régimen ordinario, 26 en régimen intermitente (Res. 04-93)
+  const valorDiario              = empleado.salarioBase / getDivisorSalarioDiario(empleado)
   const vacacionesMensualesValor = vacacionesMensualesDias * valorDiario
 
   return {

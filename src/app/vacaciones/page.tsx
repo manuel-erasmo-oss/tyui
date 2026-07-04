@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import {
   getAnosServicio,
+  getDivisorSalarioDiario,
   DIAS_VACACIONES_HASTA_5_ANOS,
   DIAS_VACACIONES_MAS_5_ANOS,
 } from '@/lib/dominican-labor'
@@ -17,9 +18,10 @@ export default function VacacionesPage() {
   const filas = empleadosActivos.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
-    const mesesServicio   = anos < 1 ? Math.floor(anos * 12) : (Math.floor((anos % 1) * 12) || 12)
+    // Fraccional, sin truncar — prorratea el mes en curso proporcionalmente
+    const mesesServicio   = anos < 1 ? anos * 12 : ((anos % 1) * 12 || 12)
     const diasAcumulados  = (diasAnuales / 12) * mesesServicio
-    const valorDiario     = e.salarioBase / 26
+    const valorDiario     = e.salarioBase / getDivisorSalarioDiario(e)
     const valorAcumulado  = diasAcumulados * valorDiario
     const puedeGozar      = anos >= 1
     return { empleado: e, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, puedeGozar }

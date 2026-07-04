@@ -194,12 +194,21 @@ nunca copiando texto, pantallas o formatos de SPN.
    ya no trunca a meses completos (`Math.floor`) — ahora es un valor fraccional
    continuo que prorratea el mes en curso proporcionalmente, consistente con
    cómo ya se calculaba `mesesCalendario` para Regalía.
-5. **Divisor de días trabajados (23.83 vs 30 vs 26)** — **pendiente decisión
-   del usuario.** Confirmado que conviven 3 divisores distintos: 23.83 (nómina
-   proporcional), 30 (Cesantía/Preaviso/Asistencia Económica) y 26 (Vacaciones
-   en Liquidación). No hay una única cifra "correcta" — es una decisión de
-   criterio contable/legal, no un bug evidente. No se cambió sin confirmación
-   explícita.
+5. ~~Divisor de días trabajados (23.83 vs 30 vs 26)~~ — **resuelto con
+   aclaración del usuario.** El divisor 26 no es un criterio arbitrario en
+   conflicto — es específico del **régimen de trabajo intermitente**
+   (Resolución 04-93 MdT: porteros, serenos, guardianes, ascensoristas,
+   mozos/camareros, barberos/manicuristas, empleados de bombas de gasolina;
+   jornada de hasta 10h/día y 60h/semana sin generar horas extras bajo esos
+   umbrales). Se agregó `Empleado.regimenIntermitente` (toggle en el
+   formulario de empleado, con nota legal) y `getDivisorSalarioDiario()` en
+   `dominican-labor.ts`: usa 23.83 para régimen ordinario, 26 para régimen
+   intermitente. Aplicado en `calcularNomina` (vacaciones mensuales),
+   `liquidacion/page.tsx` y `vacaciones/page.tsx`. El divisor 30 de
+   Cesantía/Preaviso/Asistencia Económica no cambia — es correcto para ambos
+   regímenes. `nomina/page.tsx` avisa cuando se cargan horas extra a un
+   empleado en régimen intermitente, recordando que solo cuenta el exceso
+   sobre 10h/día o 60h/semana, no los umbrales ordinarios.
 6. **Práctica de ISR quincenal** — **pendiente decisión del usuario.** SPN
    documenta que concentrar el 100% del ISR en la 2ª quincena "tiene más
    desventajas que un prorrateo equitativo entre ambas quincenas". Nuestra

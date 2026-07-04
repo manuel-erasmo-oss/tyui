@@ -269,6 +269,7 @@ interface EmpForm {
   documentoIdentidadNombre: string
   contratoLaboral: string
   contratoLaboralNombre: string
+  regimenIntermitente: boolean
 }
 
 const EMPTY: EmpForm = {
@@ -280,6 +281,7 @@ const EMPTY: EmpForm = {
   banco: '', numeroCuenta: '', avatarColor: '#1B2980',
   fotoPerfil: '', documentoIdentidad: '', documentoIdentidadNombre: '',
   contratoLaboral: '', contratoLaboralNombre: '',
+  regimenIntermitente: false,
 }
 
 function toForm(e: Empleado): EmpForm {
@@ -299,6 +301,7 @@ function toForm(e: Empleado): EmpForm {
     documentoIdentidadNombre: e.documentoIdentidadNombre ?? '',
     contratoLaboral: e.contratoLaboral ?? '',
     contratoLaboralNombre: e.contratoLaboralNombre ?? '',
+    regimenIntermitente: e.regimenIntermitente ?? false,
   }
 }
 
@@ -967,6 +970,28 @@ function EmpleadoFormModal({
                       candidatos={supervisores}
                       disabled={!form.departamento.trim()}
                     />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-2.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.regimenIntermitente}
+                        onChange={e => set('regimenIntermitente', e.target.checked)}
+                        className="h-4 w-4 rounded accent-[#1B2980]"
+                      />
+                      <span className="text-sm text-zinc-700 dark:text-zinc-300">Régimen de trabajo intermitente</span>
+                    </label>
+                    {form.regimenIntermitente && (
+                      <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-sky-200 dark:border-sky-800/40 bg-sky-50 dark:bg-sky-950/30 px-3 py-2">
+                        <Info className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
+                        <p className="text-[11px] leading-relaxed text-sky-800 dark:text-sky-300">
+                          <strong>Resolución 04-93 MdT</strong> — jornada de hasta 10h/día y 60h/semana
+                          sin generar horas extras bajo esos umbrales (porteros, serenos, guardianes,
+                          ascensoristas, mozos/camareros, barberos/manicuristas, empleados de bombas de
+                          gasolina). El salario diario de vacaciones se calcula ÷26 en vez de ÷23.83.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </section>
@@ -1745,6 +1770,7 @@ export default function EmpleadosPage() {
       banco:           (form.banco as Banco) || undefined,
       numeroCuenta:    form.numeroCuenta.trim() || undefined,
       categoriaRiesgo: getCategoriaSRLPorSector(empresa.sectorEmpresa),
+      regimenIntermitente: form.regimenIntermitente,
     }
   }
 

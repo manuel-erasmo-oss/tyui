@@ -83,6 +83,12 @@ export interface Empleado {
   banco?: Banco
   categoriaRiesgo?: CategoriaRiesgoSRL
   dependientes?: Dependiente[]
+  // Régimen de trabajo intermitente (Resolución 04-93 MdT): jornada de hasta
+  // 10h/día y 60h/semana sin generar horas extras bajo los umbrales ordinarios
+  // (8h/día, 44h/semana). Aplica a porteros, serenos, guardianes, ascensoristas,
+  // mozos/camareros, barberos/manicuristas, empleados de bombas de gasolina, etc.
+  // Cambia el divisor del salario diario (26 en vez de 23.83).
+  regimenIntermitente?: boolean
 }
 
 export interface ResultadoNomina {

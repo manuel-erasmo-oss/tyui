@@ -1211,6 +1211,14 @@ export default function NominaPage() {
                                   antes, lo cual sobreestima el ISR retenido.
                                 </p>
                               )}
+                              {newTipo === 'ingreso' && (newConcepto === 'horas_extras_35' || newConcepto === 'horas_extras_100') && empleado.regimenIntermitente && (
+                                <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+                                  Este empleado está en régimen de trabajo intermitente (Resolución 04-93) —
+                                  su jornada ordinaria llega hasta 10h/día y 60h/semana. Solo cuenta como
+                                  hora extra lo que exceda esos umbrales, no los de la jornada ordinaria
+                                  (8h/día, 44h/semana).
+                                </p>
+                              )}
                             </div>
                           </td>
                         </tr>

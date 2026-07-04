@@ -7,7 +7,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
-import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica, calcularSalarioPromedioUltimos12Meses } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica, calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario } from '@/lib/dominican-labor'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
 import type { MotivoLiquidacion } from '@/types'
 import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History, Info } from 'lucide-react'
@@ -129,7 +129,7 @@ export default function LiquidacionPage() {
 
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
     const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac
-    const vacaciones = diasVacAcum * (emp.salarioBase / 26)
+    const vacaciones = diasVacAcum * (emp.salarioBase / getDivisorSalarioDiario(emp))
 
     const regalia = (emp.salarioBase / 12) * mesesCalendario
 
