@@ -1,4 +1,4 @@
-import type { CategoriaEmpresa, CategoriaRiesgoSRL, Empleado, Empresa, ParametrosNomina, ResultadoNomina, SectorEmpresa } from '@/types'
+import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, Empleado, Empresa, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa } from '@/types'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -302,4 +302,69 @@ export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio
   const diasPorAniosCompletos = aniosCompletos * 15
   const diasProporcionales    = (15 / 12) * mesesAnioEnCurso
   return salarioDiario * (diasPorAniosCompletos + diasProporcionales)
+}
+
+// ─── Helpers de agregación de períodos (compartidos entre Reportería y Liquidación) ─
+export function ajustesToParams(ajustes: AjusteLinea[]): ParametrosNomina {
+  let horasExtras35 = 0, horasExtras100 = 0, horasNocturnas = 0, bonificaciones = 0
+  let comisiones = 0, sfsDependientes = 0, otrosDescuentos = 0
+
+  for (const a of ajustes) {
+    if (a.concepto === 'horas_extras_35')                             horasExtras35   += a.valor
+    if (a.concepto === 'horas_extras_100')                            horasExtras100  += a.valor
+    if (a.concepto === 'recargo_nocturno')                            horasNocturnas  += a.valor
+    if (a.concepto === 'bono' || a.concepto === 'otro_ingreso')       bonificaciones  += a.valor
+    if (a.concepto === 'comision')                                    comisiones      += a.valor
+    if (a.concepto === 'dependiente_sfs')                             sfsDependientes += a.valor
+    if (a.concepto === 'prestamo' || a.concepto === 'otro_descuento') otrosDescuentos += a.valor
+  }
+
+  return { horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
+}
+
+export function calcularConPeriodo(emp: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
+  const params = ajustesToParams(ajustes)
+  return periodo.tipo === 'quincenal'
+    ? calcularNominaQuincenal(emp, periodo.quincena ?? 1, params)
+    : calcularNomina(emp, params)
+}
+
+// ─── Salario ordinario real de los últimos 12 meses (Cesantía/Preaviso/Asistencia
+// Económica) ───────────────────────────────────────────────────────────────────
+// El "salario ordinario" para efectos de prestaciones laborales (Art. 76/80/82 CT)
+// debe reflejar los ingresos habituales reales del trabajador — incluyendo
+// comisiones y horas extra regulares — no solo el salario base contractual, para
+// no subestimar el pago a empleados con ingresos variables significativos.
+// Nunca retorna menos que el salario base actual (protege al trabajador ante
+// meses atípicamente bajos, ej. licencias sin sueldo).
+export function calcularSalarioPromedioUltimos12Meses(
+  empleado: Empleado,
+  periodos: PeriodoNomina[],
+  fechaReferencia: Date = new Date(),
+): number {
+  const haceUnAnio = new Date(fechaReferencia)
+  haceUnAnio.setFullYear(haceUnAnio.getFullYear() - 1)
+
+  const relevantes = periodos.filter(p =>
+    (p.estado === 'procesada' || p.estado === 'cerrada') &&
+    new Date(p.fechaGeneracion) >= haceUnAnio &&
+    new Date(p.fechaGeneracion) <= fechaReferencia
+  )
+
+  const totalPorMes = new Map<string, number>()
+  for (const p of relevantes) {
+    // Si el período trackea quién fue procesado, respeta esa membresía;
+    // si no, asume que todo período procesada/cerrada incluyó al empleado.
+    if (p.empleadosProcesados && !p.empleadosProcesados.includes(empleado.id)) continue
+    const ajustes = p.ajustesPorEmpleado?.[empleado.id] ?? []
+    const resultado = calcularConPeriodo(empleado, ajustes, p)
+    const key = `${p.anio}-${p.mes}`
+    totalPorMes.set(key, (totalPorMes.get(key) ?? 0) + resultado.totalBruto)
+  }
+
+  if (totalPorMes.size === 0) return empleado.salarioBase
+
+  const sumaTotal = [...totalPorMes.values()].reduce((s, v) => s + v, 0)
+  const promedio   = sumaTotal / totalPorMes.size
+  return Math.max(promedio, empleado.salarioBase)
 }

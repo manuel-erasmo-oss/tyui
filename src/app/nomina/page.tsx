@@ -1202,6 +1202,15 @@ export default function NominaPage() {
                                   </button>
                                 </div>
                               </div>
+                              {newTipo === 'deduccion' && newConcepto === 'otro_descuento' && (
+                                <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
+                                  Si es un descuento por ausencia/inasistencia, no lo cargues aquí —
+                                  reduce los "Días Trabajados" del empleado al crear el período. Un
+                                  descuento por ausencia registrado como "Otro Desc." se resta del
+                                  neto después de calcular el ISR, en vez de reducir la base gravable
+                                  antes, lo cual sobreestima el ISR retenido.
+                                </p>
+                              )}
                             </div>
                           </td>
                         </tr>

@@ -176,27 +176,40 @@ nunca copiando texto, pantallas o formatos de SPN.
    propósito, siguiendo el mismo enfoque práctico documentado por SPN Software,
    aunque el texto estricto del Art. 82 se refiera a incapacidad/muerte/quiebra.
    No requiere cambio.
-2. **Base de cálculo de Cesantía/Preaviso** — evaluar si debería usar el promedio
-   de ingresos de los últimos 12 meses (incluyendo variables: comisiones, horas
-   extra) en vez de solo `salarioBase` fijo, para no subestimar el pago a
-   empleados con ingresos variables significativos.
-3. **Orden de deducción por ausentismo** — auditar que el descuento por ausencias
-   se aplique ANTES de calcular ISR/TSS (reduce la base gravable), no después
-   (se descuenta del neto ya tributado). El orden incorrecto genera una
-   diferencia real de pago (SPN documenta un ejemplo de ~RD$420).
-4. **Salario diario en liquidación para empleados con <1 año de antigüedad** —
-   confirmar el prorrateo correcto (meses completos vs. meses completos +
-   proporción de días del mes en curso).
-5. **Divisor de días trabajados (23.83 vs 30)** — confirmar uso consistente en
-   todos los conceptos que dependen de "días trabajados".
-6. **Práctica de ISR quincenal** — SPN documenta que concentrar el 100% del ISR
-   en la 2ª quincena "tiene más desventajas que un prorrateo equitativo entre
-   ambas quincenas". Nuestra práctica actual (ISR=0 en 1ª, 100% en 2ª) está
-   documentada como estándar pymes DR — revisar si conviene reconsiderar o si
-   se mantiene a propósito.
-7. **Topes TSS derivados del salario mínimo vigente** — confirmar que
-   `TOPE_COTIZABLE_AFP/SFS/SRL` se recalculan si cambia `SALARIO_MINIMO_COTIZABLE_TSS`,
-   en vez de quedar como valores fijos a actualizar manualmente.
+2. ~~Base de cálculo de Cesantía/Preaviso~~ — **implementado.**
+   `calcularSalarioPromedioUltimos12Meses()` en `dominican-labor.ts` promedia
+   el `totalBruto` real de los períodos `procesada`/`cerrada` de los últimos 12
+   meses (incluye comisiones/horas extra habituales), con piso en `salarioBase`
+   (nunca paga menos que el salario contractual). Aplicado a Cesantía, Preaviso
+   y Asistencia Económica en `liquidacion/page.tsx`; Vacaciones y Regalía siguen
+   usando `salarioBase` actual. La UI muestra una nota de transparencia cuando
+   el promedio supera el salario base.
+3. ~~Orden de deducción por ausentismo~~ — **revisado, sin bug de cálculo.**
+   El mecanismo correcto ya existe (`diasTrabajados` reduce `salarioBruto`
+   ANTES del cálculo de ISR). El riesgo real era de uso: cargar una ausencia
+   como ajuste `otro_descuento` sí resta del neto después de ISR. Se agregó un
+   aviso en el formulario de ajustes de `nomina/page.tsx` que advierte esto
+   cuando se selecciona "Otro Desc.".
+4. ~~Salario diario en liquidación <1 año~~ — **implementado.** `mesesCicloVac`
+   ya no trunca a meses completos (`Math.floor`) — ahora es un valor fraccional
+   continuo que prorratea el mes en curso proporcionalmente, consistente con
+   cómo ya se calculaba `mesesCalendario` para Regalía.
+5. **Divisor de días trabajados (23.83 vs 30 vs 26)** — **pendiente decisión
+   del usuario.** Confirmado que conviven 3 divisores distintos: 23.83 (nómina
+   proporcional), 30 (Cesantía/Preaviso/Asistencia Económica) y 26 (Vacaciones
+   en Liquidación). No hay una única cifra "correcta" — es una decisión de
+   criterio contable/legal, no un bug evidente. No se cambió sin confirmación
+   explícita.
+6. **Práctica de ISR quincenal** — **pendiente decisión del usuario.** SPN
+   documenta que concentrar el 100% del ISR en la 2ª quincena "tiene más
+   desventajas que un prorrateo equitativo entre ambas quincenas". Nuestra
+   práctica actual (ISR=0 en 1ª, 100% en 2ª) está documentada como estándar
+   pymes DR — es una decisión de producto/negocio que afecta a todos los
+   clientes quincenales, no se cambió sin confirmación explícita.
+7. ~~Topes TSS derivados del salario mínimo vigente~~ — **confirmado correcto.**
+   `TOPE_COTIZABLE_AFP/SFS/SRL` ya son expresiones derivadas de
+   `SALARIO_MINIMO_COTIZABLE_TSS` (no valores fijos independientes) — se
+   recalculan automáticamente si ese valor cambia. Sin acción necesaria.
 
 ### 🔴 Alta prioridad — brechas reales confirmadas
 

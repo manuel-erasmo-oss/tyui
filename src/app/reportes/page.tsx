@@ -14,7 +14,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { useEmpresa } from '@/lib/empresa-context'
-import { calcularNomina, calcularNominaQuincenal } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatCedula, fullName,
   formatAnosServicio, contratoLabel, contratoBadgeClass,
@@ -2185,30 +2185,6 @@ function EmptyState({ message }: { message: string }) {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function ajustesToParams(ajustes: AjusteLinea[]) {
-  let horasExtras35 = 0, horasExtras100 = 0, horasNocturnas = 0, bonificaciones = 0
-  let comisiones = 0, sfsDependientes = 0, otrosDescuentos = 0
-
-  for (const a of ajustes) {
-    if (a.concepto === 'horas_extras_35')                             horasExtras35   += a.valor
-    if (a.concepto === 'horas_extras_100')                            horasExtras100  += a.valor
-    if (a.concepto === 'recargo_nocturno')                            horasNocturnas  += a.valor
-    if (a.concepto === 'bono' || a.concepto === 'otro_ingreso')       bonificaciones  += a.valor
-    if (a.concepto === 'comision')                                    comisiones      += a.valor
-    if (a.concepto === 'dependiente_sfs')                             sfsDependientes += a.valor
-    if (a.concepto === 'prestamo' || a.concepto === 'otro_descuento') otrosDescuentos += a.valor
-  }
-
-  return { horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
-}
-
-function calcularConPeriodo(emp: Parameters<typeof calcularNomina>[0], ajustes: AjusteLinea[], periodo: PeriodoNomina) {
-  const params = ajustesToParams(ajustes)
-  return periodo.tipo === 'quincenal'
-    ? calcularNominaQuincenal(emp, periodo.quincena ?? 1, params)
-    : calcularNomina(emp, params)
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ReportesPage() {
   const [activeReport, setActiveReport] = useState<ReportId>('gerencial')

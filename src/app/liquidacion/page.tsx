@@ -5,11 +5,12 @@ import { Header } from '@/components/layout/Header'
 import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
 import { usePrestamos } from '@/lib/prestamos-context'
+import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
-import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica, calcularSalarioPromedioUltimos12Meses } from '@/lib/dominican-labor'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
 import type { MotivoLiquidacion } from '@/types'
-import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History } from 'lucide-react'
+import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History, Info } from 'lucide-react'
 
 type Motivo = MotivoLiquidacion
 
@@ -64,6 +65,7 @@ const INPUT_CLASS =
 export default function LiquidacionPage() {
   const { empleadosActivos, empleados, update } = useEmpleados()
   const { getPrestamosActivos, registrarPago } = usePrestamos()
+  const { periodos } = usePeriodos()
   const { liquidaciones, registrar } = useLiquidaciones()
   const [empleadoId, setEmpleadoId] = useState<string>('')
   const [motivo, setMotivo] = useState<Motivo | ''>('')
@@ -99,21 +101,30 @@ export default function LiquidacionPage() {
       12
     )
 
-    // Vacaciones: proportional to current hire-anniversary cycle
+    // Vacaciones: proporcional al ciclo de aniversario, sin truncar el mes en
+    // curso — un empleado con 7.65 años acumula 0.65 de su octavo año, no 0
     const mesesCicloVac = anosServicio < 1
-      ? Math.floor(anosServicio * 12)
-      : (Math.floor((anosServicio % 1) * 12) || 12)
+      ? anosServicio * 12
+      : ((anosServicio % 1) * 12 || 12)
+
+    // Salario ordinario real (promedio últimos 12 meses de nómina procesada,
+    // incluye comisiones/horas extra habituales) — nunca menor al salario base.
+    // Aplica a Cesantía/Preaviso/Asistencia Económica (Art. 76/80/82 CT), que
+    // deben reflejar la capacidad real de ingreso del trabajador, no solo su
+    // salario contractual. Vacaciones y Regalía siguen usando el salario base
+    // actual, como corresponde a esos conceptos.
+    const salarioOrdinario = calcularSalarioPromedioUltimos12Meses(emp, periodos, fechaTerm)
 
     const cesantia = (motivo === 'despido_sin_causa' || motivo === 'mutuo_acuerdo')
-      ? calcularCesantia(emp.salarioBase, anosServicio)
+      ? calcularCesantia(salarioOrdinario, anosServicio)
       : 0
 
     const preaviso = (motivo === 'despido_sin_causa' || motivo === 'mutuo_acuerdo')
-      ? calcularPreaviso(emp.salarioBase, anosServicio)
+      ? calcularPreaviso(salarioOrdinario, anosServicio)
       : 0
 
     const asistenciaEconomica = motivo === 'vencimiento_contrato'
-      ? calcularAsistenciaEconomica(emp.salarioBase, anosServicio)
+      ? calcularAsistenciaEconomica(salarioOrdinario, anosServicio)
       : 0
 
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
@@ -129,7 +140,7 @@ export default function LiquidacionPage() {
     }, 0)
     const total = Math.max(0, subtotal - totalPrestamos)
 
-    return { anosServicio, mesesCicloVac, mesesCalendario, cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, total }
+    return { anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario, cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, total }
   })()
 
   function handleExportCSV() {
@@ -345,6 +356,19 @@ export default function LiquidacionPage() {
         {/* ── Results section ───────────────────────────────────────────── */}
         {emp && motivo && resultado && (
           <>
+            {resultado.salarioOrdinario > emp.salarioBase + 0.01 && (
+              <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5 flex items-start gap-3">
+                <Info className="h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0 mt-0.5" />
+                <p className="text-xs text-[#151f66] dark:text-indigo-200">
+                  Cesantía, Preaviso y Asistencia Económica se calculan sobre{' '}
+                  <strong>{formatRD(resultado.salarioOrdinario, 2)}</strong> (salario ordinario —
+                  promedio real de los últimos 12 meses de nómina procesada, incluyendo comisiones
+                  y horas extra habituales), en vez del salario base de {formatRD(emp.salarioBase, 2)},
+                  según el criterio de "salario ordinario" para prestaciones laborales.
+                </p>
+              </div>
+            )}
+
             {/* Concept grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
 
@@ -426,7 +450,7 @@ export default function LiquidacionPage() {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Vacaciones No Gozadas</p>
                     <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                      Art. 177 — {resultado.mesesCicloVac} mes{resultado.mesesCicloVac !== 1 ? 'es' : ''} × tarifa diaria
+                      Art. 177 — {resultado.mesesCicloVac.toFixed(1)} meses × tarifa diaria
                     </p>
                   </div>
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-500 dark:text-sky-400">
