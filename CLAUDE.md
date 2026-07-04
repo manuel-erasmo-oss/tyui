@@ -171,10 +171,11 @@ nunca copiando texto, pantallas o formatos de SPN.
 
 ### ⚠️ Auditar en el motor actual (posibles imprecisiones, no solo features nuevas)
 
-1. **Asistencia Económica (Art. 82)** — confirmar que el motivo `vencimiento_contrato`
-   en Liquidación usa la causal correcta. El Art. 82 real cubre incapacidad/muerte
-   del empleador o trabajador, enfermedad, o quiebra — no vencimiento de contrato
-   a plazo fijo per se.
+1. ~~Asistencia Económica (Art. 82)~~ — **revisado y confirmado intencional.**
+   El motivo `vencimiento_contrato` en Liquidación usa Asistencia Económica a
+   propósito, siguiendo el mismo enfoque práctico documentado por SPN Software,
+   aunque el texto estricto del Art. 82 se refiera a incapacidad/muerte/quiebra.
+   No requiere cambio.
 2. **Base de cálculo de Cesantía/Preaviso** — evaluar si debería usar el promedio
    de ingresos de los últimos 12 meses (incluyendo variables: comisiones, horas
    extra) en vez de solo `salarioBase` fijo, para no subestimar el pago a
