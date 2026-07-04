@@ -371,6 +371,27 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   depende del "Validador de archivo de transferencia bancaria (ACH)" (otra
   brecha de este mismo backlog, aún sin construir) — no hay archivo ACH que
   validar todavía.
+  **Extensión — envío de comprobantes por correo (implementado):** al marcar
+  un período como pagado (o después, vía el enlace "Comprobantes" que queda
+  visible) se abre un modal (`nomina/page.tsx`) con una plantilla de
+  correo **editable** (asunto + cuerpo, con variables `{nombre}`,
+  `{periodo}`, `{concepto}`, `{neto}`, `{fechaPago}`, `{empresa}` que se
+  sustituyen por empleado) y la lista de empleados con botones de envío
+  **individual y masivo** ("Enviar a Todos"). La app no tiene backend
+  (`output: 'export'`, sin servidor de correo propio), así que el "envío" de
+  hoy es una implementación intencionalmente aislada en
+  `src/lib/comprobante-email.ts` (`enviarComprobante`) que abre el cliente
+  de correo del propio usuario vía `mailto:` — el PDF del comprobante se
+  descarga aparte (botón junto a cada fila, reutiliza `descargarComprobantePDF`)
+  para adjuntarlo a mano, porque los navegadores no permiten adjuntar
+  archivos automáticamente por `mailto:`. `enviarComprobante` devuelve si la
+  ventana realmente se abrió (los navegadores pueden bloquear ventanas en un
+  envío masivo) — el envío masivo solo marca "Abierto" los que sí abrieron y
+  avisa cuántos quedaron bloqueados. **Diseñado para ser reemplazado sin
+  tocar la UI**: cuando exista backend (o se integre un servicio como
+  EmailJS/Resend/SendGrid), solo `enviarComprobante` debe cambiar — a una
+  llamada real que además adjunte el PDF — el modal, la plantilla editable y
+  los botones individual/masivo quedan igual.
 - **Avances de salario** — adelantos sin interés ni cuotas obligatorias
   (distinto de Préstamos): descuento automático en el siguiente período,
   liquidación automática contra prestaciones si el empleado se desvincula con

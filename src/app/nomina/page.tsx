@@ -18,6 +18,8 @@ import {
   PlayCircle,
   History,
   ShieldCheck,
+  Mail,
+  Send,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -29,6 +31,10 @@ import { useEmpresa } from '@/lib/empresa-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useAuth } from '@/lib/auth-context'
+import {
+  enviarComprobante, plantillaComprobanteDefault, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
+} from '@/lib/comprobante-email'
+import type { PlantillaComprobante } from '@/lib/comprobante-email'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
 import { formatRD, fullName, formatCedula, formatDate } from '@/lib/utils'
 import jsPDF from 'jspdf'
@@ -460,6 +466,12 @@ export default function NominaPage() {
   // el período (pasar de en_proceso a procesada)
   const [auditoriaIds, setAuditoriaIds] = useState<string[] | null>(null)
 
+  // Envío de comprobantes de pago por correo — se abre justo después de
+  // marcar un período como pagado (o manualmente después, vía "Comprobantes")
+  const [envioPeriodoId, setEnvioPeriodoId] = useState<string | null>(null)
+  const [plantillaComprobante, setPlantillaComprobante] = useState<PlantillaComprobante>(plantillaComprobanteDefault())
+  const [enviadosComprobante, setEnviadosComprobante] = useState<Set<string>>(new Set())
+
   // Modal + toast
   const [detalleModal, setDetalleModal] = useState<{ emp: Empleado; nom: ResultadoNomina } | null>(null)
   const [toast, setToast]               = useState<string | null>(null)
@@ -843,9 +855,21 @@ export default function NominaPage() {
                     </div>
                     {p.estado === 'cerrada' && (
                       p.pagada ? (
-                        <div className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                          <Wallet className="h-3.5 w-3.5" />
-                          Pagada el {formatDate(p.fechaPago!)}
+                        <div className="flex items-center justify-between gap-2 pt-1">
+                          <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                            <Wallet className="h-3.5 w-3.5" />
+                            Pagada el {formatDate(p.fechaPago!)}
+                          </div>
+                          <button
+                            onClick={() => {
+                              setEnvioPeriodoId(p.id)
+                              setPlantillaComprobante(plantillaComprobanteDefault())
+                              setEnviadosComprobante(new Set())
+                            }}
+                            className="flex items-center gap-1 text-[11px] font-medium text-[#1B2980] dark:text-indigo-400 hover:underline"
+                          >
+                            <Mail className="h-3.5 w-3.5" /> Comprobantes
+                          </button>
                         </div>
                       ) : (
                         <button
@@ -853,7 +877,9 @@ export default function NominaPage() {
                             const hoy = new Date().toISOString().slice(0, 10)
                             if (!confirm(`¿Confirmar que "${labelPeriodo(p)}" ya fue pagado (transferencia ACH enviada) el ${formatDate(hoy)}?`)) return
                             marcarPagada(p.id, hoy)
-                            setToast('Período marcado como pagado')
+                            setEnvioPeriodoId(p.id)
+                            setPlantillaComprobante(plantillaComprobanteDefault())
+                            setEnviadosComprobante(new Set())
                           }}
                           className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
                         >
@@ -913,6 +939,191 @@ export default function NominaPage() {
         </div>
 
         {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
+        {envioPeriodoId && (() => {
+          const periodoEnvio = periodos.find(p => p.id === envioPeriodoId)
+          if (!periodoEnvio) return null
+          const periodoEnvioLabel = labelPeriodo(periodoEnvio)
+          const concepto = periodoEnvio.tipo === 'quincenal'
+            ? `Nómina Quincenal (${periodoEnvio.quincena}ª quincena)`
+            : 'Nómina Mensual'
+          const ajustesEnvio = periodoEnvio.ajustesPorEmpleado ?? {}
+
+          const filas = empleadosActivos.map(e => ({
+            empleado: e,
+            resultado: calcularConAjustes(e, ajustesEnvio[e.id] ?? [], periodoEnvio.tipo, periodoEnvio.quincena ?? 1),
+          }))
+
+          const fechaPagoTexto = periodoEnvio.fechaPago ? formatDate(periodoEnvio.fechaPago) : ''
+
+          // Intenta abrir la ventana de correo para un empleado; devuelve si se logró.
+          // No asume éxito: el navegador puede bloquear la ventana (ver enviarComprobante).
+          function intentarEnviar(emp: Empleado, resultado: ResultadoNomina): boolean {
+            if (!emp.email) return false
+            const { asunto, cuerpo } = resolverPlantilla(plantillaComprobante, {
+              '{nombre}':    fullName(emp),
+              '{periodo}':   periodoEnvioLabel,
+              '{concepto}':  concepto,
+              '{neto}':      formatRD(resultado.salarioNeto),
+              '{fechaPago}': fechaPagoTexto,
+              '{empresa}':   empresa.nombre || 'la empresa',
+            })
+            const abierto = enviarComprobante({ destinatarioEmail: emp.email, destinatarioNombre: fullName(emp), asunto, cuerpo })
+            if (abierto) setEnviadosComprobante(prev => new Set(prev).add(emp.id))
+            return abierto
+          }
+
+          function handleEnviar(emp: Empleado, resultado: ResultadoNomina) {
+            if (!intentarEnviar(emp, resultado)) {
+              setToast(`El navegador bloqueó la ventana de correo para ${fullName(emp)} — permite ventanas emergentes o envíalo individualmente`)
+            }
+          }
+
+          function handleEnviarTodos() {
+            const pendientes = filas.filter(f => f.empleado.email && !enviadosComprobante.has(f.empleado.id))
+            const bloqueados = pendientes.filter(({ empleado: emp, resultado }) => !intentarEnviar(emp, resultado)).length
+            if (bloqueados > 0) {
+              setToast(`Tu navegador bloqueó ${bloqueados} de ${pendientes.length} ventanas — envíalas individualmente o permite ventanas emergentes para este sitio`)
+            }
+          }
+
+          const pendientesEnvio = filas.filter(f => f.empleado.email && !enviadosComprobante.has(f.empleado.id)).length
+          const sinCorreo = filas.filter(f => !f.empleado.email).length
+
+          return (
+            <>
+              <div
+                className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in"
+                onClick={() => setEnvioPeriodoId(null)}
+              />
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl bg-white dark:bg-[#141722] shadow-2xl animate-modal-in flex flex-col">
+                  <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-[#1d2035]">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-5 w-5 text-[#1B2980] dark:text-indigo-400" />
+                      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        Enviar Comprobantes de Pago — {periodoEnvioLabel}
+                      </h2>
+                    </div>
+                    <button onClick={() => setEnvioPeriodoId(null)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 px-4 py-3 text-[11px] text-amber-800 dark:text-amber-300">
+                      Cielo Cloud no tiene servidor de correo propio todavía: cada "Enviar" abre tu propio
+                      cliente de correo con el mensaje listo. Descarga el PDF de cada empleado y adjúntalo
+                      antes de dar clic en enviar desde tu correo.
+                    </div>
+
+                    {/* Plantilla editable */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Asunto</label>
+                        <input
+                          className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-2 text-sm focus:border-[#1B2980] focus:outline-none"
+                          value={plantillaComprobante.asunto}
+                          onChange={e => setPlantillaComprobante(prev => ({ ...prev, asunto: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Cuerpo del correo</label>
+                        <textarea
+                          className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-2 text-xs font-mono focus:border-[#1B2980] focus:outline-none"
+                          rows={7}
+                          value={plantillaComprobante.cuerpo}
+                          onChange={e => setPlantillaComprobante(prev => ({ ...prev, cuerpo: e.target.value }))}
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                        Variables disponibles (se reemplazan por cada empleado):{' '}
+                        {PLACEHOLDERS_COMPROBANTE.map(p => p.token).join(', ')}
+                      </p>
+                    </div>
+
+                    {/* Lista de empleados */}
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {pendientesEnvio > 0 ? `${pendientesEnvio} pendiente${pendientesEnvio === 1 ? '' : 's'}` : 'Todos enviados'}
+                        {sinCorreo > 0 && ` · ${sinCorreo} sin correo registrado`}
+                      </p>
+                      <button
+                        onClick={handleEnviarTodos}
+                        disabled={pendientesEnvio === 0}
+                        className="flex items-center gap-1.5 rounded-lg bg-[#1B2980] hover:bg-[#151f66] disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        Enviar a Todos ({pendientesEnvio})
+                      </button>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-zinc-50 dark:bg-[#1a1d2e] text-left text-zinc-500 dark:text-zinc-400">
+                            <th className="px-3 py-2 font-medium">Empleado</th>
+                            <th className="px-3 py-2 font-medium">Correo</th>
+                            <th className="px-3 py-2 font-medium text-right">Neto</th>
+                            <th className="px-3 py-2 font-medium text-right">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 dark:divide-[#1d2035]">
+                          {filas.map(({ empleado: emp, resultado }) => (
+                            <tr key={emp.id}>
+                              <td className="px-3 py-2 font-medium text-zinc-800 dark:text-zinc-200">{fullName(emp)}</td>
+                              <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">
+                                {emp.email || <span className="text-rose-500 dark:text-rose-400">Sin correo registrado</span>}
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-300">
+                                {formatRD(resultado.salarioNeto)}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center justify-end gap-2">
+                                  <button
+                                    onClick={() => descargarComprobantePDF(emp, resultado, periodoEnvioLabel, empresa)}
+                                    title="Descargar PDF"
+                                    className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] transition-colors"
+                                  >
+                                    <Download className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleEnviar(emp, resultado)}
+                                    disabled={!emp.email}
+                                    title={emp.email ? 'Enviar por correo' : 'Empleado sin correo registrado'}
+                                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-colors ${
+                                      enviadosComprobante.has(emp.id)
+                                        ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
+                                        : 'bg-[#1B2980] hover:bg-[#151f66] text-white disabled:opacity-40 disabled:cursor-not-allowed'
+                                    }`}
+                                  >
+                                    {enviadosComprobante.has(emp.id) ? (
+                                      <><CheckCircle2 className="h-3.5 w-3.5" /> Abierto</>
+                                    ) : (
+                                      <><Send className="h-3.5 w-3.5" /> Enviar</>
+                                    )}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-3 border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4">
+                    <button
+                      onClick={() => setEnvioPeriodoId(null)}
+                      className="rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-4 py-2 text-sm font-semibold text-white transition-colors"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )
+        })()}
       </div>
     )
   }
