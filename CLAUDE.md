@@ -481,6 +481,7 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
 
 | Hash | Descripción |
 |---|---|
+| `8ad36bd` | feat: registrar empleados nuevos desde el Asistente Guiado |
 | `ffa2740` | refactor: integrar Carga Inicial en Configuración + prompt post-onboarding |
 | `c87ae7f` | feat: importador Excel para carga inicial de saldos (Fase 3) |
 | `45d5245` | feat: asistente guiado de saldos iniciales (Fase 2) |
