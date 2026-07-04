@@ -490,6 +490,7 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
 
 | Hash | Descripción |
 |---|---|
+| `ccb60bc` | feat: desposteo de nómina — reabrir el período más reciente |
 | `8ad36bd` | feat: registrar empleados nuevos desde el Asistente Guiado |
 | `ffa2740` | refactor: integrar Carga Inicial en Configuración + prompt post-onboarding |
 | `c87ae7f` | feat: importador Excel para carga inicial de saldos (Fase 3) |
