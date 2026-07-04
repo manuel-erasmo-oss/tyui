@@ -96,7 +96,7 @@ export default function DashboardPage() {
 
   // Build chart from real processed periods (monthly only, last 5)
   const periodosReales = [...periodos]
-    .filter(p => p.tipo === 'mensual')
+    .filter(p => p.tipo === 'mensual' && p.estado !== 'en_proceso')
     .sort((a, b) => a.anio !== b.anio ? a.anio - b.anio : a.mes - b.mes)
     .slice(-5)
 

@@ -1532,7 +1532,7 @@ function EmpleadoDrawer({
             .filter(p => {
               const fechaPeriodo = new Date(p.fechaGeneracion)
               const fechaIngreso = new Date(empleado.fechaIngreso)
-              return fechaIngreso <= fechaPeriodo
+              return fechaIngreso <= fechaPeriodo && p.estado !== 'en_proceso'
             })
             .map(p => {
               const ajustes = p.ajustesPorEmpleado?.[empleado.id] ?? []

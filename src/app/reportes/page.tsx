@@ -111,7 +111,7 @@ function ReporteGerencial({
   const currentYear = new Date().getFullYear()
 
   const sortedPeriodos = useMemo(() =>
-    [...periodos].sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
+    [...periodos].filter(p => p.estado !== 'en_proceso').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
     [periodos]
   )
   const ultimoPeriodo = sortedPeriodos[0]
@@ -133,7 +133,7 @@ function ReporteGerencial({
 
   // YTD: acumulado del año en curso
   const ytd = useMemo(() => {
-    const yearPeriods = periodos.filter(p => p.anio === currentYear)
+    const yearPeriods = periodos.filter(p => p.anio === currentYear && p.estado !== 'en_proceso')
     return yearPeriods.reduce(
       (acc, p) => ({
         bruto:    acc.bruto    + p.totales.bruto,
@@ -466,7 +466,7 @@ function ReporteNomina({
   periodos: PeriodoNomina[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].sort((a, b) =>
+    [...periodos].filter(p => p.estado !== 'en_proceso').sort((a, b) =>
       new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()
     ), [periodos])
 
@@ -475,7 +475,7 @@ function ReporteNomina({
   const [generado, setGenerado] = useState(false)
   const [searchQ, setSearchQ] = useState('')
 
-  const periodo = periodos.find(p => p.id === periodoId)
+  const periodo = sorted.find(p => p.id === periodoId)
 
   const filas = useMemo(() => {
     if (!periodo || !generado) return []
@@ -1123,7 +1123,7 @@ function ReporteTSS({
   periodos: PeriodoNomina[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].sort((a, b) =>
+    [...periodos].filter(p => p.estado !== 'en_proceso').sort((a, b) =>
       new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()
     ), [periodos])
 
@@ -1132,7 +1132,7 @@ function ReporteTSS({
   const [generado, setGenerado] = useState(false)
   const [searchQ, setSearchQ] = useState('')
 
-  const periodo = periodos.find(p => p.id === periodoId)
+  const periodo = sorted.find(p => p.id === periodoId)
 
   const filas = useMemo(() => {
     if (!periodo || !generado) return []
@@ -1429,14 +1429,14 @@ function ReporteCostoPorDepto({
   periodos: PeriodoNomina[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
+    [...periodos].filter(p => p.estado !== 'en_proceso').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
     [periodos]
   )
   const [periodoId, setPeriodoId] = useState<string>(sorted[0]?.id ?? '')
   const [generado, setGenerado] = useState(false)
   const [searchQ, setSearchQ] = useState('')
 
-  const periodo = periodos.find(p => p.id === periodoId)
+  const periodo = sorted.find(p => p.id === periodoId)
 
   const deptos = useMemo(() => {
     if (!periodo || !generado) return []
@@ -1598,7 +1598,7 @@ function ReportePlanillaACH({
   periodos: PeriodoNomina[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
+    [...periodos].filter(p => p.estado !== 'en_proceso').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
     [periodos]
   )
   const bancos = useMemo(() => Array.from(new Set(empleados.map(e => e.banco).filter(Boolean))).sort() as string[], [empleados])
@@ -1608,7 +1608,7 @@ function ReportePlanillaACH({
   const [generado, setGenerado] = useState(false)
   const [searchQ, setSearchQ] = useState('')
 
-  const periodo = periodos.find(p => p.id === periodoId)
+  const periodo = sorted.find(p => p.id === periodoId)
   const sinCuenta = empleados.filter(e => e.activo && (!e.numeroCuenta || !e.banco)).length
 
   const filas = useMemo(() => {
@@ -1766,7 +1766,7 @@ function ReporteHorasExtras({
   const filas = useMemo(() => {
     if (!generado) return []
     const rows: { empId: string; per: string; he35: number; imp35: number; he100: number; imp100: number; nocturnas: number; impNocturno: number; total: number }[] = []
-    for (const p of periodos.filter(p => p.anio === anioFiltro)) {
+    for (const p of periodos.filter(p => p.anio === anioFiltro && p.estado !== 'en_proceso')) {
       for (const [empId, ajustes] of Object.entries(p.ajustesPorEmpleado ?? {})) {
         const he35      = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
         const he100     = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
@@ -1947,7 +1947,7 @@ function ReporteProyeccionAnual({
 
   const ytdCostoPorEmp = useMemo(() => {
     const map: Record<string, number> = {}
-    for (const p of periodos.filter(p => p.anio === currentYear)) {
+    for (const p of periodos.filter(p => p.anio === currentYear && p.estado !== 'en_proceso')) {
       for (const [empId, ajustes] of Object.entries(p.ajustesPorEmpleado ?? {})) {
         const emp = empleados.find(e => e.id === empId)
         if (!emp) continue
