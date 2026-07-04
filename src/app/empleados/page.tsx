@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Search, Plus, ChevronRight, Building2, Mail, Phone, X, Pencil,
   Upload, Download, FileText, Camera, User, Calendar, CreditCard,
-  Minimize2, Maximize2, Globe, UserPlus, Users, Clock, Trash2,
+  Minimize2, Maximize2, Globe, UserPlus, Users, Clock, Trash2, Info,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -13,7 +13,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
-  fullName, contratoBadgeClass, contratoLabel,
+  fullName, contratoBadgeClass, contratoLabel, CONTRATO_DGT_INFO,
 } from '@/lib/utils'
 import { usePeriodos } from '@/lib/periodos-context'
 import type { Empleado, TipoContrato, Banco, TipoDocumento, Dependiente, ParentescoDependiente, PeriodoNomina, AjusteLinea, TipoPeriodo, ResultadoNomina } from '@/types'
@@ -178,6 +178,19 @@ function formatDocNumber(num: string, tipo?: TipoDocumento): string {
   return num.toUpperCase()
 }
 
+function ContratoDGTNote({ tipo }: { tipo: TipoContrato }) {
+  const info = CONTRATO_DGT_INFO[tipo]
+  if (!info) return null
+  return (
+    <div className="mt-1.5 flex items-start gap-2 rounded-lg border border-sky-200 dark:border-sky-800/40 bg-sky-50 dark:bg-sky-950/30 px-3 py-2">
+      <Info className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
+      <p className="text-[11px] leading-relaxed text-sky-800 dark:text-sky-300">
+        <strong>Formulario {info.formulario}</strong> ante la DGT · Plazo: {info.plazo}
+      </p>
+    </div>
+  )
+}
+
 function labelTipoDoc(tipo?: TipoDocumento): string {
   return DOC_TIPOS.find(t => t.value === (tipo ?? 'cedula'))?.label ?? 'Cédula'
 }
@@ -262,7 +275,7 @@ const EMPTY: EmpForm = {
   tipoDocumento: 'cedula', cedula: '',
   fechaNacimiento: '', email: '', telefono: '',
   cargo: '', departamento: '', fechaIngreso: '', salarioBase: '',
-  tipoContrato: 'indefinido', supervisorId: '',
+  tipoContrato: 'fijo', supervisorId: '',
   banco: '', numeroCuenta: '', avatarColor: '#1B2980',
   fotoPerfil: '', documentoIdentidad: '', documentoIdentidadNombre: '',
   contratoLaboral: '', contratoLaboralNombre: '',
@@ -896,10 +909,15 @@ function EmpleadoFormModal({
                         <label className={labelCls}>Tipo de Contrato <span className="text-rose-500">*</span></label>
                         <select className={inputCls} value={form.tipoContrato}
                           onChange={e => set('tipoContrato', e.target.value as TipoContrato)}>
-                          <option value="indefinido">Indefinido</option>
-                          <option value="tiempo_determinado">Tiempo Determinado</option>
-                          <option value="obra_servicio">Obra o Servicio</option>
+                          <option value="fijo">Fijo (Tiempo Indefinido)</option>
+                          <option value="temporal">Temporal</option>
+                          <option value="estacional">Estacional / Temporada</option>
+                          <option value="ocasional">Móvil / Ocasional</option>
+                          <option value="pasante">Pasante</option>
+                          <option value="aprendiz">Aprendiz</option>
+                          <option value="eventual">Eventual (Obra/Servicio)</option>
                         </select>
+                        <ContratoDGTNote tipo={form.tipoContrato} />
                       </div>
                     )}
                   </div>
@@ -922,10 +940,15 @@ function EmpleadoFormModal({
                       <label className={labelCls}>Tipo de Contrato <span className="text-rose-500">*</span></label>
                       <select className={inputCls} value={form.tipoContrato}
                         onChange={e => set('tipoContrato', e.target.value as TipoContrato)}>
-                        <option value="indefinido">Indefinido</option>
-                        <option value="tiempo_determinado">Tiempo Determinado</option>
-                        <option value="obra_servicio">Obra o Servicio</option>
+                        <option value="fijo">Fijo (Tiempo Indefinido)</option>
+                        <option value="temporal">Temporal</option>
+                        <option value="estacional">Estacional / Temporada</option>
+                        <option value="ocasional">Móvil / Ocasional</option>
+                        <option value="pasante">Pasante</option>
+                        <option value="aprendiz">Aprendiz</option>
+                        <option value="eventual">Eventual (Obra/Servicio)</option>
                       </select>
+                      <ContratoDGTNote tipo={form.tipoContrato} />
                     </div>
                   )}
                   <div>

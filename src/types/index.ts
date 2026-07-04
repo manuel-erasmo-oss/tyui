@@ -1,4 +1,11 @@
-export type TipoContrato = 'indefinido' | 'tiempo_determinado' | 'obra_servicio'
+export type TipoContrato =
+  | 'fijo'         // Tiempo indefinido — DGT-3 (registro) / DGT-4 (cambios)
+  | 'temporal'     // Tiempo determinado — Art. 33 Código de Trabajo
+  | 'estacional'   // Estacional / temporada — DGT-11
+  | 'ocasional'    // Móvil / ocasional — DGT-5
+  | 'pasante'      // Pasantía
+  | 'aprendiz'     // Aprendiz — DGT-10 (Art. 251-257)
+  | 'eventual'     // Obra o servicio determinado — Art. 33/74
 export type CategoriaRiesgoSRL = 'bajo' | 'medio' | 'alto'
 export type TipoDocumento = 'cedula' | 'pasaporte' | 'residencia' | 'permiso_trabajo'
 export type Banco =
@@ -15,6 +22,7 @@ export type EstadoPeriodo = 'en_proceso' | 'procesada' | 'cerrada'
 export type ConceptoAjuste =
   | 'horas_extras_35'
   | 'horas_extras_100'
+  | 'recargo_nocturno'
   | 'comision'
   | 'bono'
   | 'prestamo'
@@ -85,6 +93,7 @@ export interface ResultadoNomina {
   importeHE35: number
   importeHE100: number
   totalHorasExtras: number
+  importeNocturno: number
   bonificaciones: number
   comisiones: number
   totalBruto: number
@@ -126,6 +135,7 @@ export interface ParametrosNomina {
   diasLaborablesMes?: number
   horasExtras35?: number
   horasExtras100?: number
+  horasNocturnas?: number
   bonificaciones?: number
   comisiones?: number
   sfsDependientes?: number
@@ -206,4 +216,18 @@ export interface Prestamo {
   notas?: string
   documentoSolicitud?: string  // base64-encoded PDF
   documentoNombre?: string     // original filename
+}
+
+// ─── Licencias remuneradas (pagadas al 100%) ─────────────────────────────────
+export type TipoLicencia = 'matrimonial' | 'fallecimiento' | 'alumbramiento'
+
+export interface Licencia {
+  id: string
+  empleadoId: string
+  tipo: TipoLicencia
+  fechaInicio: string   // ISO date string
+  fechaFin: string      // ISO date string, calculada automáticamente
+  dias: number          // días calendario según tipo
+  montoPagado: number   // salarioDiario × dias
+  notas?: string
 }

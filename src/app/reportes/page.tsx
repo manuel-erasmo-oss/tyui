@@ -17,7 +17,7 @@ import { useEmpresa } from '@/lib/empresa-context'
 import { calcularNomina, calcularNominaQuincenal } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatCedula, fullName,
-  formatAnosServicio, contratoLabel,
+  formatAnosServicio, contratoLabel, contratoBadgeClass,
 } from '@/lib/utils'
 import { exportarExcel } from '@/lib/excel-export'
 import type { AjusteLinea, PeriodoNomina, Empresa } from '@/types'
@@ -816,9 +816,13 @@ function ReporteEmpleados({
           Contrato:
           <select value={filtroContrato} onChange={e => { setFiltroContrato(e.target.value); setGenerado(false) }} className={selectCls}>
             <option value="todos">Todos</option>
-            <option value="indefinido">Indefinido</option>
-            <option value="tiempo_determinado">T. Determinado</option>
-            <option value="obra_servicio">Obra/Servicio</option>
+            <option value="fijo">Fijo</option>
+            <option value="temporal">Temporal</option>
+            <option value="estacional">Estacional</option>
+            <option value="ocasional">Móvil / Ocasional</option>
+            <option value="pasante">Pasante</option>
+            <option value="aprendiz">Aprendiz</option>
+            <option value="eventual">Eventual</option>
           </select>
         </label>
         <button onClick={() => { setGenerado(true); setSearchQ('') }} className={primaryBtn}>
@@ -859,13 +863,7 @@ function ReporteEmpleados({
                       <td className="px-5 py-3 text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{e.cargo}</td>
                       <td className="px-5 py-3 text-zinc-600 dark:text-zinc-400">{e.departamento}</td>
                       <td className="px-5 py-3">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
-                          e.tipoContrato === 'indefinido'
-                            ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:ring-emerald-800/50'
-                            : e.tipoContrato === 'tiempo_determinado'
-                            ? 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:ring-amber-800/50'
-                            : 'bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950/30 dark:text-violet-400 dark:ring-violet-800/50'
-                        }`}>{contratoLabel(e.tipoContrato)}</span>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset ${contratoBadgeClass(e.tipoContrato)}`}>{contratoLabel(e.tipoContrato)}</span>
                       </td>
                       <td className="px-5 py-3 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{formatDate(e.fechaIngreso)}</td>
                       <td className="px-5 py-3 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{formatAnosServicio(anos)}</td>
@@ -1757,16 +1755,21 @@ function ReporteHorasExtras({
 
   const filas = useMemo(() => {
     if (!generado) return []
-    const rows: { empId: string; per: string; he35: number; imp35: number; he100: number; imp100: number; total: number }[] = []
+    const rows: { empId: string; per: string; he35: number; imp35: number; he100: number; imp100: number; nocturnas: number; impNocturno: number; total: number }[] = []
     for (const p of periodos.filter(p => p.anio === anioFiltro)) {
       for (const [empId, ajustes] of Object.entries(p.ajustesPorEmpleado ?? {})) {
-        const he35  = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
-        const he100 = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
-        if (he35 === 0 && he100 === 0) continue
+        const he35      = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
+        const he100     = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
+        const nocturnas = ajustes.filter(a => a.concepto === 'recargo_nocturno').reduce((s, a) => s + a.valor, 0)
+        if (he35 === 0 && he100 === 0 && nocturnas === 0) continue
         const emp = empMap[empId]
         if (!emp) continue
         const res = calcularConPeriodo(emp, ajustes, p)
-        rows.push({ empId, per: periodoLabel(p), he35, imp35: res.importeHE35, he100, imp100: res.importeHE100, total: res.totalHorasExtras })
+        rows.push({
+          empId, per: periodoLabel(p), he35, imp35: res.importeHE35, he100, imp100: res.importeHE100,
+          nocturnas, impNocturno: res.importeNocturno,
+          total: res.totalHorasExtras + res.importeNocturno,
+        })
       }
     }
     return rows.sort((a, b) => a.per.localeCompare(b.per) || fullName(empMap[a.empId] ?? { nombre: a.empId, apellido: '' } as never).localeCompare(fullName(empMap[b.empId] ?? { nombre: b.empId, apellido: '' } as never)))
@@ -1783,8 +1786,10 @@ function ReporteHorasExtras({
 
   const resumen = useMemo(() => filas.reduce((acc, r) => ({
     he35: acc.he35 + r.he35, imp35: acc.imp35 + r.imp35,
-    he100: acc.he100 + r.he100, imp100: acc.imp100 + r.imp100, total: acc.total + r.total,
-  }), { he35: 0, imp35: 0, he100: 0, imp100: 0, total: 0 }), [filas])
+    he100: acc.he100 + r.he100, imp100: acc.imp100 + r.imp100,
+    nocturnas: acc.nocturnas + r.nocturnas, impNocturno: acc.impNocturno + r.impNocturno,
+    total: acc.total + r.total,
+  }), { he35: 0, imp35: 0, he100: 0, imp100: 0, nocturnas: 0, impNocturno: 0, total: 0 }), [filas])
 
   function exportarPDF() {
     if (filas.length === 0) return
@@ -1792,18 +1797,18 @@ function ReporteHorasExtras({
     pdfHeader(doc, empresa, 'Reporte de Horas Extras', `Año ${anioFiltro}`)
     autoTable(doc, {
       startY: 44,
-      head: [['Empleado','Período','Hrs 35%','Importe 35%','Hrs 100%','Importe 100%','Total HE']],
+      head: [['Empleado','Período','Hrs 35%','Importe 35%','Hrs 100%','Importe 100%','Hrs Noct.','Importe Noct.','Total HE']],
       body: filas.map(r => {
         const emp = empMap[r.empId]
-        return [emp ? fullName(emp) : r.empId, r.per, r.he35.toFixed(1), r.imp35.toFixed(2), r.he100.toFixed(1), r.imp100.toFixed(2), r.total.toFixed(2)]
+        return [emp ? fullName(emp) : r.empId, r.per, r.he35.toFixed(1), r.imp35.toFixed(2), r.he100.toFixed(1), r.imp100.toFixed(2), r.nocturnas.toFixed(1), r.impNocturno.toFixed(2), r.total.toFixed(2)]
       }),
-      foot: [['TOTALES', '', resumen.he35.toFixed(1), resumen.imp35.toFixed(2), resumen.he100.toFixed(1), resumen.imp100.toFixed(2), resumen.total.toFixed(2)]],
+      foot: [['TOTALES', '', resumen.he35.toFixed(1), resumen.imp35.toFixed(2), resumen.he100.toFixed(1), resumen.imp100.toFixed(2), resumen.nocturnas.toFixed(1), resumen.impNocturno.toFixed(2), resumen.total.toFixed(2)]],
       theme: 'striped',
       headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
       footStyles: { fillColor: [240, 240, 240], textColor: NAVY, fontStyle: 'bold', fontSize: 8 },
       bodyStyles: { fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
+      columnStyles: { 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'center' }, 5: { halign: 'right' }, 6: { halign: 'center' }, 7: { halign: 'right' }, 8: { halign: 'right' } },
       didDrawPage: (data) => { doc.setFontSize(7); doc.setTextColor(150); doc.text(`Página ${data.pageNumber}`, 283, 205, { align: 'right' }) },
     })
     doc.save(`horas-extras-${anioFiltro}.pdf`)
@@ -1816,13 +1821,13 @@ function ReporteHorasExtras({
       empresa: empresa.nombre, rnc: empresa.rnc,
       hojas: [{
         nombre: 'Horas Extras', titulo: 'Reporte de Horas Extras', subtitulo: `Año ${anioFiltro}`,
-        encabezados: ['Empleado','Período','Horas 35%','Importe 35%','Horas 100%','Importe 100%','Total HE'],
+        encabezados: ['Empleado','Período','Horas 35%','Importe 35%','Horas 100%','Importe 100%','Horas Noct.','Importe Noct.','Total HE'],
         filas: filas.map(r => {
           const emp = empMap[r.empId]
-          return [emp ? fullName(emp) : r.empId, r.per, r.he35, r.imp35, r.he100, r.imp100, r.total]
+          return [emp ? fullName(emp) : r.empId, r.per, r.he35, r.imp35, r.he100, r.imp100, r.nocturnas, r.impNocturno, r.total]
         }),
-        totales: ['TOTALES', '', resumen.he35, resumen.imp35, resumen.he100, resumen.imp100, resumen.total],
-        anchos: [32, 22, 14, 16, 14, 16, 16],
+        totales: ['TOTALES', '', resumen.he35, resumen.imp35, resumen.he100, resumen.imp100, resumen.nocturnas, resumen.impNocturno, resumen.total],
+        anchos: [32, 22, 14, 16, 14, 16, 14, 16, 16],
       }],
     })
   }
@@ -1843,7 +1848,7 @@ function ReporteHorasExtras({
       </FilterBar>
       {!generado ? <EmptyState message="Selecciona un año y haz clic en Generar." /> : filas.length === 0 ? <EmptyState message="No se registraron horas extras en este año." /> : (
         <>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Horas Extras 35%</p>
               <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{resumen.he35.toFixed(1)} hrs</p>
@@ -1853,6 +1858,11 @@ function ReporteHorasExtras({
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Horas Extras 100%</p>
               <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{resumen.he100.toFixed(1)} hrs</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.imp100, 0)}</p>
+            </div>
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Recargo Nocturno (15%)</p>
+              <p className="mt-1 text-xl font-bold text-sky-700 dark:text-sky-400 tabular-nums">{resumen.nocturnas.toFixed(1)} hrs</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.impNocturno, 0)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Importe HE</p>
@@ -1869,7 +1879,7 @@ function ReporteHorasExtras({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
-                    {['Empleado','Período','Hrs 35%','Importe 35%','Hrs 100%','Importe 100%','Total HE'].map(h => (
+                    {['Empleado','Período','Hrs 35%','Importe 35%','Hrs 100%','Importe 100%','Hrs Noct.','Importe Noct.','Total HE'].map(h => (
                       <th key={h} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{h}</th>
                     ))}
                   </tr>
@@ -1885,6 +1895,8 @@ function ReporteHorasExtras({
                         <td className="px-5 py-3 tabular-nums text-right text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(r.imp35, 0)}</td>
                         <td className="px-5 py-3 tabular-nums text-center text-rose-700 dark:text-rose-400">{r.he100.toFixed(1)}</td>
                         <td className="px-5 py-3 tabular-nums text-right text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(r.imp100, 0)}</td>
+                        <td className="px-5 py-3 tabular-nums text-center text-sky-700 dark:text-sky-400">{r.nocturnas.toFixed(1)}</td>
+                        <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-400 whitespace-nowrap">{formatRD(r.impNocturno, 0)}</td>
                         <td className="px-5 py-3 tabular-nums text-right font-semibold text-indigo-700 dark:text-indigo-400 whitespace-nowrap">{formatRD(r.total, 0)}</td>
                       </tr>
                     )
@@ -1897,6 +1909,8 @@ function ReporteHorasExtras({
                     <td className="px-5 py-3 tabular-nums text-right text-amber-300 whitespace-nowrap">{formatRD(resumen.imp35, 0)}</td>
                     <td className="px-5 py-3 tabular-nums text-center text-rose-300">{resumen.he100.toFixed(1)}</td>
                     <td className="px-5 py-3 tabular-nums text-right text-rose-300 whitespace-nowrap">{formatRD(resumen.imp100, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-center text-sky-300">{resumen.nocturnas.toFixed(1)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-sky-300 whitespace-nowrap">{formatRD(resumen.impNocturno, 0)}</td>
                     <td className="px-5 py-3 tabular-nums text-right text-indigo-200 whitespace-nowrap">{formatRD(resumen.total, 0)}</td>
                   </tr>
                 </tfoot>
@@ -2162,19 +2176,20 @@ function EmptyState({ message }: { message: string }) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function ajustesToParams(ajustes: AjusteLinea[]) {
-  let horasExtras35 = 0, horasExtras100 = 0, bonificaciones = 0
+  let horasExtras35 = 0, horasExtras100 = 0, horasNocturnas = 0, bonificaciones = 0
   let comisiones = 0, sfsDependientes = 0, otrosDescuentos = 0
 
   for (const a of ajustes) {
     if (a.concepto === 'horas_extras_35')                             horasExtras35   += a.valor
     if (a.concepto === 'horas_extras_100')                            horasExtras100  += a.valor
+    if (a.concepto === 'recargo_nocturno')                            horasNocturnas  += a.valor
     if (a.concepto === 'bono' || a.concepto === 'otro_ingreso')       bonificaciones  += a.valor
     if (a.concepto === 'comision')                                    comisiones      += a.valor
     if (a.concepto === 'dependiente_sfs')                             sfsDependientes += a.valor
     if (a.concepto === 'prestamo' || a.concepto === 'otro_descuento') otrosDescuentos += a.valor
   }
 
-  return { horasExtras35, horasExtras100, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
+  return { horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
 }
 
 function calcularConPeriodo(emp: Parameters<typeof calcularNomina>[0], ajustes: AjusteLinea[], periodo: PeriodoNomina) {

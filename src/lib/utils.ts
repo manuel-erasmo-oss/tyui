@@ -67,18 +67,47 @@ export function formatAnosServicio(anos: number): string {
 // Color class for tipo contrato badge
 export function contratoBadgeClass(tipo: string): string {
   switch (tipo) {
-    case 'indefinido':        return 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-    case 'tiempo_determinado': return 'bg-amber-50 text-amber-700 ring-amber-200'
-    case 'obra_servicio':     return 'bg-violet-50 text-violet-700 ring-violet-200'
-    default:                  return 'bg-zinc-50 text-zinc-700 ring-zinc-200'
+    case 'fijo':       return 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+    case 'temporal':   return 'bg-amber-50 text-amber-700 ring-amber-200'
+    case 'estacional': return 'bg-sky-50 text-sky-700 ring-sky-200'
+    case 'ocasional':  return 'bg-violet-50 text-violet-700 ring-violet-200'
+    case 'pasante':    return 'bg-cyan-50 text-cyan-700 ring-cyan-200'
+    case 'aprendiz':   return 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200'
+    case 'eventual':   return 'bg-orange-50 text-orange-700 ring-orange-200'
+    default:           return 'bg-zinc-50 text-zinc-700 ring-zinc-200'
   }
 }
 
 export function contratoLabel(tipo: string): string {
   switch (tipo) {
-    case 'indefinido':         return 'Indefinido'
-    case 'tiempo_determinado': return 'T. Determinado'
-    case 'obra_servicio':      return 'Obra/Servicio'
-    default:                   return tipo
+    case 'fijo':       return 'Fijo (Indefinido)'
+    case 'temporal':   return 'Temporal'
+    case 'estacional': return 'Estacional'
+    case 'ocasional':  return 'Móvil / Ocasional'
+    case 'pasante':    return 'Pasante'
+    case 'aprendiz':   return 'Aprendiz'
+    case 'eventual':   return 'Eventual (Obra/Servicio)'
+    default:           return tipo
   }
+}
+
+// Formulario DGT y plazo legal de registro según tipo de contrato
+// (Dirección General de Trabajo — solo los tipos con plazo documentado)
+export const CONTRATO_DGT_INFO: Partial<Record<string, { formulario: string; plazo: string }>> = {
+  fijo: {
+    formulario: 'DGT-3 (registro) / DGT-4 (cambios)',
+    plazo: 'Registro: 15 días desde inicio de operaciones · Renovación anual antes del 15 de enero · Cambios: primeros 5 días del mes siguiente',
+  },
+  estacional: {
+    formulario: 'DGT-11',
+    plazo: 'Primeros 15 días de iniciada la temporada',
+  },
+  ocasional: {
+    formulario: 'DGT-5',
+    plazo: 'Primeros 5 días del mes siguiente a la terminación',
+  },
+  aprendiz: {
+    formulario: 'DGT-10',
+    plazo: 'Contrato de aprendizaje (Art. 251–257, Código de Trabajo)',
+  },
 }
