@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Plus, X, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useUserScopedKey } from '@/lib/user-scoped-key'
 
 interface Evento {
   id: string
@@ -79,15 +80,19 @@ export function AgendaNomina() {
   const [newFecha,  setNewFecha]  = useState('')
   const [newTitulo, setNewTitulo] = useState('')
 
+  const { key: keyCustom, ready } = useUserScopedKey('cielo-agenda-custom')
+  const { key: keyDone }          = useUserScopedKey('cielo-agenda-done')
+
   useEffect(() => {
-    setMounted(true)
+    if (!ready) return
     try {
-      const c = localStorage.getItem('cielo-agenda-custom')
-      if (c) setCustom(JSON.parse(c))
-      const d = localStorage.getItem('cielo-agenda-done')
-      if (d) setDone(JSON.parse(d))
+      const c = localStorage.getItem(keyCustom)
+      setCustom(c ? JSON.parse(c) : [])
+      const d = localStorage.getItem(keyDone)
+      setDone(d ? JSON.parse(d) : [])
     } catch {}
-  }, [])
+    setMounted(true)
+  }, [keyCustom, keyDone, ready])
 
   // All events for the viewed month, sorted by date
   const allEvents: Evento[] = [
@@ -120,7 +125,7 @@ export function AgendaNomina() {
   function toggleDone(id: string) {
     const next = done.includes(id) ? done.filter(x => x !== id) : [...done, id]
     setDone(next)
-    if (mounted) localStorage.setItem('cielo-agenda-done', JSON.stringify(next))
+    if (mounted) localStorage.setItem(keyDone, JSON.stringify(next))
   }
 
   function deleteEvent(id: string) {
@@ -129,8 +134,8 @@ export function AgendaNomina() {
     setCustom(nextC)
     setDone(nextD)
     if (mounted) {
-      localStorage.setItem('cielo-agenda-custom', JSON.stringify(nextC))
-      localStorage.setItem('cielo-agenda-done',   JSON.stringify(nextD))
+      localStorage.setItem(keyCustom, JSON.stringify(nextC))
+      localStorage.setItem(keyDone,   JSON.stringify(nextD))
     }
   }
 
@@ -140,7 +145,7 @@ export function AgendaNomina() {
     const ev: Evento = { id, fecha: newFecha, titulo: newTitulo.trim(), tipo: 'custom' }
     const next = [...custom, ev]
     setCustom(next)
-    if (mounted) localStorage.setItem('cielo-agenda-custom', JSON.stringify(next))
+    if (mounted) localStorage.setItem(keyCustom, JSON.stringify(next))
     setNewFecha('')
     setNewTitulo('')
   }

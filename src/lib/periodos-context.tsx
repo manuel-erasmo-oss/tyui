@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { PeriodoNomina, AjusteLinea } from '@/types'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-periodos'
 
@@ -25,13 +26,17 @@ const Ctx = createContext<PeriodosCtx>({
 
 export function PeriodosProvider({ children }: { children: ReactNode }) {
   const [periodos, setPeriodos] = useState<PeriodoNomina[]>([])
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
+    if (!ready) return
     try {
-      const raw = localStorage.getItem(KEY)
-      if (raw) setPeriodos(JSON.parse(raw) as PeriodoNomina[])
-    } catch { /* ignore */ }
-  }, [])
+      const raw = localStorage.getItem(key)
+      setPeriodos(raw ? JSON.parse(raw) as PeriodoNomina[] : [])
+    } catch {
+      setPeriodos([])
+    }
+  }, [key, ready])
 
   function generar(data: Omit<PeriodoNomina, 'id' | 'fechaGeneracion'>): PeriodoNomina {
     const nuevo: PeriodoNomina = {
@@ -42,7 +47,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
     }
     setPeriodos(prev => {
       const next = [nuevo, ...prev]
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
     return nuevo
@@ -51,7 +56,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
   function cerrar(id: string) {
     setPeriodos(prev => {
       const next = prev.map(p => p.id === id ? { ...p, estado: 'cerrada' as const } : p)
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
   }
@@ -59,7 +64,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
   function eliminar(id: string) {
     setPeriodos(prev => {
       const next = prev.filter(p => p.id !== id)
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
   }
@@ -71,7 +76,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
           ? { ...p, ajustesPorEmpleado: { ...(p.ajustesPorEmpleado ?? {}), [empleadoId]: ajustes } }
           : p
       )
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
   }
@@ -90,7 +95,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
           estado: todosProcesados ? 'procesada' as const : p.estado,
         }
       })
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
   }

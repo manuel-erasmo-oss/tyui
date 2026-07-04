@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { Prestamo, CuotaPago } from '@/types'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-prestamos'
 
@@ -30,16 +31,20 @@ const Ctx = createContext<PrestamosCtx>({
 
 export function PrestamosProvider({ children }: { children: ReactNode }) {
   const [prestamos, setPrestamos] = useState<Prestamo[]>([])
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
+    if (!ready) return
     try {
-      const raw = localStorage.getItem(KEY)
-      if (raw) setPrestamos(JSON.parse(raw) as Prestamo[])
-    } catch { /* ignore */ }
-  }, [])
+      const raw = localStorage.getItem(key)
+      setPrestamos(raw ? JSON.parse(raw) as Prestamo[] : [])
+    } catch {
+      setPrestamos([])
+    }
+  }, [key, ready])
 
   function persist(next: Prestamo[]) {
-    try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+    try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
   }
 
   function otorgar(data: Omit<Prestamo, 'id' | 'saldoPendiente' | 'pagos' | 'estado'>): Prestamo {

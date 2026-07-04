@@ -1,8 +1,8 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { EMPLEADOS as MOCK } from './mock-data'
 import type { Empleado } from '@/types'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-empleados'
 
@@ -19,32 +19,31 @@ interface EmpleadosCtx {
 }
 
 const Ctx = createContext<EmpleadosCtx>({
-  empleados: MOCK,
-  empleadosActivos: MOCK.filter(e => e.activo),
+  empleados: [],
+  empleadosActivos: [],
   add: () => {},
   update: () => {},
   remove: () => {},
 })
 
 export function EmpleadosProvider({ children }: { children: ReactNode }) {
-  const [empleados, setEmpleados] = useState<Empleado[]>(MOCK)
+  const [empleados, setEmpleados] = useState<Empleado[]>([])
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
+    if (!ready) return
     try {
-      const raw = localStorage.getItem(KEY)
-      if (raw) setEmpleados(JSON.parse(raw) as Empleado[])
-    } catch { /* ignore */ }
-  }, [])
-
-  function persist(next: Empleado[]) {
-    setEmpleados(next)
-    try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
-  }
+      const raw = localStorage.getItem(key)
+      setEmpleados(raw ? JSON.parse(raw) as Empleado[] : [])
+    } catch {
+      setEmpleados([])
+    }
+  }, [key, ready])
 
   function add(data: Omit<Empleado, 'id'>) {
     setEmpleados(prev => {
       const next = [...prev, { ...data, id: genId() }]
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
   }
@@ -52,7 +51,7 @@ export function EmpleadosProvider({ children }: { children: ReactNode }) {
   function update(id: string, changes: Partial<Empleado>) {
     setEmpleados(prev => {
       const next = prev.map(e => e.id === id ? { ...e, ...changes } : e)
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
   }
@@ -60,7 +59,7 @@ export function EmpleadosProvider({ children }: { children: ReactNode }) {
   function remove(id: string) {
     setEmpleados(prev => {
       const next = prev.filter(e => e.id !== id)
-      try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
   }

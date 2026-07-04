@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { Licencia, TipoLicencia } from '@/types'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-licencias'
 
@@ -34,16 +35,20 @@ const Ctx = createContext<LicenciasCtx>({
 
 export function LicenciasProvider({ children }: { children: ReactNode }) {
   const [licencias, setLicencias] = useState<Licencia[]>([])
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
+    if (!ready) return
     try {
-      const raw = localStorage.getItem(KEY)
-      if (raw) setLicencias(JSON.parse(raw) as Licencia[])
-    } catch { /* ignore */ }
-  }, [])
+      const raw = localStorage.getItem(key)
+      setLicencias(raw ? JSON.parse(raw) as Licencia[] : [])
+    } catch {
+      setLicencias([])
+    }
+  }, [key, ready])
 
   function persist(next: Licencia[]) {
-    try { localStorage.setItem(KEY, JSON.stringify(next)) } catch { /* ignore */ }
+    try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
   }
 
   function registrar(

@@ -6,6 +6,7 @@ import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE_AFP, TOPE_COTIZABLE_SFS, TOPE
 import { formatRD } from '@/lib/utils'
 import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2 } from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
+import { useAuth } from '@/lib/auth-context'
 import { Toast } from '@/components/ui/Toast'
 import { cargarDatosDemo } from '@/lib/seed-data'
 import type { Empresa, CategoriaEmpresa, SectorEmpresa, RolUsuario } from '@/types'
@@ -162,6 +163,7 @@ const ROLES_USUARIO: { value: RolUsuario; label: string }[] = [
 
 export default function ConfiguracionPage() {
   const { empresa, guardar } = useEmpresa()
+  const { user } = useAuth()
   const [form, setForm]         = useState<Empresa>(empresa)
   const [showToast, setShowToast] = useState(false)
   const [confirmDemo, setConfirmDemo] = useState(false)
@@ -173,7 +175,7 @@ export default function ConfiguracionPage() {
   }, [empresa])
 
   function handleCargarDemo() {
-    cargarDatosDemo()
+    cargarDatosDemo(user?.uid)
     window.location.reload()
   }
 

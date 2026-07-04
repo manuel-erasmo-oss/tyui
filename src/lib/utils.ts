@@ -4,6 +4,13 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
 }
 
+// Namespacea una key de localStorage por usuario (UID de Firebase), para que
+// cada cuenta tenga sus propios datos y nunca comparta estado con otra cuenta
+// en el mismo navegador.
+export function scopedKey(base: string, uid?: string | null): string {
+  return uid ? `${base}::${uid}` : base
+}
+
 // Format as Dominican Peso
 export function formatRD(amount: number, decimals = 2): string {
   return new Intl.NumberFormat('es-DO', {

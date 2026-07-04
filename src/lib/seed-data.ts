@@ -1,5 +1,6 @@
 import { calcularNomina } from './dominican-labor'
 import { EMPLEADOS } from './mock-data'
+import { scopedKey } from './utils'
 import type { PeriodoNomina, Prestamo, AjusteLinea, Empresa } from '@/types'
 
 const EMPRESA_KEY   = 'cielo-empresa'
@@ -83,7 +84,9 @@ function loanAdj(id: string, prestamoId: string, nota: string, cuota: number): A
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export function cargarDatosDemo(): void {
+// `uid` namespaces las keys por cuenta — pásalo cuando haya un usuario autenticado
+// para no pisar los datos de otra cuenta en el mismo navegador.
+export function cargarDatosDemo(uid?: string | null): void {
 
   // ── 1. Empresa ───────────────────────────────────────────────────────────────
   const empresa: Empresa = {
@@ -198,8 +201,8 @@ export function cargarDatosDemo(): void {
   ]
 
   // ── 5. Persist to localStorage ────────────────────────────────────────────────
-  localStorage.setItem(EMPRESA_KEY,   JSON.stringify(empresa))
-  localStorage.setItem(EMPLEADOS_KEY, JSON.stringify(empleados))
-  localStorage.setItem(PRESTAMOS_KEY, JSON.stringify(prestamos))
-  localStorage.setItem(PERIODOS_KEY,  JSON.stringify(periodos))
+  localStorage.setItem(scopedKey(EMPRESA_KEY, uid),   JSON.stringify(empresa))
+  localStorage.setItem(scopedKey(EMPLEADOS_KEY, uid), JSON.stringify(empleados))
+  localStorage.setItem(scopedKey(PRESTAMOS_KEY, uid), JSON.stringify(prestamos))
+  localStorage.setItem(scopedKey(PERIODOS_KEY, uid),  JSON.stringify(periodos))
 }
