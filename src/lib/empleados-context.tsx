@@ -13,17 +13,28 @@ function genId(): string {
 interface EmpleadosCtx {
   empleados: Empleado[]
   empleadosActivos: Empleado[]
+  // Subconjunto de empleadosActivos que además NO está suspendido — úsalo en
+  // vez de empleadosActivos para todo lo que implique cobrar o acumular
+  // beneficios este ciclo (generar/procesar nómina, acumulación de vacaciones
+  // y regalía). Para el roster general, liquidación o saldos iniciales sigue
+  // usándose empleadosActivos, porque un suspendido conserva su vínculo.
+  empleadosEnNomina: Empleado[]
   add: (data: Omit<Empleado, 'id'>) => void
   update: (id: string, changes: Partial<Empleado>) => void
   remove: (id: string) => void
+  suspender: (id: string, fecha: string, motivo: string) => void
+  reactivar: (id: string) => void
 }
 
 const Ctx = createContext<EmpleadosCtx>({
   empleados: [],
   empleadosActivos: [],
+  empleadosEnNomina: [],
   add: () => {},
   update: () => {},
   remove: () => {},
+  suspender: () => {},
+  reactivar: () => {},
 })
 
 export function EmpleadosProvider({ children }: { children: ReactNode }) {
@@ -64,13 +75,26 @@ export function EmpleadosProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  function suspender(id: string, fecha: string, motivo: string) {
+    update(id, { suspendido: true, fechaSuspension: fecha, motivoSuspension: motivo })
+  }
+
+  function reactivar(id: string) {
+    update(id, { suspendido: false, fechaSuspension: undefined, motivoSuspension: undefined })
+  }
+
+  const empleadosActivos = empleados.filter(e => e.activo)
+
   return (
     <Ctx.Provider value={{
       empleados,
-      empleadosActivos: empleados.filter(e => e.activo),
+      empleadosActivos,
+      empleadosEnNomina: empleadosActivos.filter(e => !e.suspendido),
       add,
       update,
       remove,
+      suspender,
+      reactivar,
     }}>
       {children}
     </Ctx.Provider>

@@ -226,9 +226,12 @@ function EmpleadoDrawer({
   onToggleActivo: () => void
   onEliminar: () => void
 }) {
-  const { update } = useEmpleados()
+  const { update, suspender, reactivar } = useEmpleados()
   const { periodos } = usePeriodos()
   const [winState, setWinState] = useState<WindowState>('normal')
+  const [mostrarSuspension, setMostrarSuspension] = useState(false)
+  const [motivoSusp, setMotivoSusp] = useState('')
+  const [fechaSusp, setFechaSusp] = useState(() => new Date().toISOString().slice(0, 10))
   const [tabActivo, setTabActivo] = useState<'info' | 'dependientes' | 'historial'>('info')
   const [showDepForm, setShowDepForm] = useState(false)
   const [depNombre, setDepNombre]     = useState('')
@@ -323,12 +326,21 @@ function EmpleadoDrawer({
               <Badge variant={empleado.activo ? 'success' : 'neutral'}>
                 {empleado.activo ? 'Activo' : 'Inactivo'}
               </Badge>
+              {empleado.activo && empleado.suspendido && (
+                <Badge variant="warning">Suspendido</Badge>
+              )}
               {pais && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
                   <FlagImg code={pais.code} className="h-3.5 w-5" /> {pais.nombre}
                 </span>
               )}
             </div>
+            {empleado.activo && empleado.suspendido && (
+              <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
+                Suspendido desde el {formatDate(empleado.fechaSuspension!)}
+                {empleado.motivoSuspension && ` — ${empleado.motivoSuspension}`}
+              </p>
+            )}
           </div>
           {/* Quick stats */}
           <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
@@ -803,6 +815,45 @@ function EmpleadoDrawer({
           )
         })()}
 
+        {/* ── Suspensión de contrato ───────────────────────────────── */}
+        {mostrarSuspension && (
+          <div className="shrink-0 border-t border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/20 px-6 py-4 space-y-3">
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+              Suspender contrato — el empleado no se incluirá en la próxima nómina ni acumulará
+              vacaciones/regalía hasta que lo reactives. Conserva su antigüedad.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Fecha de inicio</label>
+                <input type="date" value={fechaSusp} onChange={e => setFechaSusp(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-2 text-sm focus:border-[#1B2980] focus:outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Motivo</label>
+                <input type="text" value={motivoSusp} onChange={e => setMotivoSusp(e.target.value)}
+                  placeholder="Ej. Licencia médica no cubierta"
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-2 text-sm focus:border-[#1B2980] focus:outline-none" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setMostrarSuspension(false)}
+                className="rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-white dark:hover:bg-[#1a1d2e] transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (!fechaSusp) return
+                  suspender(empleado.id, fechaSusp, motivoSusp.trim())
+                  setMostrarSuspension(false)
+                  setMotivoSusp('')
+                }}
+                className="rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-2 text-xs font-semibold text-white transition-colors">
+                Confirmar Suspensión
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Footer actions ──────────────────────────────────────── */}
         <div className="shrink-0 flex items-center justify-between gap-2 border-t border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4">
           <button onClick={onEliminar}
@@ -814,6 +865,19 @@ function EmpleadoDrawer({
               className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
               <Pencil className="h-3.5 w-3.5" /> Editar
             </button>
+            {empleado.activo && (
+              empleado.suspendido ? (
+                <button onClick={() => reactivar(empleado.id)}
+                  className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-medium text-white transition-colors">
+                  Reactivar de Suspensión
+                </button>
+              ) : (
+                <button onClick={() => setMostrarSuspension(v => !v)}
+                  className="rounded-lg border border-amber-200 dark:border-amber-800/50 px-4 py-2 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors">
+                  Suspender
+                </button>
+              )
+            )}
             <button onClick={onToggleActivo}
               className={`rounded-lg px-4 py-2 text-xs font-medium transition-colors ${
                 empleado.activo
@@ -976,7 +1040,10 @@ export default function EmpleadosPage() {
                       <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-400 text-xs">{formatDate(emp.fechaIngreso)}</td>
                       <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(emp.salarioBase, 0)}</td>
                       <td className="px-4 py-3.5">
-                        <Badge variant={emp.activo ? 'success' : 'neutral'}>{emp.activo ? 'Activo' : 'Inactivo'}</Badge>
+                        <div className="flex flex-wrap gap-1">
+                          <Badge variant={emp.activo ? 'success' : 'neutral'}>{emp.activo ? 'Activo' : 'Inactivo'}</Badge>
+                          {emp.activo && emp.suspendido && <Badge variant="warning">Suspendido</Badge>}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5">
                         <ChevronRight className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />

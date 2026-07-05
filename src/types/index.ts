@@ -99,6 +99,16 @@ export interface Empleado {
                                         // mientras se acumulan 12 meses reales de nómina procesada en el sistema
   saldosInicialesRevisado?: boolean    // true una vez que el Asistente de Carga Inicial confirmó este
                                         // empleado (con datos o marcado "no aplica, empleado nuevo")
+
+  // ─── Suspensión de contrato ─────────────────────────────────────────────────
+  // Distinto de `activo: false` (liquidación/desvinculación definitiva): el
+  // empleado sigue vinculado (conserva antigüedad, sigue en el roster, puede
+  // reactivarse) pero no cobra nómina ni acumula vacaciones/regalía mientras
+  // dura la suspensión — licencia médica no cubierta, suspensión disciplinaria,
+  // permiso sin sueldo extendido, etc. (Arts. 51-53 Código de Trabajo).
+  suspendido?: boolean
+  fechaSuspension?: string    // ISO date — inicio de la suspensión vigente
+  motivoSuspension?: string   // texto libre (ej. "Licencia médica no cubierta")
 }
 
 export interface ResultadoNomina {

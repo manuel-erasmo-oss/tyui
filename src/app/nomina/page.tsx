@@ -436,7 +436,7 @@ function DetalleNomina({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function NominaPage() {
-  const { empleados, empleadosActivos } = useEmpleados()
+  const { empleados, empleadosEnNomina } = useEmpleados()
   const { periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir, marcarPagada } = usePeriodos()
   const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago } = usePrestamos()
@@ -491,7 +491,7 @@ export default function NominaPage() {
   }, [periodoAbierto, periodos])
 
   function calcularTotalesRapido(ajustesPorEmp: Record<string, AjusteLinea[]> = {}) {
-    const rs = empleadosActivos.map(e =>
+    const rs = empleadosEnNomina.map(e =>
       calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], nuevoTipo, nuevaQuincena)
     )
     return {
@@ -519,7 +519,7 @@ export default function NominaPage() {
 
     // Pre-load active loan installments as deductions per employee
     const ajustesIniciales: Record<string, AjusteLinea[]> = {}
-    for (const emp of empleadosActivos) {
+    for (const emp of empleadosEnNomina) {
       const loans = getPrestamosActivos(emp.id)
       if (loans.length > 0) {
         ajustesIniciales[emp.id] = loans.map(p => ({
@@ -532,7 +532,7 @@ export default function NominaPage() {
         }))
       }
     }
-    for (const emp of empleadosActivos) {
+    for (const emp of empleadosEnNomina) {
       const deps = emp.dependientes ?? []
       if (deps.length > 0) {
         const cuotaMensualDep = cuotaDependienteSFS()
@@ -552,7 +552,7 @@ export default function NominaPage() {
       mes:                nuevoMes,
       anio:               nuevoAnio,
       estado:             'en_proceso',
-      totalEmpleados:     empleadosActivos.length,
+      totalEmpleados:     empleadosEnNomina.length,
       totales:            calcularTotalesRapido(ajustesIniciales),
       ajustesPorEmpleado: ajustesIniciales,
     })
@@ -585,7 +585,7 @@ export default function NominaPage() {
     if (!periodoActual) return
     const ajustesPorEmp  = periodoActual.ajustesPorEmpleado ?? {}
     const quincenaActual: 1 | 2 = periodoActual.quincena ?? 1
-    const rows = empleadosActivos.map(e => {
+    const rows = empleadosEnNomina.map(e => {
       const r = calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual)
       return [
         fullName(e), e.cargo, e.departamento,
@@ -641,7 +641,7 @@ export default function NominaPage() {
   function handleProcesarEmpleado(empId: string) {
     if (!periodoActual) return
     const procesadosActuales = new Set(periodoActual.empleadosProcesados ?? [])
-    const pendientes = empleadosActivos.filter(e => !procesadosActuales.has(e.id))
+    const pendientes = empleadosEnNomina.filter(e => !procesadosActuales.has(e.id))
     if (pendientes.length > 0 && pendientes.every(e => e.id === empId)) {
       setAuditoriaIds([empId])
       return
@@ -662,12 +662,12 @@ export default function NominaPage() {
     if (!periodoActual) return
     const ids = selectedEmps.size > 0
       ? [...selectedEmps]
-      : empleadosActivos.map(e => e.id)
+      : empleadosEnNomina.map(e => e.id)
     // Si esta acción completaría el período (pasaría de en_proceso a
     // procesada), se intercepta con la auditoría pre-cierre en vez de
     // procesar directamente.
     const procesadosActuales = new Set(periodoActual.empleadosProcesados ?? [])
-    const pendientes = empleadosActivos.filter(e => !procesadosActuales.has(e.id))
+    const pendientes = empleadosEnNomina.filter(e => !procesadosActuales.has(e.id))
     if (pendientes.length > 0 && pendientes.every(e => ids.includes(e.id))) {
       setAuditoriaIds(ids)
       return
@@ -686,7 +686,7 @@ export default function NominaPage() {
   }
 
   function toggleSeleccionTodos() {
-    const noProcessados = empleadosActivos
+    const noProcessados = empleadosEnNomina
       .filter(e => !(periodoActual?.empleadosProcesados ?? []).includes(e.id))
       .map(e => e.id)
     if (selectedEmps.size === noProcessados.length && noProcessados.length > 0) {
@@ -773,7 +773,7 @@ export default function NominaPage() {
 
                 <button
                   onClick={handleCrearPeriodo}
-                  disabled={empleadosActivos.length === 0}
+                  disabled={empleadosEnNomina.length === 0}
                   className="self-end flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="h-4 w-4" />
@@ -781,7 +781,7 @@ export default function NominaPage() {
                 </button>
               </div>
 
-              {empleadosActivos.length === 0 && (
+              {empleadosEnNomina.length === 0 && (
                 <p className="mt-2.5 text-xs text-amber-600 dark:text-amber-400">
                   Debes registrar al menos un empleado activo para crear un período de nómina.
                 </p>
@@ -949,7 +949,7 @@ export default function NominaPage() {
             : 'Nómina Mensual'
           const ajustesEnvio = periodoEnvio.ajustesPorEmpleado ?? {}
 
-          const filas = empleadosActivos.map(e => ({
+          const filas = empleadosEnNomina.map(e => ({
             empleado: e,
             resultado: calcularConAjustes(e, ajustesEnvio[e.id] ?? [], periodoEnvio.tipo, periodoEnvio.quincena ?? 1),
           }))
@@ -1138,10 +1138,10 @@ export default function NominaPage() {
   const esEnProceso    = periodoActual.estado === 'en_proceso'
   const esProcesada    = periodoActual.estado === 'procesada'
   const procesados     = new Set(periodoActual.empleadosProcesados ?? [])
-  const noProcessados  = empleadosActivos.filter(e => !procesados.has(e.id))
+  const noProcessados  = empleadosEnNomina.filter(e => !procesados.has(e.id))
   const todosSeleccionados = noProcessados.length > 0 && noProcessados.every(e => selectedEmps.has(e.id))
 
-  const nominas = empleadosActivos.map(e => ({
+  const nominas = empleadosEnNomina.map(e => ({
     empleado: e,
     resultado: calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual),
   }))
@@ -1241,7 +1241,7 @@ export default function NominaPage() {
             <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
               <Info className="h-3.5 w-3.5" />
               {esEnProceso
-                ? `${procesados.size}/${empleadosActivos.length} empleados procesados`
+                ? `${procesados.size}/${empleadosEnNomina.length} empleados procesados`
                 : esProcesada
                   ? 'Período procesado — solo lectura'
                   : 'Período cerrado — solo lectura'}
@@ -1522,7 +1522,7 @@ export default function NominaPage() {
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
                   <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400" colSpan={esEnProceso ? 3 : 2}>
-                    TOTALES — {empleadosActivos.length} empleados
+                    TOTALES — {empleadosEnNomina.length} empleados
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{formatRD(totales.bruto, 0)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
@@ -1574,7 +1574,7 @@ export default function NominaPage() {
         const UMBRAL_VARIACION = 20
         const UMBRAL_DESCUENTO = 30
 
-        const filas = empleadosActivos
+        const filas = empleadosEnNomina
           .filter(e => auditoriaIds.includes(e.id))
           .map(e => {
             const actual = nominas.find(n => n.empleado.id === e.id)!.resultado

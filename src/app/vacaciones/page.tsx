@@ -14,8 +14,8 @@ import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
 import { CalendarDays, Users, Clock, AlertCircle } from 'lucide-react'
 
 export default function VacacionesPage() {
-  const { empleadosActivos } = useEmpleados()
-  const filas = empleadosActivos.map(e => {
+  const { empleadosEnNomina } = useEmpleados()
+  const filas = empleadosEnNomina.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
     // Fraccional, sin truncar — prorratea el mes en curso proporcionalmente

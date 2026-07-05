@@ -416,11 +416,27 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   laboral/enfermedad profesional (75% ARL), maternidad (100%, empleador paga y
   SISALRIL reembolsa). Mismo patrón: % de cobertura configurable + disfrute de
   sueldo opcional.
-- **Suspensión de contrato** — estado nuevo `suspendido` (distinto de
-  `activo`/liquidado): el empleado sigue vinculado pero no cobra nómina;
-  liquidación de derechos adquiridos a la fecha (regalía/vacaciones
-  proporcionales); reactivación posterior sin alterar `fechaIngreso` (preserva
-  antigüedad).
+- ~~Suspensión de contrato~~ — **implementado.** Campos nuevos en `Empleado`:
+  `suspendido?: boolean`, `fechaSuspension?: string`, `motivoSuspension?: string`
+  — distinto de `activo: false` (liquidación definitiva): el empleado sigue
+  vinculado (conserva antigüedad, sigue en el roster, puede reactivarse) pero
+  no cobra nómina ni acumula vacaciones/regalía mientras dura la suspensión.
+  `useEmpleados()` ahora expone `empleadosEnNomina` (subconjunto de
+  `empleadosActivos` que excluye suspendidos) además de `suspender(id, fecha,
+  motivo)`/`reactivar(id)`. `empleadosActivos` se mantiene sin cambios — sigue
+  usándose para el roster general, liquidación y saldos iniciales, donde un
+  suspendido debe seguir apareciendo. `empleadosEnNomina` reemplazó a
+  `empleadosActivos` específicamente en `nomina/page.tsx` (generación y
+  procesamiento de períodos), `vacaciones/page.tsx` y `regalia-pascual/page.tsx`
+  (acumulación). UI en `empleados/page.tsx`: badge "Suspendido" (ámbar) en
+  tabla y drawer, nota con fecha/motivo, botón "Suspender" (mini-formulario
+  fecha+motivo) / "Reactivar de Suspensión" en el footer del drawer, junto al
+  "Dar de baja" existente (que sigue siendo la liquidación definitiva,
+  independiente de esto). **No implementado todavía**: la liquidación
+  proporcional de derechos adquiridos al momento de suspender (regalía/
+  vacaciones ya devengadas hasta esa fecha se calculan igual que para
+  cualquier empleado activo al momento de una eventual liquidación futura,
+  no hay un cálculo especial "a la fecha de suspensión").
 - **Prorrateo por reajuste salarial a mitad de período + retroactivo por
   ingreso tardío** — mismo problema de fondo (fechas de efectividad dentro de
   un período): detectar automáticamente cambios de `salarioBase` o

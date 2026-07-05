@@ -11,8 +11,8 @@ const hoy = new Date()
 const mesActual = hoy.getMonth() + 1  // 1-based
 
 export default function RegaliaPage() {
-  const { empleadosActivos } = useEmpleados()
-  const filas = empleadosActivos.map(e => {
+  const { empleadosEnNomina } = useEmpleados()
+  const filas = empleadosEnNomina.map(e => {
     const mesesServicio      = Math.min(getMesesServicio(e.fechaIngreso), mesActual)
     const mesesAcumulados    = Math.min(mesesServicio, 12)
     // Neto de lo ya pagado antes de la migración a Cielo Cloud (empleados con historial previo)
