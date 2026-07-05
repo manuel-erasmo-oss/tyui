@@ -568,6 +568,7 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
 
 | Hash | Descripción |
 |---|---|
+| `4a205a4` | feat: avances de salario — adelanto sin interés reutilizando Préstamos |
 | `6779672` | feat: licencias con subsidio — enfermedad común, accidente laboral, maternidad |
 | `034a541` | feat: suspensión de contrato — nuevo estado distinto de liquidación |
 | `a8b9c52` | feat: envío de comprobantes de pago por correo (individual y masivo) |
