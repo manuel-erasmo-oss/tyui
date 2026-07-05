@@ -238,6 +238,7 @@ function VistaDetalle({
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{nombreEmpleado}</h2>
                 <Badge variant={estadoBadgeVariant(prestamo.estado)}>{estadoLabel(prestamo.estado)}</Badge>
+                {prestamo.tipo === 'avance' && <Badge variant="info">Avance</Badge>}
               </div>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                 Otorgado el {formatDate(prestamo.fechaOtorgamiento)}
@@ -452,6 +453,7 @@ export default function PrestamosPage() {
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState<Prestamo | null>(null)
   const [filtroEstado, setFiltroEstado]                 = useState<EstadoPrestamo | 'todos'>('activo')
   const [showForm, setShowForm]                         = useState(false)
+  const [modoNuevo, setModoNuevo]                       = useState<'prestamo' | 'avance'>('prestamo')
   const [toast, setToast]                               = useState<string | null>(null)
   const [confirmId, setConfirmId]                       = useState<string | null>(null)
 
@@ -565,19 +567,23 @@ export default function PrestamosPage() {
   // ── Handlers ─────────────────────────────────────────────────────────────────
   function handleOtorgar(e: React.FormEvent) {
     e.preventDefault()
-    if (!fEmpleado || previewMonto <= 0 || previewCuotas <= 0) return
+    const esAvance = modoNuevo === 'avance'
+    const cuotas = esAvance ? 1 : previewCuotas
+    const tasa   = esAvance ? 0 : previewTasa
+    if (!fEmpleado || previewMonto <= 0 || cuotas <= 0) return
     otorgar({
       empleadoId:          fEmpleado,
       monto:               previewMonto,
-      tasaInteres:         previewTasa,
-      cuotas:              previewCuotas,
-      cuotaBase:           previewCuota,
+      tasaInteres:         tasa,
+      cuotas,
+      cuotaBase:           esAvance ? previewMonto : previewCuota,
       frecuencia:          fFrecuencia,
       fechaOtorgamiento:   new Date().toISOString().split('T')[0],
-      fechaFin:            fFechaFin || undefined,
+      fechaFin:            esAvance ? undefined : (fFechaFin || undefined),
       notas:               fNotas.trim() || undefined,
-      documentoSolicitud:  fDocBase64 ?? undefined,
-      documentoNombre:     fDocNombre ?? undefined,
+      documentoSolicitud:  esAvance ? undefined : (fDocBase64 ?? undefined),
+      documentoNombre:     esAvance ? undefined : (fDocNombre ?? undefined),
+      tipo:                modoNuevo,
     })
     // Reset form
     setFEmpleado('')
@@ -590,7 +596,8 @@ export default function PrestamosPage() {
     setFUsarFechas(false)
     clearFile()
     setShowForm(false)
-    setToast('Préstamo otorgado exitosamente')
+    setToast(esAvance ? 'Avance de salario otorgado exitosamente' : 'Préstamo otorgado exitosamente')
+    setModoNuevo('prestamo')
   }
 
   function handleCancelar(id: string) {
@@ -652,15 +659,34 @@ export default function PrestamosPage() {
     <div className="flex flex-col h-full overflow-hidden">
       <Header
         title="Préstamos a Empleados"
-        subtitle="Control de préstamos y cuotas"
+        subtitle="Control de préstamos, avances y cuotas"
         actions={
-          <button
-            onClick={() => setShowForm(prev => !prev)}
-            className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
-          >
-            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {showForm ? 'Cerrar' : 'Nuevo Préstamo'}
-          </button>
+          showForm ? (
+            <button
+              onClick={() => setShowForm(false)}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] px-3.5 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+            >
+              <X className="h-4 w-4" />
+              Cerrar
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setModoNuevo('avance'); setFTasa('0'); setFCuotas('1'); setShowForm(true) }}
+                className="flex items-center gap-2 rounded-lg border border-[#1B2980] dark:border-indigo-500 px-3.5 py-2 text-sm font-semibold text-[#1B2980] dark:text-indigo-400 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Nuevo Avance
+              </button>
+              <button
+                onClick={() => { setModoNuevo('prestamo'); setFTasa('0'); setFCuotas('12'); setShowForm(true) }}
+                className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Nuevo Préstamo
+              </button>
+            </div>
+          )
         }
       />
 
@@ -696,8 +722,14 @@ export default function PrestamosPage() {
           <div className="mx-6 mb-4 rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
             <div className="flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
               <div>
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Nuevo Préstamo</h3>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Complete los datos del préstamo a otorgar</p>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  {modoNuevo === 'avance' ? 'Nuevo Avance de Salario' : 'Nuevo Préstamo'}
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  {modoNuevo === 'avance'
+                    ? 'Adelanto sin interés — se descuenta completo en el siguiente período de nómina'
+                    : 'Complete los datos del préstamo a otorgar'}
+                </p>
               </div>
             </div>
             <form onSubmit={handleOtorgar} className="p-5 space-y-5">
@@ -731,113 +763,117 @@ export default function PrestamosPage() {
                     required
                   />
                 </div>
-                <div>
-                  <label className={labelCls}>Tasa Interés % mensual</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className={inputCls}
-                    value={fTasa}
-                    onChange={e => setFTasa(e.target.value)}
-                    placeholder="0"
-                  />
-                  {parseFloat(fTasa) === 0 && (
-                    <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">Sin interés (beneficio laboral)</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Row 2: dates toggle + cuotas + frecuencia */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {/* Date range toggle */}
-                <div className="sm:col-span-2 lg:col-span-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className={labelCls + ' mb-0'}>Período del Préstamo</label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFUsarFechas(v => !v)
-                        if (fUsarFechas) {
-                          setFFechaInicio('')
-                          setFFechaFin('')
-                        }
-                      }}
-                      className="text-[11px] text-[#1B2980] dark:text-indigo-400 hover:underline"
-                    >
-                      {fUsarFechas ? 'Usar número de cuotas' : 'Usar fechas inicio/fin'}
-                    </button>
-                  </div>
-                  {fUsarFechas ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className={labelCls}>Inicio</label>
-                        <input
-                          type="date"
-                          className={inputCls}
-                          value={fFechaInicio}
-                          onChange={e => setFFechaInicio(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Fin</label>
-                        <input
-                          type="date"
-                          className={inputCls}
-                          value={fFechaFin}
-                          onChange={e => setFFechaFin(e.target.value)}
-                          min={fFechaInicio}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1 italic">
-                      Define directamente el número de cuotas a continuación.
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className={labelCls}>
-                    Cuotas
-                    {fUsarFechas && fFechaInicio && fFechaFin && (
-                      <span className="ml-1 text-emerald-600 dark:text-emerald-400">(calculado automáticamente)</span>
+                {modoNuevo === 'prestamo' && (
+                  <div>
+                    <label className={labelCls}>Tasa Interés % mensual</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className={inputCls}
+                      value={fTasa}
+                      onChange={e => setFTasa(e.target.value)}
+                      placeholder="0"
+                    />
+                    {parseFloat(fTasa) === 0 && (
+                      <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">Sin interés (beneficio laboral)</p>
                     )}
-                    <span className="text-rose-500"> *</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    className={inputCls}
-                    value={fCuotas}
-                    onChange={e => setFCuotas(e.target.value)}
-                    placeholder="12"
-                    readOnly={fUsarFechas && !!fFechaInicio && !!fFechaFin}
-                    required
-                  />
-                </div>
+                  </div>
+                )}
+              </div>
 
-                <div>
-                  <label className={labelCls}>Frecuencia</label>
-                  <div className="flex gap-2">
-                    {(['mensual', 'quincenal'] as const).map(f => (
+              {/* Row 2: dates toggle + cuotas + frecuencia — solo préstamos */}
+              {modoNuevo === 'prestamo' && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* Date range toggle */}
+                  <div className="sm:col-span-2 lg:col-span-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className={labelCls + ' mb-0'}>Período del Préstamo</label>
                       <button
-                        key={f}
                         type="button"
-                        onClick={() => setFFrecuencia(f)}
-                        className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                          fFrecuencia === f
-                            ? 'border-[#1B2980] bg-[#1B2980] text-white dark:border-indigo-600 dark:bg-indigo-600'
-                            : 'border-zinc-200 dark:border-[#252840] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
-                        }`}
+                        onClick={() => {
+                          setFUsarFechas(v => !v)
+                          if (fUsarFechas) {
+                            setFFechaInicio('')
+                            setFFechaFin('')
+                          }
+                        }}
+                        className="text-[11px] text-[#1B2980] dark:text-indigo-400 hover:underline"
                       >
-                        {frecuenciaLabel(f)}
+                        {fUsarFechas ? 'Usar número de cuotas' : 'Usar fechas inicio/fin'}
                       </button>
-                    ))}
+                    </div>
+                    {fUsarFechas ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className={labelCls}>Inicio</label>
+                          <input
+                            type="date"
+                            className={inputCls}
+                            value={fFechaInicio}
+                            onChange={e => setFFechaInicio(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Fin</label>
+                          <input
+                            type="date"
+                            className={inputCls}
+                            value={fFechaFin}
+                            onChange={e => setFFechaFin(e.target.value)}
+                            min={fFechaInicio}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1 italic">
+                        Define directamente el número de cuotas a continuación.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className={labelCls}>
+                      Cuotas
+                      {fUsarFechas && fFechaInicio && fFechaFin && (
+                        <span className="ml-1 text-emerald-600 dark:text-emerald-400">(calculado automáticamente)</span>
+                      )}
+                      <span className="text-rose-500"> *</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      className={inputCls}
+                      value={fCuotas}
+                      onChange={e => setFCuotas(e.target.value)}
+                      placeholder="12"
+                      readOnly={fUsarFechas && !!fFechaInicio && !!fFechaFin}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelCls}>Frecuencia</label>
+                    <div className="flex gap-2">
+                      {(['mensual', 'quincenal'] as const).map(f => (
+                        <button
+                          key={f}
+                          type="button"
+                          onClick={() => setFFrecuencia(f)}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                            fFrecuencia === f
+                              ? 'border-[#1B2980] bg-[#1B2980] text-white dark:border-indigo-600 dark:bg-indigo-600'
+                              : 'border-zinc-200 dark:border-[#252840] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                          }`}
+                        >
+                          {frecuenciaLabel(f)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Row 3: notas + PDF upload */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -848,46 +884,48 @@ export default function PrestamosPage() {
                     className={inputCls}
                     value={fNotas}
                     onChange={e => setFNotas(e.target.value)}
-                    placeholder="Motivo del préstamo…"
+                    placeholder={modoNuevo === 'avance' ? 'Motivo del avance…' : 'Motivo del préstamo…'}
                   />
                 </div>
 
-                {/* PDF Upload */}
-                <div>
-                  <label className={labelCls}>Solicitud Aprobada (PDF)</label>
-                  {fDocNombre ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2">
-                      <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <span className="flex-1 truncate text-xs text-emerald-700 dark:text-emerald-300">{fDocNombre}</span>
-                      <button
-                        type="button"
-                        onClick={clearFile}
-                        className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-300"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-300 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400 hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors">
-                      <Upload className="h-4 w-4 shrink-0" />
-                      <span>Adjuntar PDF escaneado…</span>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,application/pdf"
-                        className="sr-only"
-                        onChange={handleFileUpload}
-                      />
-                    </label>
-                  )}
-                  <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                    El documento se almacena localmente junto con el préstamo.
-                  </p>
-                </div>
+                {/* PDF Upload — solo préstamos */}
+                {modoNuevo === 'prestamo' && (
+                  <div>
+                    <label className={labelCls}>Solicitud Aprobada (PDF)</label>
+                    {fDocNombre ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/20 px-3 py-2">
+                        <FileText className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <span className="flex-1 truncate text-xs text-emerald-700 dark:text-emerald-300">{fDocNombre}</span>
+                        <button
+                          type="button"
+                          onClick={clearFile}
+                          className="text-emerald-500 hover:text-emerald-700 dark:hover:text-emerald-300"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-zinc-300 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400 hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors">
+                        <Upload className="h-4 w-4 shrink-0" />
+                        <span>Adjuntar PDF escaneado…</span>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          className="sr-only"
+                          onChange={handleFileUpload}
+                        />
+                      </label>
+                    )}
+                    <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+                      El documento se almacena localmente junto con el préstamo.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Live cuota preview */}
-              {previewMonto > 0 && previewCuotas > 0 && (
+              {modoNuevo === 'prestamo' && previewMonto > 0 && previewCuotas > 0 && (
                 <div className="flex items-center gap-3 rounded-lg border border-[#1B2980]/20 dark:border-indigo-600/30 bg-[#eef0fb] dark:bg-indigo-950/30 px-4 py-3">
                   <DollarSign className="h-4 w-4 text-[#1B2980] dark:text-indigo-400 shrink-0" />
                   <div>
@@ -915,11 +953,11 @@ export default function PrestamosPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!fEmpleado || previewMonto <= 0 || previewCuotas <= 0}
+                  disabled={!fEmpleado || previewMonto <= 0 || (modoNuevo === 'prestamo' && previewCuotas <= 0)}
                   className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Plus className="h-4 w-4" />
-                  Otorgar Préstamo
+                  {modoNuevo === 'avance' ? 'Otorgar Avance' : 'Otorgar Préstamo'}
                 </button>
               </div>
             </form>
@@ -1027,7 +1065,10 @@ export default function PrestamosPage() {
                                 {initials}
                               </div>
                               <div>
-                                <span className="block font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{empName}</span>
+                                <span className="flex items-center gap-1.5 font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
+                                  {empName}
+                                  {prestamo.tipo === 'avance' && <Badge variant="info">Avance</Badge>}
+                                </span>
                                 {emp && <span className="block text-[11px] text-zinc-400 dark:text-zinc-500">{emp.departamento}</span>}
                               </div>
                             </div>

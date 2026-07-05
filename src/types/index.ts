@@ -274,6 +274,11 @@ export interface Prestamo {
   notas?: string
   documentoSolicitud?: string  // base64-encoded PDF
   documentoNombre?: string     // original filename
+  // 'avance' (default 'prestamo' para registros previos a este campo): adelanto
+  // de salario sin interés, deducido completo en el siguiente período — usa el
+  // mismo motor de otorgar/registrarPago/liquidación, solo cambia la etiqueta
+  // y el formulario simplificado con el que se otorga.
+  tipo?: 'prestamo' | 'avance'
 }
 
 // ─── Licencias remuneradas ────────────────────────────────────────────────────

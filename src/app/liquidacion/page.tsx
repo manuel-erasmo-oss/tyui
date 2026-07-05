@@ -491,8 +491,8 @@ export default function LiquidacionPage() {
                 <div className="border-b border-rose-100 dark:border-rose-900/40 px-5 py-4 flex items-center gap-2">
                   <HandCoins className="h-4 w-4 text-rose-500 dark:text-rose-400 shrink-0" />
                   <div>
-                    <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Préstamos Pendientes</h2>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Seleccione los préstamos a descontar del finiquito</p>
+                    <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Préstamos y Avances Pendientes</h2>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Seleccione los préstamos/avances a descontar del finiquito</p>
                   </div>
                 </div>
                 <div className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
@@ -511,7 +511,7 @@ export default function LiquidacionPage() {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                          {p.notas || 'Préstamo'}
+                          {p.notas || (p.tipo === 'avance' ? 'Avance de salario' : 'Préstamo')}
                         </p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
                           Original: {formatRD(p.monto, 0)} · {p.cuotas} cuotas

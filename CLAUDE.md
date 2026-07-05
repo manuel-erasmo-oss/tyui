@@ -392,10 +392,23 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   EmailJS/Resend/SendGrid), solo `enviarComprobante` debe cambiar — a una
   llamada real que además adjunte el PDF — el modal, la plantilla editable y
   los botones individual/masivo quedan igual.
-- **Avances de salario** — adelantos sin interés ni cuotas obligatorias
-  (distinto de Préstamos): descuento automático en el siguiente período,
-  liquidación automática contra prestaciones si el empleado se desvincula con
-  saldo pendiente.
+- ~~Avances de salario~~ — **implementado.** No se construyó como módulo
+  aparte — reutiliza el mismo motor de `Prestamo` (`otorgar`/`registrarPago`/
+  `getPrestamosActivos`, ya integrado con nómina y liquidación), con un nuevo
+  campo `Prestamo.tipo?: 'prestamo' | 'avance'` (default `'prestamo'` para
+  registros previos). En `prestamos/page.tsx`, el botón "Nuevo Avance" abre
+  un formulario simplificado (solo empleado, monto y motivo — sin tasa de
+  interés, cuotas, fechas ni documento adjunto) que internamente fuerza
+  `tasaInteres: 0, cuotas: 1`, es decir, un adelanto que se descuenta
+  completo en el siguiente período. La liquidación automática contra
+  prestaciones si el empleado se desvincula con saldo pendiente ya existía
+  para préstamos y aplica igual a avances sin cambios. Badge "Avance" en la
+  tabla y en el detalle para distinguirlo visualmente de un préstamo con
+  cuotas; en `nomina/page.tsx` la etiqueta del ajuste pre-cargado también
+  distingue "Avance de salario" vs "Préstamo" (aunque el chip compacto de la
+  tabla de nómina sigue mostrando la categoría genérica "Préstamo" para
+  ambos, consistente con cómo ya funcionan todos los demás chips de
+  concepto — la distinción real vive en el módulo de Préstamos).
 - **Empresa asume ISR/TSS del empleado** (grossing-up) — flag configurable por
   empleado/ajuste: % de AFP/SFS/ISR que la empresa absorbe en vez de descontarlo
   al empleado, reflejado como línea separada en Costo Empleador.

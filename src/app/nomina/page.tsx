@@ -522,14 +522,17 @@ export default function NominaPage() {
     for (const emp of empleadosEnNomina) {
       const loans = getPrestamosActivos(emp.id)
       if (loans.length > 0) {
-        ajustesIniciales[emp.id] = loans.map(p => ({
-          id: `loan-${p.id}`,
-          tipo: 'deduccion' as const,
-          concepto: 'prestamo' as const,
-          descripcion: p.notas ? `Préstamo — ${p.notas}` : 'Préstamo',
-          valor: p.cuotaBase,
-          prestamoId: p.id,
-        }))
+        ajustesIniciales[emp.id] = loans.map(p => {
+          const etiqueta = p.tipo === 'avance' ? 'Avance de salario' : 'Préstamo'
+          return {
+            id: `loan-${p.id}`,
+            tipo: 'deduccion' as const,
+            concepto: 'prestamo' as const,
+            descripcion: p.notas ? `${etiqueta} — ${p.notas}` : etiqueta,
+            valor: p.cuotaBase,
+            prestamoId: p.id,
+          }
+        })
       }
     }
     for (const emp of empleadosEnNomina) {
