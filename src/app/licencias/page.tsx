@@ -5,18 +5,29 @@ import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
-import { useLicencias, DIAS_LICENCIA, labelLicencia } from '@/lib/licencias-context'
+import {
+  useLicencias, DIAS_LICENCIA, DIAS_SUGERIDOS_SUBSIDIO, labelLicencia, esLicenciaConSubsidio,
+} from '@/lib/licencias-context'
 import { formatRD, formatDate, fullName } from '@/lib/utils'
 import type { TipoLicencia } from '@/types'
-import { FileClock, CalendarPlus, Banknote, Trash2, Plus, Info, Heart, HeartCrack, Baby } from 'lucide-react'
+import {
+  FileClock, CalendarPlus, Banknote, Trash2, Plus, Info, Heart, HeartCrack, Baby,
+  Stethoscope, HardHat, ShieldCheck,
+} from 'lucide-react'
 
-const TIPOS: TipoLicencia[] = ['matrimonial', 'fallecimiento', 'alumbramiento']
+const TIPOS: TipoLicencia[] = [
+  'matrimonial', 'fallecimiento', 'alumbramiento',
+  'enfermedad_comun', 'accidente_laboral', 'maternidad',
+]
 
 function iconoTipo(tipo: TipoLicencia) {
   switch (tipo) {
-    case 'matrimonial':   return Heart
-    case 'fallecimiento': return HeartCrack
-    case 'alumbramiento': return Baby
+    case 'matrimonial':       return Heart
+    case 'fallecimiento':     return HeartCrack
+    case 'alumbramiento':     return Baby
+    case 'enfermedad_comun':  return Stethoscope
+    case 'accidente_laboral': return HardHat
+    case 'maternidad':        return Baby
   }
 }
 
@@ -30,9 +41,13 @@ export default function LicenciasPage() {
   const [empleadoId, setEmpleadoId] = useState('')
   const [tipo, setTipo] = useState<TipoLicencia>('matrimonial')
   const [fechaInicio, setFechaInicio] = useState(new Date().toISOString().split('T')[0])
+  const [diasSubsidio, setDiasSubsidio] = useState<string>('')
+  const [modalidadEnfermedad, setModalidadEnfermedad] = useState<'ambulatoria' | 'hospitalaria'>('ambulatoria')
+  const [disfruteSueldo, setDisfruteSueldo] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
   const empMap = useMemo(() => Object.fromEntries(empleados.map(e => [e.id, e])), [empleados])
+  const conSubsidio = esLicenciaConSubsidio(tipo)
 
   const hoy = new Date()
   const licenciasMes = licencias.filter(l => {
@@ -41,6 +56,15 @@ export default function LicenciasPage() {
   })
   const totalPagadoMes = licenciasMes.reduce((s, l) => s + l.montoPagado, 0)
   const totalPagadoGeneral = licencias.reduce((s, l) => s + l.montoPagado, 0)
+  const totalSubsidioMes = licenciasMes.reduce((s, l) => s + (l.montoSubsidioEstimado ?? 0), 0)
+
+  function resetForm() {
+    setEmpleadoId('')
+    setFechaInicio(new Date().toISOString().split('T')[0])
+    setDiasSubsidio('')
+    setModalidadEnfermedad('ambulatoria')
+    setDisfruteSueldo(false)
+  }
 
   function handleRegistrar() {
     const emp = empMap[empleadoId]
@@ -48,10 +72,17 @@ export default function LicenciasPage() {
       setToast('Seleccione un empleado')
       return
     }
-    registrar(empleadoId, tipo, fechaInicio, emp.salarioBase)
+    if (conSubsidio && (!diasSubsidio || Number(diasSubsidio) <= 0)) {
+      setToast('Indique los días de licencia (según certificado médico/legal)')
+      return
+    }
+    registrar(empleadoId, tipo, fechaInicio, emp, {
+      dias: conSubsidio ? Number(diasSubsidio) : undefined,
+      modalidadEnfermedad: tipo === 'enfermedad_comun' ? modalidadEnfermedad : undefined,
+      disfruteSueldo: conSubsidio ? disfruteSueldo : undefined,
+    })
     setToast(`Licencia ${labelLicencia(tipo).toLowerCase()} registrada — ${fullName(emp)}`)
-    setEmpleadoId('')
-    setFechaInicio(new Date().toISOString().split('T')[0])
+    resetForm()
   }
 
   function handleEliminar(id: string) {
@@ -65,12 +96,12 @@ export default function LicenciasPage() {
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Licencias Remuneradas"
-        subtitle="Matrimonial · Fallecimiento · Alumbramiento — Código de Trabajo"
+        subtitle="Remuneradas y con subsidio — Código de Trabajo y Seguridad Social"
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
         {/* ── Stat cards ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <StatCard
             label="Licencias Este Mes"
             value={`${licenciasMes.length}`}
@@ -79,11 +110,18 @@ export default function LicenciasPage() {
             iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
           />
           <StatCard
-            label="Total Pagado Este Mes"
+            label="Pagado por la Empresa Este Mes"
             value={formatRD(totalPagadoMes, 0)}
-            sub="Salario diario × días de licencia"
+            sub="Vía nómina — no incluye subsidios TSS"
             icon={Banknote}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+          />
+          <StatCard
+            label="Subsidio SISALRIL/ARL Este Mes"
+            value={formatRD(totalSubsidioMes, 0)}
+            sub="Informativo — lo paga/reembolsa TSS"
+            icon={ShieldCheck}
+            iconColor="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
           />
           <StatCard
             label="Total Histórico Pagado"
@@ -116,9 +154,21 @@ export default function LicenciasPage() {
 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Tipo de Licencia</label>
-                <select value={tipo} onChange={e => setTipo(e.target.value as TipoLicencia)} className={INPUT_CLASS}>
+                <select
+                  value={tipo}
+                  onChange={e => {
+                    const nuevoTipo = e.target.value as TipoLicencia
+                    setTipo(nuevoTipo)
+                    if (esLicenciaConSubsidio(nuevoTipo)) {
+                      setDiasSubsidio(String(DIAS_SUGERIDOS_SUBSIDIO[nuevoTipo as 'enfermedad_comun' | 'accidente_laboral' | 'maternidad']))
+                    }
+                  }}
+                  className={INPUT_CLASS}
+                >
                   {TIPOS.map(t => (
-                    <option key={t} value={t}>{labelLicencia(t)} ({DIAS_LICENCIA[t]} días)</option>
+                    <option key={t} value={t}>
+                      {labelLicencia(t)} {esLicenciaConSubsidio(t) ? '(días variables)' : `(${DIAS_LICENCIA[t as 'matrimonial' | 'fallecimiento' | 'alumbramiento']} días)`}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -133,6 +183,34 @@ export default function LicenciasPage() {
                 />
               </div>
 
+              {conSubsidio && (
+                <div className="flex flex-col gap-1.5 w-28">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Días</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={diasSubsidio}
+                    onChange={e => setDiasSubsidio(e.target.value)}
+                    placeholder="Días"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+              )}
+
+              {tipo === 'enfermedad_comun' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Modalidad</label>
+                  <select
+                    value={modalidadEnfermedad}
+                    onChange={e => setModalidadEnfermedad(e.target.value as 'ambulatoria' | 'hospitalaria')}
+                    className={INPUT_CLASS}
+                  >
+                    <option value="ambulatoria">Ambulatoria (60%)</option>
+                    <option value="hospitalaria">Hospitalaria (40%)</option>
+                  </select>
+                </div>
+              )}
+
               <button
                 onClick={handleRegistrar}
                 disabled={!empleadoId}
@@ -142,6 +220,31 @@ export default function LicenciasPage() {
                 Registrar
               </button>
             </div>
+
+            {tipo !== 'maternidad' && conSubsidio && (
+              <label className="mt-3 flex w-fit items-center gap-2.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3.5 py-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={disfruteSueldo}
+                  onChange={e => setDisfruteSueldo(e.target.checked)}
+                  className="h-4 w-4 rounded accent-[#1B2980]"
+                />
+                <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                  La empresa además paga el sueldo completo como beneficio adicional (disfrute de sueldo)
+                </span>
+              </label>
+            )}
+
+            {conSubsidio && (
+              <p className="mt-3 flex items-start gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>
+                  {tipo === 'maternidad'
+                    ? 'La empresa paga el 100% del salario durante la licencia y luego solicita el reembolso a SISALRIL.'
+                    : 'El subsidio lo paga SISALRIL/ARL directamente al empleado — Cielo Cloud no lo desembolsa, solo lo registra como referencia para tu contabilidad.'}
+                </span>
+              </p>
+            )}
           </div>
         </div>
 
@@ -159,14 +262,15 @@ export default function LicenciasPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Inicio</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fin</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Días</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Monto Pagado</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Pagado Empresa</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Subsidio TSS</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
                 {licenciasOrdenadas.length === 0 && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="flex flex-col items-center justify-center py-16 text-center">
                         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
                           <FileClock className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" />
@@ -206,6 +310,9 @@ export default function LicenciasPage() {
                       <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
                         {formatRD(l.montoPagado, 2)}
                       </td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-sky-600 dark:text-sky-400">
+                        {l.montoSubsidioEstimado != null ? formatRD(l.montoSubsidioEstimado, 2) : '—'}
+                      </td>
                       <td className="px-4 py-3.5 text-right">
                         <button
                           onClick={() => handleEliminar(l.id)}
@@ -228,6 +335,9 @@ export default function LicenciasPage() {
                     <td className="px-4 py-3 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
                       {formatRD(totalPagadoGeneral, 2)}
                     </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-600 dark:text-sky-400">
+                      {formatRD(licenciasOrdenadas.reduce((s, l) => s + (l.montoSubsidioEstimado ?? 0), 0), 2)}
+                    </td>
                     <td />
                   </tr>
                 </tfoot>
@@ -240,13 +350,22 @@ export default function LicenciasPage() {
         <div className="rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-4">
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0" />
-            <div className="text-xs text-[#151f66] dark:text-indigo-200 space-y-1">
+            <div className="text-xs text-[#151f66] dark:text-indigo-200 space-y-1.5">
               <p className="font-semibold">Licencias Remuneradas — Código de Trabajo, República Dominicana</p>
               <p>
                 <strong>Matrimonial:</strong> 5 días calendario pagados al 100%. <strong>Fallecimiento de familiar</strong>
                 {' '}(abuelos, padres, hijos, cónyuge): 3 días calendario pagados al 100%. <strong>Alumbramiento</strong> de
                 esposa o compañera registrada: 2 días calendario pagados al 100%. El monto se calcula sobre el salario
-                diario (salario base ÷ 23.83 días).
+                diario (salario base ÷ 23.83, o ÷26 en régimen de trabajo intermitente).
+              </p>
+              <p>
+                <strong>Licencias con subsidio (Seguridad Social):</strong> <strong>Enfermedad común</strong> — SISALRIL
+                subsidia 60% (atención ambulatoria) o 40% (hospitalización) del salario, pagado directo al empleado.
+                {' '}<strong>Accidente laboral o enfermedad profesional</strong> — el Seguro de Riesgos Laborales (SRL)
+                subsidia 75%. <strong>Maternidad</strong> — 12 semanas (Art. 236 Código de Trabajo: 6 antes y 6 después
+                del parto), la empresa paga el 100% y luego solicita reembolso a SISALRIL. En los tres casos, Cielo Cloud
+                solo registra el subsidio como referencia — no lo desembolsa — salvo que actives "disfrute de sueldo"
+                como beneficio adicional pagado por la empresa vía nómina.
               </p>
             </div>
           </div>

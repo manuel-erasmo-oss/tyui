@@ -276,8 +276,17 @@ export interface Prestamo {
   documentoNombre?: string     // original filename
 }
 
-// ─── Licencias remuneradas (pagadas al 100%) ─────────────────────────────────
-export type TipoLicencia = 'matrimonial' | 'fallecimiento' | 'alumbramiento'
+// ─── Licencias remuneradas ────────────────────────────────────────────────────
+// matrimonial/fallecimiento/alumbramiento: días fijos, pagados 100% por el
+// empleador vía nómina normal.
+// enfermedad_comun/accidente_laboral/maternidad: "licencias con subsidio" —
+// días variables (según certificado médico), con un % de subsidio que paga o
+// reembolsa SISALRIL/ARL (no Cielo Cloud, que no desembolsa ese subsidio,
+// solo lo registra como referencia) más un "disfrute de sueldo" opcional que
+// el empleador puede otorgar como beneficio adicional pagado vía nómina.
+export type TipoLicencia =
+  | 'matrimonial' | 'fallecimiento' | 'alumbramiento'
+  | 'enfermedad_comun' | 'accidente_laboral' | 'maternidad'
 
 export interface Licencia {
   id: string
@@ -285,9 +294,14 @@ export interface Licencia {
   tipo: TipoLicencia
   fechaInicio: string   // ISO date string
   fechaFin: string      // ISO date string, calculada automáticamente
-  dias: number          // días calendario según tipo
-  montoPagado: number   // salarioDiario × dias
+  dias: number          // días calendario — fijo según tipo, o capturado del certificado médico
+  montoPagado: number   // lo que efectivamente paga el EMPLEADOR vía nómina por este concepto
   notas?: string
+
+  // Solo licencias con subsidio (enfermedad_comun / accidente_laboral / maternidad):
+  modalidadEnfermedad?: 'ambulatoria' | 'hospitalaria'  // solo enfermedad_comun — define 60%/40%
+  disfruteSueldo?: boolean        // beneficio adicional: el empleador decide pagar el sueldo completo
+  montoSubsidioEstimado?: number  // estimado de lo que SISALRIL/ARL paga o reembolsa — informativo
 }
 
 // ─── Liquidación de empleados (desvinculación) ───────────────────────────────

@@ -411,11 +411,24 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
 - **Retención consolidada de ISR con otro(s) empleador(es)** — campo de "ingreso
   de otro empleador" que solo afecta la base imponible de ISR mensual, sin
   tocar TSS ni el neto pagado.
-- **Licencias con subsidio** (módulo genérico, no tres features separadas) —
-  enfermedad común (60% SISALRIL ambulatoria / 40% hospitalaria), accidente
-  laboral/enfermedad profesional (75% ARL), maternidad (100%, empleador paga y
-  SISALRIL reembolsa). Mismo patrón: % de cobertura configurable + disfrute de
-  sueldo opcional.
+- ~~Licencias con subsidio~~ — **implementado.** Extendido `TipoLicencia` (antes
+  solo matrimonial/fallecimiento/alumbramiento, días fijos) con 3 tipos nuevos
+  de días variables (según certificado médico/legal): `enfermedad_comun`
+  (SISALRIL 60% ambulatoria / 40% hospitalaria — nuevo campo
+  `modalidadEnfermedad`), `accidente_laboral` (SRL 75%), `maternidad` (12
+  semanas / 84 días sugeridos, Art. 236 — el empleador paga 100% y luego
+  reembolsa SISALRIL). Campo nuevo `Licencia.montoSubsidioEstimado` —
+  puramente informativo, Cielo Cloud no lo desembolsa (lo paga/reembolsa TSS
+  directo); `Licencia.montoPagado` es lo que el empleador realmente paga vía
+  nómina, que es RD$0 para enfermedad_comun/accidente_laboral salvo que se
+  active `disfruteSueldo` (beneficio adicional voluntario, no aplica a
+  maternidad porque ahí el empleador siempre paga 100%). UI en
+  `licencias/page.tsx`: campos condicionales según tipo (días, modalidad,
+  checkbox de disfrute de sueldo), columna "Subsidio TSS" en la tabla, y una
+  4ta stat card separando "Pagado por la Empresa" de "Subsidio SISALRIL/ARL".
+  De paso se corrigió `licencias-context.tsx`, que tenía el divisor de
+  salario diario hardcodeado en 23.83 sin considerar `regimenIntermitente`
+  (ahora usa `getDivisorSalarioDiario()`, igual que nómina/vacaciones/liquidación).
 - ~~Suspensión de contrato~~ — **implementado.** Campos nuevos en `Empleado`:
   `suspendido?: boolean`, `fechaSuspension?: string`, `motivoSuspension?: string`
   — distinto de `activo: false` (liquidación definitiva): el empleado sigue
