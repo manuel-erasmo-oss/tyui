@@ -452,10 +452,40 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   monto es 0). Verificado en navegador: empleado con salarioBase RD$55,000,
   2% aporte propio y 3% aporte empresa → descuento exacto RD$1,100 y aporte
   empresa exacto RD$1,650, con ISR retenido sin cambios frente al caso base.
-- **Saldo a favor del empleado (ISR retenido de más)** — obligación legal real:
-  registro de monto/año/motivo que se reintegra automáticamente descontándose
-  del ISR calculado en períodos subsecuentes hasta agotarse, o contra
-  prestaciones al desvincularse.
+- ~~Saldo a favor del empleado (ISR retenido de más)~~ — **implementado.**
+  Nuevo tipo `SaldoISRFavor` (monto/saldoPendiente/motivo/año/estado/
+  aplicaciones[]) + `saldo-isr-context.tsx` (registrar/aplicar/liquidar/
+  consultas, mismo patrón de `prestamos-context.tsx`). Helper puro
+  `aplicarSaldoISRFavor(resultado, saldoDisponible)` en `dominican-labor.ts`:
+  descuenta `min(isrMensual, saldoDisponible)` del ISR calculado (nunca de
+  AFP/SFS) y lo suma de vuelta al `salarioNeto` — no decide cuánto crédito
+  hay disponible ni persiste consumo, eso lo maneja el context. En
+  `nomina/page.tsx`, helper `conSaldoISR(empleado, resultado, periodo)`:
+  si el empleado YA fue procesado en ese período usa el monto histórico
+  realmente aplicado (`getMontoAplicadoEnPeriodo`, fijo para siempre,
+  independiente de cómo cambie el saldoPendiente después); si aún no se
+  procesa, muestra vista previa en vivo contra el saldo disponible ahora
+  mismo (FIFO — el crédito más antiguo se consume primero). El monto se
+  "congela" recién al procesar (`congelarCreditoISR`, llamado desde
+  `handleProcesarEmpleado`/`confirmarAuditoria`/`handleProcesarSeleccionados`
+  antes de `marcarProcesados`), consistente con cómo ya funciona la
+  auditoría pre-cierre. UI: sección "Saldo ISR a Favor" en el tab
+  Información del drawer de `empleados/page.tsx` (mini-formulario inline
+  para registrar, mismo patrón visual que Suspensión de Contrato); nota
+  "Incluye crédito ISR a favor aplicado" en Descuentos del modal
+  `DetalleNomina` y el PDF de comprobante; Historial Nómina reconstruye el
+  ISR correcto de cada período pasado sin recalcular contra el saldo actual.
+  En `liquidacion/page.tsx`: cualquier saldo pendiente se reembolsa completo
+  (se SUMA al total, no se descuenta) y se marca `'liquidado'` al finalizar
+  — nuevo campo `RegistroLiquidacion.saldoISRReembolsado`, card y línea
+  dedicada en el grid de conceptos, el bloque de Total a Pagar y el CSV.
+  Verificado en navegador: Carlos Rodríguez Méndez (ISR base RD$9,283) con
+  RD$5,000 registrados → ISR retenido baja a RD$4,283 exacto, neto sube
+  RD$5,000; al procesar el período el saldo pasa a "Sin saldo pendiente"
+  (agotado) y el Historial de meses previos (ya cerrados antes del
+  registro) no se ve afectado. Ana Martínez Santos con RD$2,000 pendientes
+  → aparece en la liquidación como reembolso (+RD$2,000), total exacto
+  RD$26,750.40 (vacaciones + regalía + saldo ISR).
 - **Retención consolidada de ISR con otro(s) empleador(es)** — campo de "ingreso
   de otro empleador" que solo afecta la base imponible de ISR mensual, sin
   tocar TSS ni el neto pagado.
