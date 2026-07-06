@@ -701,8 +701,18 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   Señal principal: el empleado no aparece en `empleadosProcesados` del
   período; señal secundaria: `totalBruto` calculado en RD$0. Nota siempre
   visible en la UI explicando la metodología exacta.
-- Reporte "Salario vs. Inasistencias" — detalle de días descontados por
-  motivo (licencia/permiso/ausencia) con impacto exacto en el salario.
+- ~~Reporte "Salario vs. Inasistencias"~~ — **implementado como "Salario vs.
+  Licencias"** (vía agente en worktree aislado), con alcance real ajustado y
+  documentado honestamente: el sistema NO captura "días trabajados" ni
+  ausencias/permisos informales por período (`calcularNomina` acepta
+  `diasTrabajados` pero ninguna pantalla de nómina lo alimenta con un valor
+  distinto al default de mes completo) — así que "detalle de días
+  descontados por ausencia" no es implementable sobre datos reales. El
+  reporte se basa en el único dato real y verificable de ausencias con
+  impacto salarial: el módulo de Licencias (matrimonial, fallecimiento,
+  alumbramiento, enfermedad común, accidente laboral, maternidad), mostrando
+  por licencia el `montoPagado` real y el `montoSubsidioEstimado` TSS/ARL.
+  Nota siempre visible en la UI aclarando esta limitación de alcance.
 - ~~Ampliar procesamiento individual existente con filtros de selección
   múltiple~~ — **implementado.** Botón "Filtros" en la tabla de detalle de
   `nomina/page.tsx` (solo visible en período `en_proceso`) despliega un panel
