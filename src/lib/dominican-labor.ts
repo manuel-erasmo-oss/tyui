@@ -2,7 +2,9 @@ import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, Empleado, Empre
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
-const TRAMOS_ISR = [
+// Exportado (además de usarse internamente) para que el Checklist de Inicio de
+// Año muestre los tramos vigentes sin duplicar los valores en otro archivo.
+export const TRAMOS_ISR = [
   { hasta: 416_220.00, tasa: 0.00, fijo: 0 },
   { hasta: 624_329.00, tasa: 0.15, fijo: 0 },
   { hasta: 867_123.00, tasa: 0.20, fijo: 31_216.00 },

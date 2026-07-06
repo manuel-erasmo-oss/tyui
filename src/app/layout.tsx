@@ -10,6 +10,7 @@ import { LicenciasProvider } from '@/lib/licencias-context'
 import { BandasSalarialesProvider } from '@/lib/bandas-salariales-context'
 import { LiquidacionesProvider } from '@/lib/liquidaciones-context'
 import { SaldoISRProvider } from '@/lib/saldo-isr-context'
+import { ChecklistAnualProvider } from '@/lib/inicio-de-ano-context'
 import { AuthProvider } from '@/lib/auth-context'
 import { RouteGuard } from '@/components/auth/RouteGuard'
 
@@ -48,7 +49,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                       <LiquidacionesProvider>
                         <SaldoISRProvider>
                           <PeriodosProvider>
-                            <RouteGuard>{children}</RouteGuard>
+                            <ChecklistAnualProvider>
+                              <RouteGuard>{children}</RouteGuard>
+                            </ChecklistAnualProvider>
                           </PeriodosProvider>
                         </SaldoISRProvider>
                       </LiquidacionesProvider>
