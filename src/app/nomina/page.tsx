@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Mail,
   Send,
+  Filter,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -524,6 +525,14 @@ export default function NominaPage() {
   // Selección para procesamiento masivo
   const [selectedEmps, setSelectedEmps] = useState<Set<string>>(new Set())
 
+  // Filtros de selección múltiple — solo cubre datos que realmente existen hoy
+  // en el modelo (departamento, fecha de ingreso); no hay campo de "fecha de
+  // último cambio salarial" en el sistema, así que no se ofrece ese filtro.
+  const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  const [filtroDepto, setFiltroDepto] = useState('todos')
+  const [filtroIngresoDesde, setFiltroIngresoDesde] = useState('')
+  const [filtroIngresoHasta, setFiltroIngresoHasta] = useState('')
+
   // Auditoría pre-cierre: ids en espera de confirmación antes de completar
   // el período (pasar de en_proceso a procesada)
   const [auditoriaIds, setAuditoriaIds] = useState<string[] | null>(null)
@@ -778,6 +787,17 @@ export default function NominaPage() {
     } else {
       setSelectedEmps(new Set(noProcessados))
     }
+  }
+
+  function seleccionarPorCriterio() {
+    const noProcessados = empleadosEnNomina.filter(e => !(periodoActual?.empleadosProcesados ?? []).includes(e.id))
+    const coincidencias = noProcessados.filter(e => {
+      if (filtroDepto !== 'todos' && e.departamento !== filtroDepto) return false
+      if (filtroIngresoDesde && e.fechaIngreso < filtroIngresoDesde) return false
+      if (filtroIngresoHasta && e.fechaIngreso > filtroIngresoHasta) return false
+      return true
+    })
+    setSelectedEmps(new Set(coincidencias.map(e => e.id)))
   }
 
   const anios = [nuevoAnio - 1, nuevoAnio, nuevoAnio + 1]
@@ -1322,15 +1342,64 @@ export default function NominaPage() {
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
               Detalle por Empleado — {periodoActualLabel}
             </h2>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-              <Info className="h-3.5 w-3.5" />
-              {esEnProceso
-                ? `${procesados.size}/${empleadosEnNomina.length} empleados procesados`
-                : esProcesada
-                  ? 'Período procesado — solo lectura'
-                  : 'Período cerrado — solo lectura'}
+            <div className="flex items-center gap-3">
+              {esEnProceso && (
+                <button
+                  onClick={() => setMostrarFiltros(v => !v)}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    mostrarFiltros
+                      ? 'border-[#1B2980]/30 bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/50'
+                      : 'border-zinc-200 dark:border-[#252840] text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                  }`}
+                >
+                  <Filter className="h-3.5 w-3.5" />
+                  Filtros
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                <Info className="h-3.5 w-3.5" />
+                {esEnProceso
+                  ? `${procesados.size}/${empleadosEnNomina.length} empleados procesados`
+                  : esProcesada
+                    ? 'Período procesado — solo lectura'
+                    : 'Período cerrado — solo lectura'}
+              </div>
             </div>
           </div>
+          {esEnProceso && mostrarFiltros && (
+            <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3 flex flex-wrap items-end gap-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Departamento</label>
+                <select value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}
+                  className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none">
+                  <option value="todos">Todos</option>
+                  {Array.from(new Set(empleadosEnNomina.map(e => e.departamento))).sort().map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Ingreso Desde</label>
+                <input type="date" value={filtroIngresoDesde} onChange={e => setFiltroIngresoDesde(e.target.value)}
+                  className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Ingreso Hasta</label>
+                <input type="date" value={filtroIngresoHasta} onChange={e => setFiltroIngresoHasta(e.target.value)}
+                  className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none" />
+              </div>
+              <button
+                onClick={seleccionarPorCriterio}
+                className="rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-3 py-1.5 text-xs font-semibold text-white transition-colors"
+              >
+                Seleccionar Coincidencias
+              </button>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 basis-full">
+                Reemplaza la selección actual por los empleados pendientes que coincidan con estos criterios.
+                No existe un campo de "fecha de último cambio salarial" en el sistema hoy, por eso no se ofrece ese filtro.
+              </p>
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
