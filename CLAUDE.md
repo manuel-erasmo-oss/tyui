@@ -412,11 +412,24 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
 - **Empresa asume ISR/TSS del empleado** (grossing-up) — flag configurable por
   empleado/ajuste: % de AFP/SFS/ISR que la empresa absorbe en vez de descontarlo
   al empleado, reflejado como línea separada en Costo Empleador.
-- **Aporte voluntario a AFP** — % adicional configurable (solo empleado, o
-  empleado+empresa) sobre el 2.87%/7.10% obligatorio. Dato legal citable: una
-  carta de la DGII (2022) confirma que el aporte voluntario **no reduce la base
-  imponible del ISR** — se calcula después de la retención de ISR, a diferencia
-  del aporte obligatorio.
+- ~~Aporte voluntario a AFP~~ — **implementado.** Dos campos nuevos en
+  `Empleado`: `aporteVoluntarioAFPEmpleadoPct`/`aporteVoluntarioAFPEmpresaPct`
+  (% adicional sobre el salario cotizable AFP, independiente del 2.87%/7.10%
+  obligatorio). En `calcularNomina`/`calcularNominaQuincenal`
+  (`dominican-labor.ts`): `baseGravableMensual`/`baseGravableAnual` (base del
+  ISR) se calculan ANTES y sin depender del aporte voluntario — el aporte del
+  empleado se descuenta de `totalDescuentos`/`salarioNeto` DESPUÉS del ISR, tal
+  como confirma la carta DGII (2022) citada en este mismo backlog ("el aporte
+  voluntario no reduce la base imponible del ISR"). El aporte de la empresa se
+  suma a `totalAportesEmpleador`/`totalCostoEmpleador` como beneficio aparte,
+  sin tocar el neto del empleado. Nueva sección "Aporte Voluntario a AFP" en
+  `EmpleadoFormFields.tsx` (con nota legal inline) y campos correspondientes en
+  `empleado-form.ts`. `nomina/page.tsx`: línea "Aporte Voluntario AFP" en
+  Descuentos y "Aporte Voluntario AFP (empresa)" en Aportes Empresa del modal
+  `DetalleNomina` y del PDF de comprobante, ambas condicionales (ocultas si el
+  monto es 0). Verificado en navegador: empleado con salarioBase RD$55,000,
+  2% aporte propio y 3% aporte empresa → descuento exacto RD$1,100 y aporte
+  empresa exacto RD$1,650, con ISR retenido sin cambios frente al caso base.
 - **Saldo a favor del empleado (ISR retenido de más)** — obligación legal real:
   registro de monto/año/motivo que se reintegra automáticamente descontándose
   del ISR calculado en períodos subsecuentes hasta agotarse, o contra
