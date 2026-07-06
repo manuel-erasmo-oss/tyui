@@ -268,6 +268,8 @@ function descargarComprobantePDF(
     { label: 'SFS Empleador (7.09%)', v: nomina.sfsEmpleador },
     { label: 'SRL Empleador',         v: nomina.srlEmpleador },
     { label: 'Infotep (1.00%)',       v: nomina.infotepEmpleador },
+    ...(nomina.aporteVoluntarioAFPEmpresa > 0 ? [{ label: 'Aporte Voluntario AFP', v: nomina.aporteVoluntarioAFPEmpresa }] : []),
+    ...(nomina.grossingUpEmpresa           > 0 ? [{ label: 'Grossing-up (ISR/TSS empleado)', v: nomina.grossingUpEmpresa }] : []),
   ]
   aportes.forEach(a => {
     doc.setFont('helvetica', 'normal')
@@ -392,6 +394,11 @@ function DetalleNomina({
           <div className="rounded-xl bg-white dark:bg-[#141722] border border-zinc-200 dark:border-[#252840] p-4">
             <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-semibold tracking-wide">Salario Neto a Pagar</p>
             <p className="mt-1 text-2xl font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">{formatRD(nomina.salarioNeto, 0)}</p>
+            {nomina.grossingUpEmpresa > 0 && (
+              <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
+                Incluye reembolso de grossing-up: +{formatRD(nomina.grossingUpEmpresa)}
+              </p>
+            )}
           </div>
           <div className="rounded-xl bg-white dark:bg-[#141722] border border-zinc-200 dark:border-[#252840] p-4 space-y-1.5">
             <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-semibold tracking-wide mb-2">Aportes Empresa (TSS)</p>
@@ -415,6 +422,12 @@ function DetalleNomina({
               <div className="flex justify-between text-xs">
                 <span className="text-zinc-600 dark:text-zinc-400">Aporte Voluntario AFP (empresa)</span>
                 <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.aporteVoluntarioAFPEmpresa)}</span>
+              </div>
+            )}
+            {nomina.grossingUpEmpresa > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-zinc-600 dark:text-zinc-400">Grossing-up (ISR/TSS empleado)</span>
+                <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.grossingUpEmpresa)}</span>
               </div>
             )}
             <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-1.5 flex justify-between text-xs font-bold">

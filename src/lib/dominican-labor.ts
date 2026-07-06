@@ -176,10 +176,16 @@ export function calcularNomina(
   const aporteVoluntarioAFPEmpleado = baseCotizableAFP * ((empleado.aporteVoluntarioAFPEmpleadoPct ?? 0) / 100)
   const aporteVoluntarioAFPEmpresa  = baseCotizableAFP * ((empleado.aporteVoluntarioAFPEmpresaPct ?? 0) / 100)
 
+  // ─── Grossing-up: empresa asume % de AFP+SFS+ISR retenidos al empleado ────
+  // La retención/remesa a TSS/DGII no cambia (afpEmpleado/sfsEmpleado/isrMensual
+  // se calculan y reportan igual) — la empresa simplemente reembolsa ese monto
+  // al empleado vía el neto, absorbiéndolo como costo adicional propio.
+  const grossingUpEmpresa = (afpEmpleado + sfsEmpleado + isrMensual) * ((empleado.grossingUpPct ?? 0) / 100)
+
   // ─── Totales ───────────────────────────────────────────────────────────────
   const totalDescuentos       = afpEmpleado + sfsEmpleado + isrMensual + sfsDependientes + otrosDescuentos + aporteVoluntarioAFPEmpleado
-  const salarioNeto           = totalBruto - totalDescuentos
-  const totalAportesEmpleador = afpEmpleador + sfsEmpleador + srlEmpleador + infotepEmpleador + aporteVoluntarioAFPEmpresa
+  const salarioNeto           = totalBruto - totalDescuentos + grossingUpEmpresa
+  const totalAportesEmpleador = afpEmpleador + sfsEmpleador + srlEmpleador + infotepEmpleador + aporteVoluntarioAFPEmpresa + grossingUpEmpresa
   const totalCostoEmpleador   = totalBruto + totalAportesEmpleador
 
   // ─── Provisiones ──────────────────────────────────────────────────────────
@@ -216,6 +222,7 @@ export function calcularNomina(
     otrosDescuentos,
     aporteVoluntarioAFPEmpleado,
     totalDescuentos,
+    grossingUpEmpresa,
     salarioNeto,
     afpEmpleador,
     sfsEmpleador,
@@ -248,6 +255,10 @@ export function calcularNominaQuincenal(
   const otros    = m.otrosDescuentos / 2
   const aporteVolEmp = m.aporteVoluntarioAFPEmpleado / 2
   const totalDesc = afpEmp + sfsEmp + isr + sfsDep + otros + aporteVolEmp
+  // Recalculado por quincena (no simplemente m.grossingUpEmpresa/2): el ISR
+  // solo se retiene en la 2da quincena, así que el reembolso de grossing-up
+  // sobre ISR también debe aplicarse ahí, no repartido 50/50 como AFP/SFS.
+  const grossingUp = (afpEmp + sfsEmp + isr) * ((empleado.grossingUpPct ?? 0) / 100)
 
   return {
     ...m,
@@ -267,14 +278,15 @@ export function calcularNominaQuincenal(
     otrosDescuentos:          otros,
     aporteVoluntarioAFPEmpleado: aporteVolEmp,
     totalDescuentos:          totalDesc,
-    salarioNeto:              bruto - totalDesc,
+    grossingUpEmpresa:        grossingUp,
+    salarioNeto:              bruto - totalDesc + grossingUp,
     afpEmpleador:             m.afpEmpleador / 2,
     sfsEmpleador:             m.sfsEmpleador / 2,
     srlEmpleador:             m.srlEmpleador / 2,
     infotepEmpleador:         m.infotepEmpleador / 2,
     aporteVoluntarioAFPEmpresa: m.aporteVoluntarioAFPEmpresa / 2,
-    totalAportesEmpleador:    m.totalAportesEmpleador / 2,
-    totalCostoEmpleador:      bruto + m.totalAportesEmpleador / 2,
+    totalAportesEmpleador:    m.afpEmpleador / 2 + m.sfsEmpleador / 2 + m.srlEmpleador / 2 + m.infotepEmpleador / 2 + m.aporteVoluntarioAFPEmpresa / 2 + grossingUp,
+    totalCostoEmpleador:      bruto + (m.afpEmpleador / 2 + m.sfsEmpleador / 2 + m.srlEmpleador / 2 + m.infotepEmpleador / 2 + m.aporteVoluntarioAFPEmpresa / 2 + grossingUp),
     regaliaPascual:           m.regaliaPascual / 2,
     vacacionesMensualesDias:  m.vacacionesMensualesDias / 2,
     vacacionesMensualesValor: m.vacacionesMensualesValor / 2,

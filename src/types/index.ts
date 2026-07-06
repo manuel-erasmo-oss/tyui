@@ -118,6 +118,13 @@ export interface Empleado {
   // adicional para el empleador, no afecta el neto del empleado.
   aporteVoluntarioAFPEmpleadoPct?: number  // % sobre el salario cotizable AFP
   aporteVoluntarioAFPEmpresaPct?: number   // % adicional que la empresa aporta como beneficio
+
+  // ─── Grossing-up: empresa asume ISR/TSS del empleado ───────────────────────
+  // % de (AFP+SFS+ISR retenidos al empleado) que la empresa absorbe como
+  // beneficio adicional. La retención/remesa a TSS/DGII no cambia (se sigue
+  // calculando y reportando igual); lo que cambia es que la empresa reembolsa
+  // ese monto al empleado vía el neto, financiándolo como costo adicional.
+  grossingUpPct?: number
 }
 
 export interface ResultadoNomina {
@@ -144,6 +151,9 @@ export interface ResultadoNomina {
   otrosDescuentos: number
   aporteVoluntarioAFPEmpleado: number  // no reduce la base imponible del ISR (post-retención)
   totalDescuentos: number
+
+  // Grossing-up (empresa asume ISR/TSS) — se reembolsa al empleado vía el neto
+  grossingUpEmpresa: number
 
   // Neto
   salarioNeto: number

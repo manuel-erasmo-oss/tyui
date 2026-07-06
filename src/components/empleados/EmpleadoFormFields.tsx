@@ -644,6 +644,27 @@ export function EmpleadoFormFields({
         </p>
       </section>
 
+      {/* Grossing-up — empresa asume AFP/SFS/ISR del empleado */}
+      <section>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+          Empresa Asume ISR/TSS del Empleado
+        </h3>
+        <p className="mb-3 text-[11px] text-zinc-400 dark:text-zinc-500">
+          Opcional — % de AFP+SFS+ISR retenidos al empleado que la empresa absorbe como beneficio.
+        </p>
+        <div>
+          <label className={labelCls}>% Absorbido por la Empresa (Grossing-up)</label>
+          <input type="number" min="0" max="100" step="0.01" className={inputCls}
+            value={form.grossingUpPct}
+            onChange={e => set('grossingUpPct', e.target.value)}
+            placeholder="0" />
+        </div>
+        <p className="mt-1.5 text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+          La retención y remesa a TSS/DGII no cambia — la empresa reembolsa ese monto al
+          empleado vía el neto, absorbiéndolo como costo adicional propio.
+        </p>
+      </section>
+
       {/* Saldos Iniciales — empleados con historial previo a Cielo Cloud */}
       <section>
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">

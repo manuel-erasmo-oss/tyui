@@ -204,6 +204,7 @@ export interface EmpForm {
   salarioHistoricoReferencia: string
   aporteVoluntarioAFPEmpleadoPct: string
   aporteVoluntarioAFPEmpresaPct: string
+  grossingUpPct: string
 }
 
 export const EMPTY_EMP_FORM: EmpForm = {
@@ -218,6 +219,7 @@ export const EMPTY_EMP_FORM: EmpForm = {
   regimenIntermitente: false,
   saldoVacacionesInicial: '', regaliaPagadaEsteAnio: '', salarioHistoricoReferencia: '',
   aporteVoluntarioAFPEmpleadoPct: '', aporteVoluntarioAFPEmpresaPct: '',
+  grossingUpPct: '',
 }
 
 export function toEmpForm(e: Empleado): EmpForm {
@@ -243,6 +245,7 @@ export function toEmpForm(e: Empleado): EmpForm {
     salarioHistoricoReferencia: e.salarioHistoricoReferencia != null ? String(e.salarioHistoricoReferencia) : '',
     aporteVoluntarioAFPEmpleadoPct: e.aporteVoluntarioAFPEmpleadoPct != null ? String(e.aporteVoluntarioAFPEmpleadoPct) : '',
     aporteVoluntarioAFPEmpresaPct: e.aporteVoluntarioAFPEmpresaPct != null ? String(e.aporteVoluntarioAFPEmpresaPct) : '',
+    grossingUpPct: e.grossingUpPct != null ? String(e.grossingUpPct) : '',
   }
 }
 
@@ -279,6 +282,7 @@ export function formToEmpleado(form: EmpForm, sectorEmpresa?: SectorEmpresa): Om
     salarioHistoricoReferencia: form.salarioHistoricoReferencia ? Number(form.salarioHistoricoReferencia) : undefined,
     aporteVoluntarioAFPEmpleadoPct: form.aporteVoluntarioAFPEmpleadoPct ? Number(form.aporteVoluntarioAFPEmpleadoPct) : undefined,
     aporteVoluntarioAFPEmpresaPct:  form.aporteVoluntarioAFPEmpresaPct  ? Number(form.aporteVoluntarioAFPEmpresaPct)  : undefined,
+    grossingUpPct:                  form.grossingUpPct                 ? Number(form.grossingUpPct)                  : undefined,
   }
 }
 
