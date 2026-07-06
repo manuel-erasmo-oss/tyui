@@ -223,6 +223,7 @@ export function calcularNomina(
     aporteVoluntarioAFPEmpleado,
     totalDescuentos,
     grossingUpEmpresa,
+    saldoISRAplicado: 0,  // se aplica después, vía aplicarSaldoISRFavor() — no depende del empleado/empresa
     salarioNeto,
     afpEmpleador,
     sfsEmpleador,
@@ -290,6 +291,30 @@ export function calcularNominaQuincenal(
     regaliaPascual:           m.regaliaPascual / 2,
     vacacionesMensualesDias:  m.vacacionesMensualesDias / 2,
     vacacionesMensualesValor: m.vacacionesMensualesValor / 2,
+  }
+}
+
+// ─── Saldo a favor del empleado (ISR retenido de más) ─────────────────────────
+// Aplica el crédito disponible contra el ISR YA calculado del período (nunca
+// contra AFP/SFS, que son aportes obligatorios independientes de esto).
+// Función pura: no decide cuánto crédito hay disponible ni persiste consumo —
+// eso lo maneja saldo-isr-context.tsx. Aquí solo se resta lo que corresponda
+// del isrMensual, ajustando totalDescuentos/salarioNeto en consecuencia.
+export function aplicarSaldoISRFavor(
+  resultado: ResultadoNomina,
+  saldoDisponible: number,
+): { resultado: ResultadoNomina; montoAplicado: number } {
+  const montoAplicado = Math.min(resultado.isrMensual, Math.max(0, saldoDisponible))
+  if (montoAplicado <= 0) return { resultado, montoAplicado: 0 }
+  return {
+    resultado: {
+      ...resultado,
+      isrMensual:       resultado.isrMensual - montoAplicado,
+      totalDescuentos:  resultado.totalDescuentos - montoAplicado,
+      saldoISRAplicado: montoAplicado,
+      salarioNeto:      resultado.salarioNeto + montoAplicado,
+    },
+    montoAplicado,
   }
 }
 

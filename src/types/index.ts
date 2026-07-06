@@ -155,6 +155,10 @@ export interface ResultadoNomina {
   // Grossing-up (empresa asume ISR/TSS) — se reembolsa al empleado vía el neto
   grossingUpEmpresa: number
 
+  // Saldo a favor del empleado (ISR retenido de más en años anteriores) —
+  // se aplica automáticamente contra el ISR calculado de este período
+  saldoISRAplicado: number
+
   // Neto
   salarioNeto: number
 
@@ -300,6 +304,35 @@ export interface Prestamo {
   // mismo motor de otorgar/registrarPago/liquidación, solo cambia la etiqueta
   // y el formulario simplificado con el que se otorga.
   tipo?: 'prestamo' | 'avance'
+}
+
+// ─── Saldo a favor del empleado (ISR retenido de más) ────────────────────────
+// Obligación legal real: cuando se retuvo más ISR del que correspondía (ej.
+// error de cálculo, cambio de tramo a mitad de año, deducciones no
+// consideradas a tiempo), el empleado tiene un crédito que se reintegra
+// automáticamente descontándose del ISR calculado en períodos subsecuentes
+// (nunca reduce AFP/SFS, solo ISR) hasta agotarse, o se liquida contra
+// prestaciones si el empleado se desvincula antes de agotarlo.
+export interface AplicacionSaldoISR {
+  id: string
+  periodoId: string
+  periodoLabel: string  // denormalizado para mostrar sin tener que resolver el período
+  monto: number
+  fecha: string          // ISO timestamp de cuándo se aplicó
+}
+
+export type EstadoSaldoISR = 'activo' | 'agotado' | 'liquidado'
+
+export interface SaldoISRFavor {
+  id: string
+  empleadoId: string
+  monto: number             // monto original registrado
+  saldoPendiente: number    // lo que queda por aplicar
+  motivo: string
+  anio: number              // año fiscal al que corresponde el saldo
+  fechaRegistro: string     // ISO date
+  estado: EstadoSaldoISR    // 'agotado' = se aplicó completo vía nómina; 'liquidado' = se pagó el resto en una liquidación
+  aplicaciones: AplicacionSaldoISR[]
 }
 
 // ─── Licencias remuneradas ────────────────────────────────────────────────────
