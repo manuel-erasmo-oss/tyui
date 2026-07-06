@@ -4,16 +4,27 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Plus, ArrowLeft, X, DollarSign, Users, CheckCircle2, ChevronRight,
   AlertTriangle, CreditCard, Calendar, TrendingDown, FileText,
-  Upload, Download, Search,
+  Upload, Download, Search, Wallet,
 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
-import { usePrestamos, calcularCuotaBase } from '@/lib/prestamos-context'
+import {
+  usePrestamos, calcularCuotaBase, calcularCuotaSimple,
+  calcularAmortizacionFrancesa, calcularAmortizacionSimple,
+} from '@/lib/prestamos-context'
+import type { FilaAmortizacion } from '@/lib/prestamos-context'
 import { formatRD, fullName, formatDate } from '@/lib/utils'
 import type { Prestamo, EstadoPrestamo } from '@/types'
+
+// Umbral de referencia para la alerta de Capacidad de Pago — ver PanelCapacidadPago.
+const UMBRAL_CAPACIDAD_PAGO = 30
+
+// Límite de cuotas para renderizar la tabla de amortización en vivo en el
+// formulario (protección de rendimiento ante números de cuotas atípicos).
+const MAX_CUOTAS_PREVIEW = 360
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 const inputCls =
@@ -91,6 +102,156 @@ function ProgressBar({ pct }: { pct: number }) {
   )
 }
 
+// ── Tabla de Amortización (compartida entre el formulario y el detalle) ───────
+interface FilaAmortizacionUI extends FilaAmortizacion {
+  pagado?: boolean
+  esProxima?: boolean
+}
+
+function TablaAmortizacion({
+  rows, titulo, subtitulo, mostrarEstado = false,
+}: {
+  rows: FilaAmortizacionUI[]
+  titulo: string
+  subtitulo: string
+  mostrarEstado?: boolean
+}) {
+  const headers = mostrarEstado
+    ? ['#', 'Cuota', 'Capital', 'Interés', 'Saldo Remanente', 'Estado']
+    : ['#', 'Cuota', 'Capital', 'Interés', 'Saldo Remanente']
+
+  return (
+    <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
+      <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{titulo}</h3>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{subtitulo}</p>
+      </div>
+      <div className="overflow-x-auto max-h-96 overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+              {headers.map(h => (
+                <th
+                  key={h}
+                  className="px-4 py-3 text-right first:text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+            {rows.map(row => (
+              <tr
+                key={row.num}
+                className={
+                  row.esProxima
+                    ? 'bg-amber-50 dark:bg-amber-950/20'
+                    : row.pagado
+                      ? 'opacity-50'
+                      : ''
+                }
+              >
+                <td className="px-4 py-2.5 text-xs text-zinc-500 dark:text-zinc-400">{row.num}</td>
+                <td className="px-4 py-2.5 text-right text-sm font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
+                  {formatRD(row.cuota)}
+                </td>
+                <td className="px-4 py-2.5 text-right text-sm tabular-nums text-zinc-700 dark:text-zinc-300">
+                  {formatRD(row.capital)}
+                </td>
+                <td className="px-4 py-2.5 text-right text-sm tabular-nums text-zinc-500 dark:text-zinc-400">
+                  {formatRD(row.interes)}
+                </td>
+                <td className="px-4 py-2.5 text-right text-sm tabular-nums text-zinc-700 dark:text-zinc-300">
+                  {formatRD(row.saldo)}
+                </td>
+                {mostrarEstado && (
+                  <td className="px-4 py-2.5 text-right">
+                    {row.pagado ? (
+                      <Badge variant="success">Pagado</Badge>
+                    ) : row.esProxima ? (
+                      <Badge variant="warning">Próxima</Badge>
+                    ) : (
+                      <Badge variant="neutral">Pendiente</Badge>
+                    )}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Panel de Capacidad de Pago ─────────────────────────────────────────────────
+function PanelCapacidadPago({
+  salarioBase, sumaCuotasActivas, cantidadPrestamosActivos, nuevaCuota,
+}: {
+  salarioBase: number
+  sumaCuotasActivas: number
+  cantidadPrestamosActivos: number
+  nuevaCuota: number
+}) {
+  const totalCuotas = sumaCuotasActivas + nuevaCuota
+  const pct         = salarioBase > 0 ? (totalCuotas / salarioBase) * 100 : 0
+  const excede      = pct > UMBRAL_CAPACIDAD_PAGO
+
+  return (
+    <div
+      className={`rounded-lg border px-4 py-3 space-y-3 ${
+        excede
+          ? 'border-amber-300 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/20'
+          : 'border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e]'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Wallet className={`h-4 w-4 ${excede ? 'text-amber-600 dark:text-amber-400' : 'text-[#1B2980] dark:text-indigo-400'}`} />
+        <p className={`text-xs font-semibold ${excede ? 'text-amber-800 dark:text-amber-300' : 'text-zinc-700 dark:text-zinc-300'}`}>
+          Capacidad de Pago
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Salario Base</p>
+          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(salarioBase, 0)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+            Cuotas Activas {cantidadPrestamosActivos > 0 ? `(${cantidadPrestamosActivos})` : ''}
+          </p>
+          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(sumaCuotasActivas, 0)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Nueva Cuota</p>
+          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(nuevaCuota, 0)}</p>
+        </div>
+        <div>
+          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">% del Salario Base</p>
+          <p className={`text-sm font-semibold tabular-nums ${excede ? 'text-amber-700 dark:text-amber-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
+            {pct.toFixed(1)}%
+          </p>
+        </div>
+      </div>
+      {excede ? (
+        <div className="flex items-start gap-2 border-t border-amber-200 dark:border-amber-800/40 pt-2.5">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+          <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
+            Las cuotas totales (activas + esta nueva) superan el {UMBRAL_CAPACIDAD_PAGO}% del salario base. Este
+            umbral es una regla de negocio interna de Cielo Cloud, no un límite establecido por el Código de
+            Trabajo — el otorgamiento no se bloquea, la decisión final queda a tu criterio.
+          </p>
+        </div>
+      ) : (
+        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+          Referencia informativa (umbral interno de Cielo Cloud, {UMBRAL_CAPACIDAD_PAGO}% del salario base) — no bloquea el otorgamiento.
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ── Confirm dialog ────────────────────────────────────────────────────────────
 function ConfirmDialog({
   message, onConfirm, onCancel,
@@ -144,44 +305,19 @@ function VistaDetalle({
   const [pagoMonto, setPagoMonto] = useState('')
   const [pagoDesc, setPagoDesc]   = useState('')
 
-  // Build amortization table
-  const cuotaBase   = prestamo.cuotaBase
-  const tasaMensual = prestamo.tasaInteres / 100
-  const rows: {
-    num: number
-    cuota: number
-    capital: number
-    interes: number
-    saldo: number
-    pagado: boolean
-    esProxima: boolean
-  }[] = []
+  // Build amortization table — usa la función pura según el modo de interés
+  // del préstamo (undefined → 'francés', retrocompatible con registros previos)
+  const modoInteres = prestamo.modoInteres ?? 'francés'
+  const numPagos     = prestamo.pagos.length
+  const baseRows     = modoInteres === 'simple'
+    ? calcularAmortizacionSimple(prestamo.monto, prestamo.tasaInteres, prestamo.cuotas)
+    : calcularAmortizacionFrancesa(prestamo.monto, prestamo.tasaInteres, prestamo.cuotas)
 
-  let saldo = prestamo.monto
-  const numPagos = prestamo.pagos.length
-
-  for (let i = 1; i <= prestamo.cuotas; i++) {
-    let interes: number
-    let capital: number
-    let cuota: number
-
-    if (prestamo.tasaInteres === 0) {
-      interes = 0
-      capital = cuotaBase
-      cuota   = cuotaBase
-    } else {
-      interes = saldo * tasaMensual
-      capital = cuotaBase - interes
-      cuota   = cuotaBase
-    }
-
-    const saldoRestante = Math.max(0, saldo - capital)
-    const pagado        = i <= numPagos
-    const esProxima     = !pagado && prestamo.estado === 'activo' && rows.filter(r => !r.pagado).length === 0
-
-    rows.push({ num: i, cuota, capital, interes, saldo: saldoRestante, pagado, esProxima })
-    saldo = saldoRestante
-  }
+  const rows: FilaAmortizacionUI[] = baseRows.map(row => ({
+    ...row,
+    pagado: row.num <= numPagos,
+    esProxima: row.num === numPagos + 1 && prestamo.estado === 'activo',
+  }))
 
   function handlePago(e: React.FormEvent) {
     e.preventDefault()
@@ -265,6 +401,7 @@ function VistaDetalle({
               { label: 'Saldo Pendiente',  value: formatRD(prestamo.saldoPendiente), highlight: prestamo.estado === 'activo' },
               { label: 'Cuota',            value: formatRD(prestamo.cuotaBase) },
               { label: 'Tasa Interés',     value: prestamo.tasaInteres === 0 ? 'Sin interés' : `${prestamo.tasaInteres}% mensual` },
+              { label: 'Modo de Interés',  value: (prestamo.modoInteres ?? 'francés') === 'simple' ? 'Interés simple' : 'Francés' },
               { label: 'Cuotas',           value: `${prestamo.cuotas} cuotas` },
               { label: 'Frecuencia',       value: frecuenciaLabel(prestamo.frecuencia) },
               { label: 'Pagos Realizados', value: `${prestamo.pagos.length} de ${prestamo.cuotas}` },
@@ -289,65 +426,12 @@ function VistaDetalle({
         </div>
 
         {/* Amortization table */}
-        <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
-          <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Tabla de Amortización</h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Proyección de cuotas · {prestamo.cuotas} períodos</p>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
-                  {['#', 'Cuota', 'Capital', 'Interés', 'Saldo Remanente', 'Estado'].map(h => (
-                    <th
-                      key={h}
-                      className="px-4 py-3 text-right first:text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
-                {rows.map(row => (
-                  <tr
-                    key={row.num}
-                    className={
-                      row.esProxima
-                        ? 'bg-amber-50 dark:bg-amber-950/20'
-                        : row.pagado
-                          ? 'opacity-50'
-                          : ''
-                    }
-                  >
-                    <td className="px-4 py-2.5 text-xs text-zinc-500 dark:text-zinc-400">{row.num}</td>
-                    <td className="px-4 py-2.5 text-right text-sm font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
-                      {formatRD(row.cuota)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-sm tabular-nums text-zinc-700 dark:text-zinc-300">
-                      {formatRD(row.capital)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-sm tabular-nums text-zinc-500 dark:text-zinc-400">
-                      {formatRD(row.interes)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right text-sm tabular-nums text-zinc-700 dark:text-zinc-300">
-                      {formatRD(row.saldo)}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      {row.pagado ? (
-                        <Badge variant="success">Pagado</Badge>
-                      ) : row.esProxima ? (
-                        <Badge variant="warning">Próxima</Badge>
-                      ) : (
-                        <Badge variant="neutral">Pendiente</Badge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <TablaAmortizacion
+          rows={rows}
+          titulo="Tabla de Amortización"
+          subtitulo={`Proyección de cuotas · ${prestamo.cuotas} períodos · modo ${modoInteres === 'simple' ? 'interés simple' : 'francés'}`}
+          mostrarEstado
+        />
 
         {/* Payment history */}
         {prestamo.pagos.length > 0 && (
@@ -446,7 +530,7 @@ function VistaDetalle({
 export default function PrestamosPage() {
   const { empleadosActivos, empleados } = useEmpleados()
   const { empresa }                     = useEmpresa()
-  const { prestamos, otorgar, registrarPago, cancelar } = usePrestamos()
+  const { prestamos, otorgar, registrarPago, cancelar, getPrestamosActivos } = usePrestamos()
 
   // ── View state ──────────────────────────────────────────────────────────────
   const [vista, setVista]                               = useState<'lista' | 'detalle'>('lista')
@@ -464,6 +548,7 @@ export default function PrestamosPage() {
   const [fEmpleado,    setFEmpleado]    = useState('')
   const [fMonto,       setFMonto]       = useState('')
   const [fTasa,        setFTasa]        = useState('0')
+  const [fModoInteres, setFModoInteres] = useState<'francés' | 'simple'>('francés')
   const [fCuotas,      setFCuotas]      = useState('12')
   const [fFrecuencia,  setFFrecuencia]  = useState<'mensual' | 'quincenal'>('mensual')
   const [fFechaInicio, setFFechaInicio] = useState('')
@@ -537,11 +622,28 @@ export default function PrestamosPage() {
       })
     : prestamosBase
 
-  // Live cuota preview
+  // Live cuota preview — respeta el modo de interés elegido (solo aplica a
+  // préstamos; los avances siempre son tasa 0%, donde ambas fórmulas coinciden)
   const previewMonto  = parseFloat(fMonto) || 0
   const previewTasa   = parseFloat(fTasa)  || 0
   const previewCuotas = parseInt(fCuotas)  || 0
-  const previewCuota  = calcularCuotaBase(previewMonto, previewTasa, previewCuotas)
+  const previewCuota  = modoNuevo === 'prestamo' && fModoInteres === 'simple'
+    ? calcularCuotaSimple(previewMonto, previewTasa, previewCuotas)
+    : calcularCuotaBase(previewMonto, previewTasa, previewCuotas)
+
+  // Tabla de amortización completa en vivo (limitada a un número razonable de
+  // cuotas para no degradar el rendimiento del formulario)
+  const previewRows: FilaAmortizacion[] =
+    modoNuevo === 'prestamo' && previewMonto > 0 && previewCuotas > 0 && previewCuotas <= MAX_CUOTAS_PREVIEW
+      ? (fModoInteres === 'simple'
+          ? calcularAmortizacionSimple(previewMonto, previewTasa, previewCuotas)
+          : calcularAmortizacionFrancesa(previewMonto, previewTasa, previewCuotas))
+      : []
+
+  // ── Capacidad de Pago — préstamos activos del empleado seleccionado ─────────
+  const empleadoSeleccionado   = fEmpleado ? getEmpleado(fEmpleado) : undefined
+  const prestamosActivosEmp    = fEmpleado ? getPrestamosActivos(fEmpleado) : []
+  const sumaCuotasActivasEmp   = prestamosActivosEmp.reduce((s, p) => s + p.cuotaBase, 0)
 
   // ── File upload handler ──────────────────────────────────────────────────────
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -584,11 +686,13 @@ export default function PrestamosPage() {
       documentoSolicitud:  esAvance ? undefined : (fDocBase64 ?? undefined),
       documentoNombre:     esAvance ? undefined : (fDocNombre ?? undefined),
       tipo:                modoNuevo,
+      modoInteres:         esAvance ? undefined : fModoInteres,
     })
     // Reset form
     setFEmpleado('')
     setFMonto('')
     setFTasa('0')
+    setFModoInteres('francés')
     setFCuotas('12')
     setFNotas('')
     setFFechaInicio('')
@@ -672,14 +776,14 @@ export default function PrestamosPage() {
           ) : (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => { setModoNuevo('avance'); setFTasa('0'); setFCuotas('1'); setShowForm(true) }}
+                onClick={() => { setModoNuevo('avance'); setFTasa('0'); setFModoInteres('francés'); setFCuotas('1'); setShowForm(true) }}
                 className="flex items-center gap-2 rounded-lg border border-[#1B2980] dark:border-indigo-500 px-3.5 py-2 text-sm font-semibold text-[#1B2980] dark:text-indigo-400 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Nuevo Avance
               </button>
               <button
-                onClick={() => { setModoNuevo('prestamo'); setFTasa('0'); setFCuotas('12'); setShowForm(true) }}
+                onClick={() => { setModoNuevo('prestamo'); setFTasa('0'); setFModoInteres('francés'); setFCuotas('12'); setShowForm(true) }}
                 className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
               >
                 <Plus className="h-4 w-4" />
@@ -734,8 +838,8 @@ export default function PrestamosPage() {
             </div>
             <form onSubmit={handleOtorgar} className="p-5 space-y-5">
 
-              {/* Row 1: employee, amount, tasa */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Row 1: employee, amount, tasa, modo de interés */}
+              <div className={`grid grid-cols-1 gap-4 sm:grid-cols-2 ${modoNuevo === 'prestamo' ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
                 <div className="sm:col-span-2 lg:col-span-1">
                   <label className={labelCls}>Empleado <span className="text-rose-500">*</span></label>
                   <select
@@ -778,6 +882,32 @@ export default function PrestamosPage() {
                     {parseFloat(fTasa) === 0 && (
                       <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">Sin interés (beneficio laboral)</p>
                     )}
+                  </div>
+                )}
+                {modoNuevo === 'prestamo' && (
+                  <div>
+                    <label className={labelCls}>Modo de Interés</label>
+                    <div className="flex gap-2">
+                      {(['francés', 'simple'] as const).map(m => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setFModoInteres(m)}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize transition-colors ${
+                            fModoInteres === m
+                              ? 'border-[#1B2980] bg-[#1B2980] text-white dark:border-indigo-600 dark:bg-indigo-600'
+                              : 'border-zinc-200 dark:border-[#252840] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                          }`}
+                        >
+                          {m === 'francés' ? 'Francés' : 'Simple'}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                      {fModoInteres === 'francés'
+                        ? 'Interés sobre saldo decreciente (amortización estándar)'
+                        : 'Interés fijo sobre el capital original, repartido en partes iguales'}
+                    </p>
                   </div>
                 )}
               </div>
@@ -941,6 +1071,30 @@ export default function PrestamosPage() {
                     )}
                   </div>
                 </div>
+              )}
+
+              {/* Capacidad de Pago — solo préstamos, con empleado seleccionado */}
+              {modoNuevo === 'prestamo' && fEmpleado && empleadoSeleccionado && (
+                <PanelCapacidadPago
+                  salarioBase={empleadoSeleccionado.salarioBase}
+                  sumaCuotasActivas={sumaCuotasActivasEmp}
+                  cantidadPrestamosActivos={prestamosActivosEmp.length}
+                  nuevaCuota={previewCuota}
+                />
+              )}
+
+              {/* Tabla de amortización completa en vivo */}
+              {modoNuevo === 'prestamo' && previewRows.length > 0 && (
+                <TablaAmortizacion
+                  rows={previewRows}
+                  titulo="Tabla de Amortización (vista previa)"
+                  subtitulo={`${previewCuotas} cuotas proyectadas · modo ${fModoInteres === 'simple' ? 'interés simple' : 'francés'}`}
+                />
+              )}
+              {modoNuevo === 'prestamo' && previewMonto > 0 && previewCuotas > MAX_CUOTAS_PREVIEW && (
+                <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">
+                  Ingresa un número de cuotas de {MAX_CUOTAS_PREVIEW} o menos para ver la proyección completa de amortización.
+                </p>
               )}
 
               <div className="flex items-center justify-end gap-3">

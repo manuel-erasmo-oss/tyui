@@ -310,6 +310,13 @@ export interface Prestamo {
   // mismo motor de otorgar/registrarPago/liquidación, solo cambia la etiqueta
   // y el formulario simplificado con el que se otorga.
   tipo?: 'prestamo' | 'avance'
+  // Modo de cálculo de interés (default 'francés' para registros previos a este
+  // campo, 100% retrocompatible): 'francés' = cuota fija con interés sobre saldo
+  // decreciente (amortización estándar, calcularCuotaBase/calcularAmortizacionFrancesa).
+  // 'simple' = interés fijo calculado una sola vez sobre el capital original,
+  // repartido en partes iguales en cada cuota junto con el capital — ver
+  // calcularAmortizacionSimple() en prestamos-context.tsx.
+  modoInteres?: 'francés' | 'simple'
 }
 
 // ─── Saldo a favor del empleado (ISR retenido de más) ────────────────────────
