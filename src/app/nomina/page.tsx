@@ -489,7 +489,7 @@ export default function NominaPage() {
   const { empleados, empleadosEnNomina } = useEmpleados()
   const { periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir, marcarPagada } = usePeriodos()
   const { empresa } = useEmpresa()
-  const { getPrestamosActivos, registrarPago } = usePrestamos()
+  const { getPrestamosActivos, registrarPago, registrarOmisionCuota } = usePrestamos()
   const { liquidaciones } = useLiquidaciones()
   const { getSaldosActivos, getMontoAplicadoEnPeriodo, aplicar: aplicarSaldoISR } = useSaldoISR()
   const { getEstado: getEstadoAnual } = useChecklistAnual()
@@ -730,6 +730,34 @@ export default function NominaPage() {
     }
   }
 
+  // Reglas de manejo de insuficiencia de fondos: si el neto de un empleado no
+  // alcanza para cubrir la(s) cuota(s) de préstamo/avance de este período, se
+  // omiten esas cuotas en vez de dejar un neto negativo — es el único
+  // descuento que se puede diferir sin implicar un problema de cumplimiento
+  // legal (a diferencia de AFP/SFS/ISR, que son obligatorios). Si el neto
+  // sigue negativo incluso sin las cuotas de préstamo, no se toca nada más
+  // aquí — ese caso ya lo señala la auditoría pre-cierre existente. Devuelve
+  // el nombre del empleado si se omitió alguna cuota, o null si no aplicó.
+  function manejarInsuficienciaFondos(empId: string): string | null {
+    if (!periodoActual) return null
+    const emp = empleadosEnNomina.find(e => e.id === empId)
+    if (!emp) return null
+    const ajustes = getAjustes(empId)
+    const resultado = conSaldoISR(emp, calcularConAjustes(emp, ajustes, periodoActual.tipo, periodoActual.quincena ?? 1), periodoActual)
+    if (resultado.salarioNeto >= 0) return null
+
+    const ajustesPrestamo = ajustes.filter(a => a.concepto === 'prestamo' && a.prestamoId)
+    if (ajustesPrestamo.length === 0) return null
+
+    const ajustesSinPrestamo = ajustes.filter(a => !(a.concepto === 'prestamo' && a.prestamoId))
+    const resultadoSinPrestamo = conSaldoISR(emp, calcularConAjustes(emp, ajustesSinPrestamo, periodoActual.tipo, periodoActual.quincena ?? 1), periodoActual)
+    if (resultadoSinPrestamo.salarioNeto < 0) return null // no es solo el préstamo — se deja para la auditoría
+
+    actualizarAjustes(periodoActual.id, empId, ajustesSinPrestamo)
+    ajustesPrestamo.forEach(a => { if (a.prestamoId) registrarOmisionCuota(a.prestamoId) })
+    return fullName(emp)
+  }
+
   function handleProcesarEmpleado(empId: string) {
     if (!periodoActual) return
     const procesadosActuales = new Set(periodoActual.empleadosProcesados ?? [])
@@ -738,17 +766,22 @@ export default function NominaPage() {
       setAuditoriaIds([empId])
       return
     }
+    const omitido = manejarInsuficienciaFondos(empId)
     congelarCreditoISR(empId)
     marcarProcesados(periodoActual.id, [empId])
     setSelectedEmps(prev => { const s = new Set(prev); s.delete(empId); return s })
+    setToast(omitido ? `Cuota de préstamo omitida para ${omitido} — el neto no alcanzaba` : 'Empleado procesado')
   }
 
   function confirmarAuditoria() {
     if (!periodoActual || !auditoriaIds) return
+    const omitidos = auditoriaIds.map(manejarInsuficienciaFondos).filter((n): n is string => n !== null)
     auditoriaIds.forEach(congelarCreditoISR)
     marcarProcesados(periodoActual.id, auditoriaIds)
     setSelectedEmps(new Set())
-    setToast('Todos los empleados procesados')
+    setToast(omitidos.length > 0
+      ? `Todos los empleados procesados — cuota de préstamo omitida para: ${omitidos.join(', ')}`
+      : 'Todos los empleados procesados')
     setAuditoriaIds(null)
   }
 
@@ -766,10 +799,15 @@ export default function NominaPage() {
       setAuditoriaIds(ids)
       return
     }
+    const omitidos = ids.map(manejarInsuficienciaFondos).filter((n): n is string => n !== null)
     ids.forEach(congelarCreditoISR)
     marcarProcesados(periodoActual.id, ids)
     setSelectedEmps(new Set())
-    setToast(selectedEmps.size > 0 ? `${ids.length} empleado(s) procesado(s)` : 'Todos los empleados procesados')
+    if (omitidos.length > 0) {
+      setToast(`Cuota de préstamo omitida para: ${omitidos.join(', ')}`)
+    } else {
+      setToast(selectedEmps.size > 0 ? `${ids.length} empleado(s) procesado(s)` : 'Todos los empleados procesados')
+    }
   }
 
   function toggleSeleccionEmp(empId: string) {

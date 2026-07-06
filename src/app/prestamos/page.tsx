@@ -375,11 +375,19 @@ function VistaDetalle({
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{nombreEmpleado}</h2>
                 <Badge variant={estadoBadgeVariant(prestamo.estado)}>{estadoLabel(prestamo.estado)}</Badge>
                 {prestamo.tipo === 'avance' && <Badge variant="info">Avance</Badge>}
+                {prestamo.requiereGestionCobro && (
+                  <Badge variant="danger" className="uppercase tracking-wide">
+                    Requiere gestión de cobro
+                  </Badge>
+                )}
               </div>
               <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                 Otorgado el {formatDate(prestamo.fechaOtorgamiento)}
                 {prestamo.fechaFin && ` · Vence ${formatDate(prestamo.fechaFin)}`}
                 {prestamo.notas && ` · ${prestamo.notas}`}
+                {(prestamo.cuotasOmitidasConsecutivas ?? 0) > 0 && (
+                  <> · {prestamo.cuotasOmitidasConsecutivas} cuota(s) omitida(s) por insuficiencia de fondos</>
+                )}
               </p>
             </div>
             {/* Document download */}
@@ -1222,6 +1230,7 @@ export default function PrestamosPage() {
                                 <span className="flex items-center gap-1.5 font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">
                                   {empName}
                                   {prestamo.tipo === 'avance' && <Badge variant="info">Avance</Badge>}
+                                  {prestamo.requiereGestionCobro && <Badge variant="danger">Requiere cobro</Badge>}
                                 </span>
                                 {emp && <span className="block text-[11px] text-zinc-400 dark:text-zinc-500">{emp.departamento}</span>}
                               </div>

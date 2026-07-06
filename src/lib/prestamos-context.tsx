@@ -97,6 +97,7 @@ interface PrestamosCtx {
   registrarPago: (prestamoId: string, pago: Omit<CuotaPago, 'id'>) => void
   cancelar: (prestamoId: string) => void
   getPrestamosActivos: (empleadoId: string) => Prestamo[]
+  registrarOmisionCuota: (prestamoId: string) => void
 }
 
 const Ctx = createContext<PrestamosCtx>({
@@ -105,6 +106,7 @@ const Ctx = createContext<PrestamosCtx>({
   registrarPago: () => {},
   cancelar: () => {},
   getPrestamosActivos: () => [],
+  registrarOmisionCuota: () => {},
 })
 
 export function PrestamosProvider({ children }: { children: ReactNode }) {
@@ -152,7 +154,26 @@ export function PrestamosProvider({ children }: { children: ReactNode }) {
           saldoPendiente: nuevoSaldo,
           estado: nuevoSaldo <= 0 ? 'pagado' as const : p.estado,
           pagos: [...p.pagos, cuota],
+          // Volvió a cobrarse con normalidad — se resetea la racha de omisiones.
+          cuotasOmitidasConsecutivas: 0,
+          requiereGestionCobro: false,
         }
+      })
+      persist(next)
+      return next
+    })
+  }
+
+  // Se llama cuando el neto de un empleado no alcanzó para cubrir la cuota de
+  // este período y esa cuota se omitió (ver manejarInsuficienciaFondos en
+  // nomina/page.tsx) — no descuenta nada del saldo, solo lleva la cuenta de
+  // omisiones consecutivas para señalar cuándo requiere seguimiento manual.
+  function registrarOmisionCuota(prestamoId: string) {
+    setPrestamos(prev => {
+      const next = prev.map(p => {
+        if (p.id !== prestamoId) return p
+        const omisiones = (p.cuotasOmitidasConsecutivas ?? 0) + 1
+        return { ...p, cuotasOmitidasConsecutivas: omisiones, requiereGestionCobro: omisiones >= 3 }
       })
       persist(next)
       return next
@@ -172,7 +193,7 @@ export function PrestamosProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ prestamos, otorgar, registrarPago, cancelar, getPrestamosActivos }}>
+    <Ctx.Provider value={{ prestamos, otorgar, registrarPago, cancelar, getPrestamosActivos, registrarOmisionCuota }}>
       {children}
     </Ctx.Provider>
   )

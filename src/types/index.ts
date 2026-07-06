@@ -317,6 +317,18 @@ export interface Prestamo {
   // repartido en partes iguales en cada cuota junto con el capital — ver
   // calcularAmortizacionSimple() en prestamos-context.tsx.
   modoInteres?: 'francés' | 'simple'
+  // ─── Insuficiencia de fondos (Media Prioridad, CLAUDE.md) ──────────────────
+  // Cuando el salario neto de un empleado no alcanza para cubrir su cuota de
+  // préstamo/avance de este período, la cuota se OMITE ese período en vez de
+  // dejar un neto negativo (ver `manejarInsuficienciaFondos` en nomina/page.tsx).
+  // `cuotasOmitidasConsecutivas` cuenta esas omisiones seguidas; se resetea a 0
+  // en cuanto vuelve a cobrarse una cuota con normalidad (`registrarPago`).
+  // Al llegar a 3 seguidas, `requiereGestionCobro` se marca — es solo una
+  // bandera informativa para que RRHH le dé seguimiento manual (esta app no
+  // tiene un módulo de cuentas por cobrar separado); no bloquea ni cancela
+  // el préstamo automáticamente.
+  cuotasOmitidasConsecutivas?: number
+  requiereGestionCobro?: boolean
 }
 
 // ─── Saldo a favor del empleado (ISR retenido de más) ────────────────────────
