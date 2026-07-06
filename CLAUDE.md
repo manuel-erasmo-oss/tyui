@@ -561,10 +561,26 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   el dato capturado. Verificado en navegador: empleado con 5 años 7 meses de
   antigüedad, notificación 35 días antes de la fecha de salida → "Cumplió" con
   el detalle exacto "+7 días de más" (mínimo exigido 28).
-- **Conciliación mensual TSS y DGII** — reporte que reproduce los mismos
-  conceptos/totales de la factura oficial de TSS (AFP/SFS/SRL/Infotep separados
-  empleado/empleador) y un equivalente de retención mensual de ISR acumulada,
-  para que contabilidad concilie sin recalcular a mano.
+- ~~Conciliación mensual TSS y DGII~~ — **implementado** (vía agente en
+  worktree aislado), extendiendo el reporte "Cumplimiento Fiscal" ya
+  existente en Reportería (ese reporte ya calculaba los números correctos
+  pero solo como tabla por empleado — le faltaba el formato de "factura"
+  para conciliar). Nueva sección "Planilla de Conciliación TSS": desglose
+  por concepto (AFP, SFS, SFS Dependientes Adicionales si aplica, SRL
+  agrupado por cada categoría de riesgo realmente presente en la plantilla,
+  Infotep) con tasa empleado/empleador y monto, más el total general "TSS a
+  Remitir (CNSS)". Bloque separado "Retención ISR — DGII" con el total
+  agregado de ISR retenido del período (equivalente para IR-13). La tabla de
+  detalle por empleado que ya existía se conserva debajo como respaldo de
+  auditoría. Exportación PDF (2 páginas: conciliación + detalle) y Excel (2
+  hojas) actualizadas en consecuencia. Verificado en navegador con datos
+  demo: Total TSS RD$60,395 = TSS Empleado RD$16,075 + TSS Empleador
+  RD$44,320 (cuadra exacto), ISR Retenido RD$15,452.86.
+
+**Con esto quedan implementados los 18 gaps confirmados de la sección
+🔴 Alta prioridad** (backlog originado del análisis de la guía pública de
+SPN Software, ver sección de arriba). Quedan pendientes las secciones
+🟡 Media prioridad y 🔵 Baja prioridad, no solicitadas todavía.
 - ~~Validador de archivo de transferencia bancaria (ACH)~~ — **implementado**
   (vía agente en worktree aislado) como capa de validación sobre el reporte
   "Planilla Bancaria / ACH" ya existente en Reportería (esa planilla es una
