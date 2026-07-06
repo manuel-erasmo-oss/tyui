@@ -639,9 +639,13 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
 - Reglas de manejo de insuficiencia de fondos: qué hacer si el neto no alcanza
   para cubrir una cuota/descuento programado (omitir cuota, acumular como
   cuenta por cobrar tras 3 fallos consecutivos).
-- Generalizar el prorrateo de descuentos fijos entre períodos (ya lo hacemos
-  para Dep. SFS quincenal) como helper reutilizable para futuros descuentos
-  recurrentes.
+- ~~Generalizar el prorrateo de descuentos fijos entre períodos~~ — **implementado.**
+  Nuevo helper puro `prorratearMontoFijo(montoMensual, tipo)` en
+  `dominican-labor.ts` (divide entre 2 y redondea a centavos solo si
+  `tipo === 'quincenal'`, retorna el monto tal cual en mensual) que reemplaza
+  la lógica que antes vivía inline únicamente para Dep. SFS en
+  `nomina/page.tsx` — mismo comportamiento exacto, ahora reutilizable para
+  cualquier futuro descuento/aporte fijo recurrente.
 - Modo de interés simple en Préstamos (alterno a la amortización francesa
   actual) + tabla de amortización visual con desglose capital/interés.
 - Panel de "Capacidad de Pago" (últimas 4 nóminas + proyección de 4 siguientes
