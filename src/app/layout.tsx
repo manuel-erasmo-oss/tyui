@@ -7,6 +7,7 @@ import { PeriodosProvider } from '@/lib/periodos-context'
 import { EmpresaProvider } from '@/lib/empresa-context'
 import { PrestamosProvider } from '@/lib/prestamos-context'
 import { LicenciasProvider } from '@/lib/licencias-context'
+import { BandasSalarialesProvider } from '@/lib/bandas-salariales-context'
 import { LiquidacionesProvider } from '@/lib/liquidaciones-context'
 import { SaldoISRProvider } from '@/lib/saldo-isr-context'
 import { AuthProvider } from '@/lib/auth-context'
@@ -41,17 +42,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <AuthProvider>
             <EmpresaProvider>
               <EmpleadosProvider>
-                <PrestamosProvider>
-                  <LicenciasProvider>
-                    <LiquidacionesProvider>
-                      <SaldoISRProvider>
-                        <PeriodosProvider>
-                          <RouteGuard>{children}</RouteGuard>
-                        </PeriodosProvider>
-                      </SaldoISRProvider>
-                    </LiquidacionesProvider>
-                  </LicenciasProvider>
-                </PrestamosProvider>
+                <BandasSalarialesProvider>
+                  <PrestamosProvider>
+                    <LicenciasProvider>
+                      <LiquidacionesProvider>
+                        <SaldoISRProvider>
+                          <PeriodosProvider>
+                            <RouteGuard>{children}</RouteGuard>
+                          </PeriodosProvider>
+                        </SaldoISRProvider>
+                      </LiquidacionesProvider>
+                    </LicenciasProvider>
+                  </PrestamosProvider>
+                </BandasSalarialesProvider>
               </EmpleadosProvider>
             </EmpresaProvider>
           </AuthProvider>

@@ -369,6 +369,20 @@ export interface Licencia {
   montoSubsidioEstimado?: number  // estimado de lo que SISALRIL/ARL paga o reembolsa — informativo
 }
 
+// ─── Bandas/niveles salariales ────────────────────────────────────────────────
+// Tabla de niveles (mín/medio/máx) por posición, para detectar empleados fuera
+// de banda (por debajo del mínimo o por encima del máximo) y visualizar la
+// distribución salarial. `posicion` se matchea contra `Empleado.cargo`
+// case-insensitive y sin espacios al inicio/final (ver `normalizarPosicion`
+// en bandas-salariales-context.tsx).
+export interface BandaSalarial {
+  id: string
+  posicion: string
+  salarioMinimo: number
+  salarioMedio: number
+  salarioMaximo: number
+}
+
 // ─── Liquidación de empleados (desvinculación) ───────────────────────────────
 export type MotivoLiquidacion =
   | 'renuncia'

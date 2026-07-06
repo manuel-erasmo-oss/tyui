@@ -18,6 +18,7 @@ import {
   HandCoins,
   Percent,
   FileClock,
+  BarChart2,
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: '/bonificacion',    icon: Percent,         label: 'Bonificación Utilidades' },
   { href: '/liquidacion',     icon: UserMinus,       label: 'Liquidación' },
   { href: '/aumentos',        icon: TrendingUp,      label: 'Aumentos Salariales' },
+  { href: '/bandas-salariales', icon: BarChart2,     label: 'Bandas Salariales' },
   { href: '/reportes',        icon: FileBarChart2,   label: 'Reportería' },
 ]
 
