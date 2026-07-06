@@ -409,9 +409,31 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   tabla de nómina sigue mostrando la categoría genérica "Préstamo" para
   ambos, consistente con cómo ya funcionan todos los demás chips de
   concepto — la distinción real vive en el módulo de Préstamos).
-- **Empresa asume ISR/TSS del empleado** (grossing-up) — flag configurable por
-  empleado/ajuste: % de AFP/SFS/ISR que la empresa absorbe en vez de descontarlo
-  al empleado, reflejado como línea separada en Costo Empleador.
+- ~~Empresa asume ISR/TSS del empleado~~ (grossing-up) — **implementado.**
+  Nuevo campo `Empleado.grossingUpPct` (% de AFP+SFS+ISR retenidos al
+  empleado que la empresa absorbe como beneficio). Diseño clave en
+  `calcularNomina`/`calcularNominaQuincenal` (`dominican-labor.ts`): la
+  retención/remesa real a TSS/DGII **no cambia** — `afpEmpleado`,
+  `sfsEmpleado`, `isrMensual` se calculan y reportan exactamente igual que
+  sin este flag (cumplimiento intacto). Lo que cambia es que
+  `grossingUpEmpresa = (afpEmpleado + sfsEmpleado + isrMensual) * pct/100` se
+  SUMA al `salarioNeto` (el empleado recibe ese monto de vuelta, como si la
+  empresa se lo reembolsara) y también se suma a `totalAportesEmpleador`/
+  `totalCostoEmpleador` (la empresa lo financia como costo adicional). En la
+  variante quincenal, el reembolso se recalcula por quincena en vez de
+  repartir 50/50 el monto mensual completo — el ISR real solo se retiene en
+  la 2ª quincena (regla ya existente del motor), así que el grossing-up sobre
+  ISR también aplica únicamente ahí. Nueva sección "Empresa Asume ISR/TSS del
+  Empleado" en `EmpleadoFormFields.tsx`, campo en `empleado-form.ts`. En
+  `nomina/page.tsx`: nota "Incluye reembolso de grossing-up" bajo el Salario
+  Neto y línea "Grossing-up (ISR/TSS empleado)" en Aportes Empresa del modal
+  `DetalleNomina` y del PDF (de paso se corrigió una omisión de la feature
+  anterior: el Aporte Voluntario AFP de la empresa tampoco aparecía
+  desglosado en la lista de aportes del PDF, ya corregido). Verificado en
+  navegador: empleado con salarioBase RD$88,000, préstamo activo y 50%
+  grossing-up → reembolso exacto RD$7,241.77 (= 50% de AFP+SFS+ISR
+  combinados), neto sube de RD$66,850 a RD$74,092, Costo Total Empresa
+  RD$109,576.97, sin ningún cambio en el monto de ISR retenido.
 - ~~Aporte voluntario a AFP~~ — **implementado.** Dos campos nuevos en
   `Empleado`: `aporteVoluntarioAFPEmpleadoPct`/`aporteVoluntarioAFPEmpresaPct`
   (% adicional sobre el salario cotizable AFP, independiente del 2.87%/7.10%
