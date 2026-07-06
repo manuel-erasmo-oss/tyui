@@ -662,8 +662,16 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   integridad pre-cierre (prerequisito también de una futura integración TSS).
 - Reporte "Salario vs. Inasistencias" — detalle de días descontados por
   motivo (licencia/permiso/ausencia) con impacto exacto en el salario.
-- Ampliar procesamiento individual existente con filtros de selección múltiple
-  (departamento, fecha de ingreso, fecha de último cambio salarial).
+- ~~Ampliar procesamiento individual existente con filtros de selección
+  múltiple~~ — **implementado.** Botón "Filtros" en la tabla de detalle de
+  `nomina/page.tsx` (solo visible en período `en_proceso`) despliega un panel
+  con Departamento + rango de Fecha de Ingreso Desde/Hasta; botón "Seleccionar
+  Coincidencias" reemplaza la selección actual por los empleados pendientes
+  que coincidan. No se ofrece filtro de "fecha de último cambio salarial"
+  porque ese campo no existe en el modelo de datos hoy (nota visible en la
+  propia UI explicando esta limitación, en vez de inventar el dato).
+  Verificado en navegador: filtro por departamento "Ventas" selecciona
+  exactamente al empleado de ese departamento pendiente de procesar.
 - Aumento masivo de salario: selección por criterio + importación Excel +
   aprobación de segundo usuario antes de impactar nómina.
 - Reporte de antigüedad de plantilla (agrupado por posición/rango de años).
