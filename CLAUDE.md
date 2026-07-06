@@ -663,9 +663,21 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
 - Aumento masivo de salario: selección por criterio + importación Excel +
   aprobación de segundo usuario antes de impactar nómina.
 - Reporte de antigüedad de plantilla (agrupado por posición/rango de años).
-- Crédito de ISR por gastos educativos (Ley 179-09) — registro manual (no
-  automatizar el 10%/25%, depende de notificación DGII) que se resta del ISR
-  calculado, con su propio renglón en el comprobante.
+- ~~Crédito de ISR por gastos educativos (Ley 179-09)~~ — **implementado.**
+  En vez de duplicar toda la máquina de `SaldoISRFavor` (registrar/aplicar/
+  liquidar/FIFO por fecha), se generalizó ese mismo mecanismo — ya usado para
+  "Saldo a favor del empleado (ISR retenido de más)" — con un nuevo campo
+  opcional `SaldoISRFavor.tipo?: TipoCreditoISR` (`'retencion_excesiva'` por
+  defecto, retrocompatible con registros previos a este campo, o
+  `'gastos_educativos'`). Ambos tipos comparten exactamente la misma
+  aplicación contra el ISR calculado (vía `aplicarSaldoISRFavor`, sin tocar
+  AFP/SFS) — la app **no automatiza el 10%/25%** que permite la ley (depende
+  de una notificación/aprobación de la DGII fuera de su alcance), el usuario
+  registra el monto ya autorizado. UI: selector "Tipo de Crédito" en el
+  formulario de "Saldo ISR a Favor" (tab Información de `empleados/page.tsx`)
+  con nota legal condicional, y badge "Ley 179-09" en las filas de ese tipo.
+  Verificado en navegador: registro de RD$3,000 con motivo "Colegio San Judas
+  - notificación DGII 2026-05" → aparece con el badge correcto.
 
 ### 🔵 Baja prioridad / no aplica ahora
 
