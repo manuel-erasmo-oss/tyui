@@ -486,9 +486,24 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   registro) no se ve afectado. Ana Martínez Santos con RD$2,000 pendientes
   → aparece en la liquidación como reembolso (+RD$2,000), total exacto
   RD$26,750.40 (vacaciones + regalía + saldo ISR).
-- **Retención consolidada de ISR con otro(s) empleador(es)** — campo de "ingreso
-  de otro empleador" que solo afecta la base imponible de ISR mensual, sin
-  tocar TSS ni el neto pagado.
+- ~~Retención consolidada de ISR con otro(s) empleador(es)~~ — **implementado.**
+  Nuevo campo `Empleado.ingresoOtroEmpleadorMensual`. Mecanismo (interpretación
+  propia de Cielo Cloud — la norma no detalla cómo coordinan dos empleadores
+  la retención): en `calcularNomina` (`dominican-labor.ts`) se consolida
+  `baseGravableAnual` (de este empleador) + el ingreso anualizado del otro
+  empleador SOLO para ubicar el tramo ISR correcto
+  (`calcularISRAnual(baseGravableConsolidadaAnual)`), y luego este empleador
+  retiene únicamente la porción proporcional a su propia base
+  (`isrConsolidadoAnual × baseGravableAnual/baseGravableConsolidadaAnual`).
+  Con el campo vacío/0 la fórmula es idéntica a la anterior (proporción = 1),
+  100% retrocompatible. TSS y el resto del cálculo no se tocan. Nueva
+  sección "Ingreso de Otro Empleador" en `EmpleadoFormFields.tsx`; nota de
+  transparencia (`nomina/page.tsx`, modal `DetalleNomina` y PDF) cuando
+  aplica. Verificado en navegador: José Hernández Cruz (salario RD$43,000,
+  ISR propio RD$866.06 sin el campo) con RD$30,000/mes de otro empleador →
+  ISR retenido sube a RD$3,610.45 exacto (empuja la base consolidada al
+  tramo del 20%, pero solo se retiene la fracción ~57.4% que corresponde a
+  esta empresa) — coincide exactamente con el cálculo manual de verificación.
 - ~~Licencias con subsidio~~ — **implementado.** Extendido `TipoLicencia` (antes
   solo matrimonial/fallecimiento/alumbramiento, días fijos) con 3 tipos nuevos
   de días variables (según certificado médico/legal): `enfermedad_comun`
