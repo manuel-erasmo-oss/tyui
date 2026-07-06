@@ -723,8 +723,26 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   propia UI explicando esta limitación, en vez de inventar el dato).
   Verificado en navegador: filtro por departamento "Ventas" selecciona
   exactamente al empleado de ese departamento pendiente de procesar.
-- Aumento masivo de salario: selección por criterio + importación Excel +
-  aprobación de segundo usuario antes de impactar nómina.
+- ~~Aumento masivo de salario~~ — **implementado** (vía agente en worktree
+  aislado). Antes escribía directo en `Empleado.salarioBase` sin ningún
+  rastro; ahora cada solicitud (manual por criterio, o importada por Excel)
+  queda registrada en un nuevo tipo `RegistroAumento` (contexto
+  `aumentos-context.tsx`, mismo patrón que `prestamos-context.tsx`) con
+  estado `pendiente_aprobacion → aprobado → aplicado` (o `rechazado`). Solo
+  `aplicar()`, y únicamente si el registro ya está `aprobado`, sobreescribe
+  el salario real. Selección por criterio: departamento + "ingresados antes
+  de" + "sin aumento aplicado desde" (derivado del propio historial, ya que
+  no existe un campo de "fecha de último cambio salarial" en el modelo).
+  Importador Excel (Cédula, Nuevo Salario o % de Aumento, Motivo) genera
+  solicitudes en el mismo estado pendiente, nunca aplica directo. Aprobación
+  de "segundo usuario": dado que la app no tiene roles reales (mismo caso ya
+  documentado para el desposteo de nómina), la salvaguarda es un campo de
+  texto obligatorio "Aprobado por" que se debe llenar a mano antes de que el
+  registro pueda pasar a aplicado — no hay enforcement real de que sea una
+  persona distinta, pero queda un rastro auditable explícito. Verificado en
+  navegador: solicitud de 5% para María González Pérez → RD$55,000 →
+  RD$57,750, aprobada con "Gerente RRHH", aplicada — `salarioBase` del
+  empleado actualizado exactamente a RD$57,750.
 - ~~Reporte de antigüedad de plantilla~~ — **implementado** (vía agente en
   worktree aislado), extendiendo Reportería con un nuevo `ReportId`
   "Antigüedad de Plantilla". Dos agrupaciones en tabs (Por Rango de Años:
