@@ -25,7 +25,7 @@ import {
 import type { EmpForm } from '@/lib/empleado-form'
 import { EmpleadoAvatar } from '@/components/empleados/EmpleadoAvatar'
 import { EmpleadoFormFields, FlagImg, inputCls, labelCls } from '@/components/empleados/EmpleadoFormFields'
-import type { Empleado, Dependiente, ParentescoDependiente, PeriodoNomina, AjusteLinea, TipoPeriodo, ResultadoNomina } from '@/types'
+import type { Empleado, Dependiente, ParentescoDependiente, PeriodoNomina, AjusteLinea, TipoPeriodo, ResultadoNomina, TipoCreditoISR } from '@/types'
 
 // ── Floating Form Modal ───────────────────────────────────────────────────────
 type WindowState = 'normal' | 'maximized' | 'minimized'
@@ -233,6 +233,7 @@ function EmpleadoDrawer({
   const [showSaldoISRForm, setShowSaldoISRForm] = useState(false)
   const [saldoISRMonto, setSaldoISRMonto] = useState('')
   const [saldoISRMotivo, setSaldoISRMotivo] = useState('')
+  const [saldoISRTipo, setSaldoISRTipo] = useState<TipoCreditoISR>('retencion_excesiva')
   const [saldoISRAnio, setSaldoISRAnio] = useState(() => new Date().getFullYear())
   const [winState, setWinState] = useState<WindowState>('normal')
   const [mostrarSuspension, setMostrarSuspension] = useState(false)
@@ -552,6 +553,14 @@ function EmpleadoDrawer({
 
                 {showSaldoISRForm && (
                   <div className="mb-3 space-y-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] p-3">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Tipo de Crédito</label>
+                      <select value={saldoISRTipo} onChange={e => setSaldoISRTipo(e.target.value as TipoCreditoISR)}
+                        className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none">
+                        <option value="retencion_excesiva">Retención de ISR en exceso</option>
+                        <option value="gastos_educativos">Gastos educativos (Ley 179-09)</option>
+                      </select>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Monto (RD$)</label>
@@ -570,12 +579,19 @@ function EmpleadoDrawer({
                       <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Motivo</label>
                       <input type="text" value={saldoISRMotivo}
                         onChange={e => setSaldoISRMotivo(e.target.value)}
-                        placeholder="Ej. cambio de tramo ISR a mitad de año"
+                        placeholder={saldoISRTipo === 'gastos_educativos' ? 'Ej. colegiatura autorizada por DGII' : 'Ej. cambio de tramo ISR a mitad de año'}
                         className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none" />
                     </div>
+                    {saldoISRTipo === 'gastos_educativos' && (
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                        La Ley 179-09 permite un crédito de ISR por gastos educativos, pero el 10%/25%
+                        exacto depende de una notificación/aprobación de la DGII — Cielo Cloud no lo
+                        calcula automáticamente. Registra aquí el monto ya autorizado.
+                      </p>
+                    )}
                     <div className="flex justify-end gap-2 pt-1">
                       <button type="button"
-                        onClick={() => { setShowSaldoISRForm(false); setSaldoISRMonto(''); setSaldoISRMotivo('') }}
+                        onClick={() => { setShowSaldoISRForm(false); setSaldoISRMonto(''); setSaldoISRMotivo(''); setSaldoISRTipo('retencion_excesiva') }}
                         className="rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-1.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:bg-white dark:hover:bg-[#141722] transition-colors">
                         Cancelar
                       </button>
@@ -587,12 +603,14 @@ function EmpleadoDrawer({
                             empleadoId: empleado.id,
                             monto,
                             motivo: saldoISRMotivo.trim() || 'Sin especificar',
+                            tipo: saldoISRTipo,
                             anio: saldoISRAnio,
                             fechaRegistro: new Date().toISOString().slice(0, 10),
                           })
                           setShowSaldoISRForm(false)
                           setSaldoISRMonto('')
                           setSaldoISRMotivo('')
+                          setSaldoISRTipo('retencion_excesiva')
                         }}
                         className="rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-3 py-1.5 text-[11px] font-semibold text-white transition-colors">
                         Guardar
@@ -609,7 +627,14 @@ function EmpleadoDrawer({
                       <div key={s.id} className="rounded-lg border border-teal-100 dark:border-teal-900/40 bg-teal-50 dark:bg-teal-950/20 px-4 py-3">
                         <div className="flex items-center justify-between">
                           <div>
-                            <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.motivo}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.motivo}</p>
+                              {s.tipo === 'gastos_educativos' && (
+                                <span className="rounded-full bg-teal-100 dark:bg-teal-900/50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-400">
+                                  Ley 179-09
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Año {s.anio} · original {formatRD(s.monto, 0)}</p>
                           </div>
                           <span className="text-sm font-bold tabular-nums text-teal-600 dark:text-teal-400">{formatRD(s.saldoPendiente, 0)}</span>

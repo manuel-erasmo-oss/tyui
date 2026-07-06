@@ -329,12 +329,22 @@ export interface AplicacionSaldoISR {
 
 export type EstadoSaldoISR = 'activo' | 'agotado' | 'liquidado'
 
+// 'retencion_excesiva' (default, retrocompatible con registros previos a este
+// campo) vs. 'gastos_educativos' — crédito de ISR por gastos educativos
+// (Ley 179-09). Ambos comparten exactamente el mismo mecanismo de aplicación
+// (se descuentan del isrMensual calculado, FIFO por fechaRegistro, hasta
+// agotarse o liquidarse) — la app NO automatiza el 10%/25% que permite la
+// ley (depende de una notificación/aprobación de la DGII que está fuera del
+// alcance de este sistema); el usuario registra el monto ya autorizado.
+export type TipoCreditoISR = 'retencion_excesiva' | 'gastos_educativos'
+
 export interface SaldoISRFavor {
   id: string
   empleadoId: string
   monto: number             // monto original registrado
   saldoPendiente: number    // lo que queda por aplicar
   motivo: string
+  tipo?: TipoCreditoISR     // opcional para no romper registros ya existentes en localStorage
   anio: number              // año fiscal al que corresponde el saldo
   fechaRegistro: string     // ISO date
   estado: EstadoSaldoISR    // 'agotado' = se aplicó completo vía nómina; 'liquidado' = se pagó el resto en una liquidación

@@ -1,14 +1,14 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import type { SaldoISRFavor, AplicacionSaldoISR } from '@/types'
+import type { SaldoISRFavor, AplicacionSaldoISR, TipoCreditoISR } from '@/types'
 import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-saldo-isr'
 
 interface SaldoISRCtx {
   saldos: SaldoISRFavor[]
-  registrar: (data: { empleadoId: string; monto: number; motivo: string; anio: number; fechaRegistro: string }) => SaldoISRFavor
+  registrar: (data: { empleadoId: string; monto: number; motivo: string; tipo?: TipoCreditoISR; anio: number; fechaRegistro: string }) => SaldoISRFavor
   aplicar: (saldoId: string, periodoId: string, periodoLabel: string, monto: number) => void
   liquidar: (saldoId: string) => void
   getSaldosActivos: (empleadoId: string) => SaldoISRFavor[]
@@ -42,7 +42,7 @@ export function SaldoISRProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
   }
 
-  function registrar(data: { empleadoId: string; monto: number; motivo: string; anio: number; fechaRegistro: string }): SaldoISRFavor {
+  function registrar(data: { empleadoId: string; monto: number; motivo: string; tipo?: TipoCreditoISR; anio: number; fechaRegistro: string }): SaldoISRFavor {
     const nuevo: SaldoISRFavor = {
       ...data,
       id: `saldo-isr-${Date.now().toString(36)}`,
