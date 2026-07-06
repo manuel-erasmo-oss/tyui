@@ -636,9 +636,30 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
 
 - Catálogo configurable de tipos de ingreso/descuento (flags de qué computa
   para prestaciones/ISR/TSS) en vez de lógica hardcodeada.
-- Reglas de manejo de insuficiencia de fondos: qué hacer si el neto no alcanza
-  para cubrir una cuota/descuento programado (omitir cuota, acumular como
-  cuenta por cobrar tras 3 fallos consecutivos).
+- ~~Reglas de manejo de insuficiencia de fondos~~ — **implementado.** Nueva
+  función `manejarInsuficienciaFondos(empId)` en `nomina/page.tsx`, invocada
+  justo antes de marcar procesado a un empleado (en los 3 puntos de entrada:
+  individual, selección múltiple, y confirmación de auditoría pre-cierre): si
+  el neto calculado (con saldo ISR ya aplicado) es negativo, se identifican
+  los ajustes `concepto === 'prestamo'` con `prestamoId` de ese empleado en
+  el período; si al quitarlos el neto deja de ser negativo, se persisten sin
+  ellos (`actualizarAjustes`) y se llama `registrarOmisionCuota(prestamoId)`
+  en `prestamos-context.tsx` por cada uno — la cuota se omite ese período en
+  vez de dejar un neto negativo (es el único descuento diferible sin
+  implicar incumplimiento legal, a diferencia de AFP/SFS/ISR). Si el neto
+  sigue negativo incluso sin las cuotas de préstamo, no se toca nada más —
+  ese caso ya lo señala la auditoría pre-cierre existente. Nuevos campos
+  `Prestamo.cuotasOmitidasConsecutivas`/`requiereGestionCobro` (se resetean a
+  0/false en cuanto vuelve a cobrarse una cuota con normalidad vía
+  `registrarPago`); al llegar a 3 omisiones seguidas se marca
+  `requiereGestionCobro` — es solo una bandera informativa para seguimiento
+  manual de RRHH (esta app no tiene un módulo de cuentas por cobrar
+  separado), badge "Requiere gestión de cobro" visible en `prestamos/page.tsx`.
+  Verificado en navegador: empleado con salario RD$21,500 y cuotas de
+  préstamo+avance sumando RD$21,000 → neto calculado -RD$771 → al procesar,
+  toast "Cuota de préstamo omitida para Roberto Díaz Vargas — el neto no
+  alcanzaba", ajustes de préstamo removidos de su fila, neto final ajustado
+  a RD$20,229 (positivo).
 - ~~Generalizar el prorrateo de descuentos fijos entre períodos~~ — **implementado.**
   Nuevo helper puro `prorratearMontoFijo(montoMensual, tipo)` en
   `dominican-labor.ts` (divide entre 2 y redondea a centavos solo si
