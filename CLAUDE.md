@@ -646,10 +646,23 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   la lógica que antes vivía inline únicamente para Dep. SFS en
   `nomina/page.tsx` — mismo comportamiento exacto, ahora reutilizable para
   cualquier futuro descuento/aporte fijo recurrente.
-- Modo de interés simple en Préstamos (alterno a la amortización francesa
-  actual) + tabla de amortización visual con desglose capital/interés.
-- Panel de "Capacidad de Pago" (últimas 4 nóminas + proyección de 4 siguientes
-  incluyendo cuotas pendientes) antes de aprobar un préstamo nuevo.
+- ~~Modo de interés simple en Préstamos~~ + ~~Panel de "Capacidad de Pago"~~ —
+  **implementado** (vía agente en worktree aislado). Nuevo campo
+  `Prestamo.modoInteres?: 'francés' | 'simple'` (default `'francés'`
+  retrocompatible). Funciones puras nuevas en `prestamos-context.tsx`:
+  `calcularAmortizacionFrancesa` (extraída de la lógica que ya existía en
+  `VistaDetalle`, sin cambiar su comportamiento) y `calcularAmortizacionSimple`
+  (interés fijo calculado una sola vez sobre el capital original —
+  `capitalPorCuota = monto/cuotas`, `interesPorCuota = monto × tasa/100`,
+  ambos fijos en cada cuota). Selector Francés/Simple en el formulario de
+  "Nuevo Préstamo" con tabla de amortización completa en vivo (componente
+  compartido `TablaAmortizacion`, reutilizado también en `VistaDetalle`).
+  Panel de "Capacidad de Pago": salario base + cuotas activas + nueva cuota
+  vs. 30% del salario (regla interna de Cielo Cloud, rotulada explícitamente
+  como tal — no es un tope legal, no bloquea el otorgamiento). Verificado en
+  navegador: préstamo de RD$60,000/12 cuotas a Carlos Rodríguez Méndez con
+  2% de interés simple → cuota fija exacta RD$6,200 (RD$5,000 capital +
+  RD$1,200 interés) en las 12 cuotas, capacidad de pago 14.6% del salario.
 - ~~Retribuciones Complementarias (Impuesto Sustitutivo 27%)~~ — **implementado**
   (vía agente en worktree aislado). Nueva calculadora standalone
   `/retribuciones-complementarias` (mismo patrón de `bonificacion/page.tsx`):
