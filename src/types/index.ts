@@ -406,6 +406,15 @@ export interface RegistroLiquidacion {
   totalPrestamosDescontados: number
   saldoISRReembolsado?: number  // saldo ISR a favor pendiente que se reembolsó en esta liquidación
   totalPagado: number
+
+  // ─── Cumplimiento de preaviso en renuncias (Art. 76) ─────────────────────
+  // Solo aplica cuando motivo === 'renuncia'. Opcional para no romper
+  // liquidaciones ya existentes en localStorage que se registraron antes de
+  // este campo. Fecha en que el empleado avisó su renuncia — distinta de
+  // fechaTerminacion (fecha efectiva de salida). El Art. 76 exige que el
+  // trabajador avise con la misma anticipación mínima que el empleador
+  // (7/14/28 días según antigüedad).
+  fechaNotificacionRenuncia?: string
 }
 
 // ─── Checklist de Inicio de Año ──────────────────────────────────────────────

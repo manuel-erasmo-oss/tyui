@@ -8,10 +8,10 @@ import { usePrestamos } from '@/lib/prestamos-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
-import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica, calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica, calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario, getDiasPreavisoRequeridos } from '@/lib/dominican-labor'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
 import type { MotivoLiquidacion } from '@/types'
-import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History, Info } from 'lucide-react'
+import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History, Info, CheckCircle2, XCircle } from 'lucide-react'
 
 type Motivo = MotivoLiquidacion
 
@@ -74,6 +74,9 @@ export default function LiquidacionPage() {
   const [fechaTerminacion, setFechaTerminacion] = useState<string>(
     new Date().toISOString().split('T')[0]
   )
+  // Solo aplica cuando motivo === 'renuncia' — fecha en que el empleado avisó
+  // que se iba, distinta de fechaTerminacion (fecha efectiva de salida).
+  const [fechaNotificacionRenuncia, setFechaNotificacionRenuncia] = useState<string>('')
   const [prestamosADescontar, setPrestamosADescontar] = useState<string[]>([])
   const [confirmFinalizar, setConfirmFinalizar] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -151,7 +154,26 @@ export default function LiquidacionPage() {
     // nómina) — se reembolsa completo en la liquidación, no se descuenta.
     const total = Math.max(0, subtotal + saldoISRPendiente - totalPrestamos)
 
-    return { anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario, cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, saldoISR: saldoISRPendiente, total }
+    // Cumplimiento de preaviso en renuncias (Art. 76) — el empleado también
+    // debe avisar con la anticipación mínima que le correspondería recibir
+    // si fuera despedido (7/14/28 días según antigüedad). Solo se evalúa
+    // cuando el motivo es renuncia y se capturó la fecha de notificación.
+    const diasPreavisoRequeridos = motivo === 'renuncia' ? getDiasPreavisoRequeridos(anosServicio) : null
+    const diasAnticipacionReal = (motivo === 'renuncia' && fechaNotificacionRenuncia)
+      ? Math.round((fechaTerm.getTime() - new Date(fechaNotificacionRenuncia).getTime()) / (24 * 3600 * 1000))
+      : null
+    const cumplioPreaviso = (diasAnticipacionReal !== null && diasPreavisoRequeridos !== null)
+      ? diasAnticipacionReal >= diasPreavisoRequeridos
+      : null
+    const diferenciaDiasPreaviso = (diasAnticipacionReal !== null && diasPreavisoRequeridos !== null)
+      ? diasAnticipacionReal - diasPreavisoRequeridos
+      : null
+
+    return {
+      anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario, cesantia, preaviso,
+      asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, saldoISR: saldoISRPendiente, total,
+      diasPreavisoRequeridos, diasAnticipacionReal, cumplioPreaviso, diferenciaDiasPreaviso,
+    }
   })()
 
   function handleExportCSV() {
@@ -170,6 +192,13 @@ export default function LiquidacionPage() {
     }
     if (totalPrestamos > 0) {
       rows.push(['Descuento Préstamos Pendientes', 'Sí', (-totalPrestamos).toFixed(2)])
+    }
+    if (resultado.cumplioPreaviso !== null) {
+      rows.push([
+        'Cumplimiento Preaviso (Art. 76)',
+        resultado.cumplioPreaviso ? 'Cumplió' : `Incumplió por ${Math.abs(resultado.diferenciaDiasPreaviso ?? 0)} días`,
+        `${resultado.diasAnticipacionReal} de ${resultado.diasPreavisoRequeridos} días requeridos`,
+      ])
     }
     rows.push(['TOTAL NETO A PAGAR', '', total.toFixed(2)])
     exportarCSV(
@@ -217,6 +246,7 @@ export default function LiquidacionPage() {
       totalPrestamosDescontados: resultado.totalPrestamos,
       saldoISRReembolsado: resultado.saldoISR,
       totalPagado: resultado.total,
+      ...(motivo === 'renuncia' && fechaNotificacionRenuncia ? { fechaNotificacionRenuncia } : {}),
     })
 
     // Mark the employee as inactive — this is the only state that needs to
@@ -232,6 +262,7 @@ export default function LiquidacionPage() {
     // Reset form — the employee will disappear from empleadosActivos
     setEmpleadoId('')
     setMotivo('')
+    setFechaNotificacionRenuncia('')
     setPrestamosADescontar([])
   }
 
@@ -285,7 +316,11 @@ export default function LiquidacionPage() {
                 </label>
                 <select
                   value={motivo}
-                  onChange={e => setMotivo(e.target.value as Motivo | '')}
+                  onChange={e => {
+                    const next = e.target.value as Motivo | ''
+                    setMotivo(next)
+                    if (next !== 'renuncia') setFechaNotificacionRenuncia('')
+                  }}
                   className={INPUT_CLASS}
                 >
                   <option value="">— Seleccionar motivo —</option>
@@ -310,6 +345,58 @@ export default function LiquidacionPage() {
                 />
               </div>
             </div>
+
+            {/* Fecha de notificación de renuncia — solo cuando el motivo es renuncia (Art. 76) */}
+            {motivo === 'renuncia' && (
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-zinc-100 dark:border-[#1d2035] pt-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Fecha en que el Empleado Notificó su Renuncia
+                  </label>
+                  <input
+                    type="date"
+                    value={fechaNotificacionRenuncia}
+                    onChange={e => setFechaNotificacionRenuncia(e.target.value)}
+                    className={INPUT_CLASS}
+                  />
+                </div>
+                {resultado && resultado.diasPreavisoRequeridos !== null && (
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Cumplimiento de Preaviso (Art. 76)
+                    </label>
+                    {resultado.cumplioPreaviso === null ? (
+                      <p className="text-xs text-zinc-400 dark:text-zinc-500 pt-1.5">
+                        Captura la fecha de notificación para verificar el cumplimiento —
+                        requiere {resultado.diasPreavisoRequeridos} días de anticipación
+                        según la antigüedad del empleado.
+                      </p>
+                    ) : resultado.cumplioPreaviso ? (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-800/50">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Cumplió
+                        </span>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {resultado.diasAnticipacionReal} días de anticipación (mínimo {resultado.diasPreavisoRequeridos})
+                          {resultado.diferenciaDiasPreaviso! > 0 && ` · +${resultado.diferenciaDiasPreaviso} días de más`}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1 text-xs font-medium text-rose-700 dark:text-rose-400 ring-1 ring-inset ring-rose-200 dark:ring-rose-800/50">
+                          <XCircle className="h-3.5 w-3.5" />
+                          Incumplió por {Math.abs(resultado.diferenciaDiasPreaviso!)} días
+                        </span>
+                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {resultado.diasAnticipacionReal! < 0 ? 'Fecha de notificación posterior a la terminación' : `${resultado.diasAnticipacionReal} días de anticipación (mínimo ${resultado.diasPreavisoRequeridos})`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -356,6 +356,17 @@ export function calcularPreaviso(salarioMensual: number, anosServicio: number, d
   return salarioDiario * 28                           // 12+ meses: 28 días fijo
 }
 
+// Mismos tramos de calcularPreaviso, pero como días exigidos (no monto en
+// RD$) — el Art. 76 exige la misma anticipación mínima en ambos sentidos
+// (empleador → despido, empleado → renuncia). Usado por el reporte de
+// cumplimiento de preaviso en renuncias.
+export function getDiasPreavisoRequeridos(anosServicio: number): number {
+  if (anosServicio < 0.25) return 0
+  if (anosServicio < 0.5)  return 7   // 3–6 meses
+  if (anosServicio < 1)    return 14  // 6–12 meses
+  return 28                           // 12+ meses fijo
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function getAnosServicio(fechaIngreso: string): number {
   const hoy = new Date()
