@@ -650,8 +650,17 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   actual) + tabla de amortización visual con desglose capital/interés.
 - Panel de "Capacidad de Pago" (últimas 4 nóminas + proyección de 4 siguientes
   incluyendo cuotas pendientes) antes de aprobar un préstamo nuevo.
-- Retribuciones Complementarias (Impuesto Sustitutivo 27%, guía oficial DGII) —
-  para paquetes ejecutivos con beneficios en especie (vehículo, vivienda).
+- ~~Retribuciones Complementarias (Impuesto Sustitutivo 27%)~~ — **implementado**
+  (vía agente en worktree aislado). Nueva calculadora standalone
+  `/retribuciones-complementarias` (mismo patrón de `bonificacion/page.tsx`):
+  líneas editables por concepto (Vehículo de la empresa, Vivienda, Colegios/
+  Educación, Otros beneficios en especie) con valor mensual RD$, suma total y
+  27% de Impuesto Sustitutivo sobre esa base — impuesto MENSUAL como cálculo
+  principal (obligación recurrente, no una declaración anual única), con un
+  tercer stat card de "Impuesto Anualizado (referencia)" solo para
+  presupuesto. Empleado beneficiario es opcional/informativo (el impuesto lo
+  paga la empresa sin importar quién reciba el beneficio). Verificado en
+  navegador: línea de RD$20,000 → Impuesto Sustitutivo exacto RD$5,400.
 - Calendario anual de feriados administrable que alimente el cálculo de H.E.
   100% automáticamente.
 - Importador de horas trabajadas vía CSV/Excel con plantilla y validación previa.
