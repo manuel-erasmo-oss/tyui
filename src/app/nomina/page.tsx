@@ -298,6 +298,13 @@ function descargarComprobantePDF(
     doc.text(`Crédito ISR a favor aplicado: -${formatRD(nomina.saldoISRAplicado)}`, 14, y)
     y += 4
   }
+  if ((empleado.ingresoOtroEmpleadorMensual ?? 0) > 0) {
+    doc.setFontSize(6.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(150, 150, 150)
+    doc.text(`ISR consolidado con ingreso de otro empleador (${formatRD(empleado.ingresoOtroEmpleadorMensual!, 0)}/mes)`, 14, y)
+    y += 4
+  }
 
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'normal')
@@ -394,6 +401,12 @@ function DetalleNomina({
               {nomina.saldoISRAplicado > 0 && (
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 italic">
                   Incluye crédito ISR a favor aplicado: -{formatRD(nomina.saldoISRAplicado)}
+                </p>
+              )}
+              {(empleado.ingresoOtroEmpleadorMensual ?? 0) > 0 && (
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
+                  ISR consolidado con ingreso de otro empleador ({formatRD(empleado.ingresoOtroEmpleadorMensual!, 0)}/mes)
+                  — esta empresa solo retiene su porción proporcional
                 </p>
               )}
               <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-2 flex justify-between font-semibold text-sm">

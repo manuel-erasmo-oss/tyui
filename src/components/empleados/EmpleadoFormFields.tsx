@@ -665,6 +665,28 @@ export function EmpleadoFormFields({
         </p>
       </section>
 
+      {/* Retención consolidada de ISR con otro(s) empleador(es) */}
+      <section>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+          Ingreso de Otro Empleador
+        </h3>
+        <p className="mb-3 text-[11px] text-zinc-400 dark:text-zinc-500">
+          Opcional — si el empleado también recibe ingresos de otro empleador, esto ubica el
+          tramo de ISR correcto sin afectar TSS ni el neto que paga esta empresa.
+        </p>
+        <div>
+          <label className={labelCls}>Ingreso Mensual de Otro Empleador (RD$)</label>
+          <input type="number" min="0" step="0.01" className={inputCls}
+            value={form.ingresoOtroEmpleadorMensual}
+            onChange={e => set('ingresoOtroEmpleadorMensual', e.target.value)}
+            placeholder="0" />
+        </div>
+        <p className="mt-1.5 text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+          Solo consolida la base para ubicar el tramo ISR — esta empresa nunca retiene el ISR
+          del ingreso ajeno, únicamente la porción proporcional a lo que ella misma paga.
+        </p>
+      </section>
+
       {/* Saldos Iniciales — empleados con historial previo a Cielo Cloud */}
       <section>
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">

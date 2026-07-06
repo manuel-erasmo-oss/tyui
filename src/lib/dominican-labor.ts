@@ -170,7 +170,22 @@ export function calcularNomina(
   // diferencia del aporte obligatorio, no reduce el ISR (carta DGII 2022).
   const baseGravableMensual  = totalBruto - afpEmpleado - sfsEmpleado
   const baseGravableAnual    = baseGravableMensual * 12
-  const isrMensual           = calcularISRAnual(baseGravableAnual) / 12
+
+  // ─── Retención consolidada de ISR (ingreso de otro empleador) ─────────────
+  // Interpretación propia de Cielo Cloud (la norma no detalla el mecanismo
+  // exacto de coordinación entre dos empleadores): se consolida la base
+  // temporalmente solo para ubicar el tramo ISR correcto (el que aplicaría
+  // si todo el ingreso viniera de un solo empleador), pero este empleador
+  // SOLO retiene la porción proporcional a su propia base gravable — nunca
+  // el ISR del ingreso ajeno, que le corresponde retener al otro empleador.
+  // Con ingresoOtroEmpleadorMensual = 0/undefined, esto es idéntico al
+  // cálculo anterior (proporción = 1).
+  const ingresoOtroEmpleadorAnual   = (empleado.ingresoOtroEmpleadorMensual ?? 0) * 12
+  const baseGravableConsolidadaAnual = baseGravableAnual + ingresoOtroEmpleadorAnual
+  const isrConsolidadoAnual          = calcularISRAnual(baseGravableConsolidadaAnual)
+  const isrMensual = baseGravableConsolidadaAnual > 0
+    ? (isrConsolidadoAnual * (baseGravableAnual / baseGravableConsolidadaAnual)) / 12
+    : 0
 
   // ─── Aporte voluntario a AFP (adicional al 2.87%/7.10% obligatorio) ───────
   const aporteVoluntarioAFPEmpleado = baseCotizableAFP * ((empleado.aporteVoluntarioAFPEmpleadoPct ?? 0) / 100)

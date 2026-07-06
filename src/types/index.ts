@@ -125,6 +125,12 @@ export interface Empleado {
   // calculando y reportando igual); lo que cambia es que la empresa reembolsa
   // ese monto al empleado vía el neto, financiándolo como costo adicional.
   grossingUpPct?: number
+
+  // ─── Retención consolidada de ISR con otro(s) empleador(es) ────────────────
+  // Ingreso bruto mensual que el empleado recibe de OTRO empleador. Solo
+  // afecta qué tramo de ISR le corresponde a este ingreso (base consolidada
+  // temporal) — nunca la base de TSS ni el neto que paga este empleador.
+  ingresoOtroEmpleadorMensual?: number
 }
 
 export interface ResultadoNomina {
