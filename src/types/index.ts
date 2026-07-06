@@ -109,6 +109,15 @@ export interface Empleado {
   suspendido?: boolean
   fechaSuspension?: string    // ISO date — inicio de la suspensión vigente
   motivoSuspension?: string   // texto libre (ej. "Licencia médica no cubierta")
+
+  // ─── Aporte voluntario a AFP ────────────────────────────────────────────────
+  // % adicional sobre el 2.87%/7.10% obligatorio (Ley 87-01). A diferencia del
+  // aporte obligatorio, el aporte voluntario del EMPLEADO no reduce la base
+  // imponible del ISR — se descuenta después de calcular la retención (carta
+  // DGII 2022). El aporte de la EMPRESA (si iguala como beneficio) es un costo
+  // adicional para el empleador, no afecta el neto del empleado.
+  aporteVoluntarioAFPEmpleadoPct?: number  // % sobre el salario cotizable AFP
+  aporteVoluntarioAFPEmpresaPct?: number   // % adicional que la empresa aporta como beneficio
 }
 
 export interface ResultadoNomina {
@@ -133,6 +142,7 @@ export interface ResultadoNomina {
   isrMensual: number
   sfsDependientes: number
   otrosDescuentos: number
+  aporteVoluntarioAFPEmpleado: number  // no reduce la base imponible del ISR (post-retención)
   totalDescuentos: number
 
   // Neto
@@ -143,6 +153,7 @@ export interface ResultadoNomina {
   sfsEmpleador: number
   srlEmpleador: number
   infotepEmpleador: number
+  aporteVoluntarioAFPEmpresa: number   // aporte adicional voluntario de la empresa (beneficio)
   totalAportesEmpleador: number
 
   // Costo total empleador

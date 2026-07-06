@@ -204,6 +204,7 @@ function descargarComprobantePDF(
     ...(nomina.isrMensual      > 0 ? [{ label: 'ISR Retención',       v: nomina.isrMensual }]      : []),
     ...(nomina.sfsDependientes > 0 ? [{ label: 'SFS Dep. Adicionales',v: nomina.sfsDependientes }] : []),
     ...(nomina.otrosDescuentos > 0 ? [{ label: 'Otros Descuentos',    v: nomina.otrosDescuentos }] : []),
+    ...(nomina.aporteVoluntarioAFPEmpleado > 0 ? [{ label: 'Aporte Voluntario AFP', v: nomina.aporteVoluntarioAFPEmpleado }] : []),
   ]
 
   const rH = 5.2
@@ -367,6 +368,7 @@ function DetalleNomina({
                 { label: 'ISR Retención',             value: nomina.isrMensual,        hide: nomina.isrMensual === 0 },
                 { label: 'SFS Dep. Adicionales',      value: nomina.sfsDependientes,   hide: nomina.sfsDependientes === 0 },
                 { label: 'Otros Descuentos',          value: nomina.otrosDescuentos,   hide: nomina.otrosDescuentos === 0 },
+                { label: 'Aporte Voluntario AFP',      value: nomina.aporteVoluntarioAFPEmpleado, hide: nomina.aporteVoluntarioAFPEmpleado === 0 },
               ].filter(r => !r.hide).map(row => (
                 <div key={row.label} className="flex justify-between text-sm">
                   <span className="text-zinc-600 dark:text-zinc-400">{row.label}</span>
@@ -409,6 +411,12 @@ function DetalleNomina({
               <span className="text-zinc-600 dark:text-zinc-400">Infotep (1.00%)</span>
               <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.infotepEmpleador)}</span>
             </div>
+            {nomina.aporteVoluntarioAFPEmpresa > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-zinc-600 dark:text-zinc-400">Aporte Voluntario AFP (empresa)</span>
+                <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.aporteVoluntarioAFPEmpresa)}</span>
+              </div>
+            )}
             <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-1.5 flex justify-between text-xs font-bold">
               <span className="dark:text-zinc-200">Costo Total Empresa</span>
               <span className="text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(nomina.totalCostoEmpleador)}</span>

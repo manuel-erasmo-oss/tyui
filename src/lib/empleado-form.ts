@@ -202,6 +202,8 @@ export interface EmpForm {
   saldoVacacionesInicial: string
   regaliaPagadaEsteAnio: string
   salarioHistoricoReferencia: string
+  aporteVoluntarioAFPEmpleadoPct: string
+  aporteVoluntarioAFPEmpresaPct: string
 }
 
 export const EMPTY_EMP_FORM: EmpForm = {
@@ -215,6 +217,7 @@ export const EMPTY_EMP_FORM: EmpForm = {
   contratoLaboral: '', contratoLaboralNombre: '',
   regimenIntermitente: false,
   saldoVacacionesInicial: '', regaliaPagadaEsteAnio: '', salarioHistoricoReferencia: '',
+  aporteVoluntarioAFPEmpleadoPct: '', aporteVoluntarioAFPEmpresaPct: '',
 }
 
 export function toEmpForm(e: Empleado): EmpForm {
@@ -238,6 +241,8 @@ export function toEmpForm(e: Empleado): EmpForm {
     saldoVacacionesInicial: e.saldoVacacionesInicial != null ? String(e.saldoVacacionesInicial) : '',
     regaliaPagadaEsteAnio: e.regaliaPagadaEsteAnio != null ? String(e.regaliaPagadaEsteAnio) : '',
     salarioHistoricoReferencia: e.salarioHistoricoReferencia != null ? String(e.salarioHistoricoReferencia) : '',
+    aporteVoluntarioAFPEmpleadoPct: e.aporteVoluntarioAFPEmpleadoPct != null ? String(e.aporteVoluntarioAFPEmpleadoPct) : '',
+    aporteVoluntarioAFPEmpresaPct: e.aporteVoluntarioAFPEmpresaPct != null ? String(e.aporteVoluntarioAFPEmpresaPct) : '',
   }
 }
 
@@ -272,6 +277,8 @@ export function formToEmpleado(form: EmpForm, sectorEmpresa?: SectorEmpresa): Om
     saldoVacacionesInicial:     form.saldoVacacionesInicial     ? Number(form.saldoVacacionesInicial)     : undefined,
     regaliaPagadaEsteAnio:      form.regaliaPagadaEsteAnio      ? Number(form.regaliaPagadaEsteAnio)      : undefined,
     salarioHistoricoReferencia: form.salarioHistoricoReferencia ? Number(form.salarioHistoricoReferencia) : undefined,
+    aporteVoluntarioAFPEmpleadoPct: form.aporteVoluntarioAFPEmpleadoPct ? Number(form.aporteVoluntarioAFPEmpleadoPct) : undefined,
+    aporteVoluntarioAFPEmpresaPct:  form.aporteVoluntarioAFPEmpresaPct  ? Number(form.aporteVoluntarioAFPEmpresaPct)  : undefined,
   }
 }
 

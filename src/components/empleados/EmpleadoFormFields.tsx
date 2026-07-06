@@ -614,6 +614,36 @@ export function EmpleadoFormFields({
         </div>
       </section>
 
+      {/* Aporte Voluntario a AFP — adicional al 2.87%/7.10% obligatorio */}
+      <section>
+        <h3 className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+          Aporte Voluntario a AFP
+        </h3>
+        <p className="mb-3 text-[11px] text-zinc-400 dark:text-zinc-500">
+          Opcional — % adicional sobre el salario cotizable AFP, aparte del 2.87%/7.10% obligatorio.
+        </p>
+        <div className={`grid gap-3 ${wide ? 'grid-cols-2' : 'grid-cols-2'}`}>
+          <div>
+            <label className={labelCls}>% Adicional del Empleado</label>
+            <input type="number" min="0" max="100" step="0.01" className={inputCls}
+              value={form.aporteVoluntarioAFPEmpleadoPct}
+              onChange={e => set('aporteVoluntarioAFPEmpleadoPct', e.target.value)}
+              placeholder="0" />
+          </div>
+          <div>
+            <label className={labelCls}>% Adicional de la Empresa (beneficio)</label>
+            <input type="number" min="0" max="100" step="0.01" className={inputCls}
+              value={form.aporteVoluntarioAFPEmpresaPct}
+              onChange={e => set('aporteVoluntarioAFPEmpresaPct', e.target.value)}
+              placeholder="0" />
+          </div>
+        </div>
+        <p className="mt-1.5 text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+          El aporte del empleado se descuenta después del ISR — no reduce su base imponible
+          (carta DGII 2022), a diferencia del aporte obligatorio.
+        </p>
+      </section>
+
       {/* Saldos Iniciales — empleados con historial previo a Cielo Cloud */}
       <section>
         <h3 className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">

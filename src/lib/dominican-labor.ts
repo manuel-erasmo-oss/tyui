@@ -165,15 +165,21 @@ export function calcularNomina(
   const infotepEmpleador = baseCotizableAFP * TASAS_TSS.infotepEmpleador
 
   // ─── ISR Retención (DGII, Ley 11-92 art. 309) ─────────────────────────────
-  // Base gravable = total bruto - AFP empleado - SFS empleado (deducibles)
+  // Base gravable = total bruto - AFP empleado - SFS empleado (deducibles).
+  // El aporte VOLUNTARIO a AFP se excluye a propósito de esta base — a
+  // diferencia del aporte obligatorio, no reduce el ISR (carta DGII 2022).
   const baseGravableMensual  = totalBruto - afpEmpleado - sfsEmpleado
   const baseGravableAnual    = baseGravableMensual * 12
   const isrMensual           = calcularISRAnual(baseGravableAnual) / 12
 
+  // ─── Aporte voluntario a AFP (adicional al 2.87%/7.10% obligatorio) ───────
+  const aporteVoluntarioAFPEmpleado = baseCotizableAFP * ((empleado.aporteVoluntarioAFPEmpleadoPct ?? 0) / 100)
+  const aporteVoluntarioAFPEmpresa  = baseCotizableAFP * ((empleado.aporteVoluntarioAFPEmpresaPct ?? 0) / 100)
+
   // ─── Totales ───────────────────────────────────────────────────────────────
-  const totalDescuentos       = afpEmpleado + sfsEmpleado + isrMensual + sfsDependientes + otrosDescuentos
+  const totalDescuentos       = afpEmpleado + sfsEmpleado + isrMensual + sfsDependientes + otrosDescuentos + aporteVoluntarioAFPEmpleado
   const salarioNeto           = totalBruto - totalDescuentos
-  const totalAportesEmpleador = afpEmpleador + sfsEmpleador + srlEmpleador + infotepEmpleador
+  const totalAportesEmpleador = afpEmpleador + sfsEmpleador + srlEmpleador + infotepEmpleador + aporteVoluntarioAFPEmpresa
   const totalCostoEmpleador   = totalBruto + totalAportesEmpleador
 
   // ─── Provisiones ──────────────────────────────────────────────────────────
@@ -208,12 +214,14 @@ export function calcularNomina(
     isrMensual,
     sfsDependientes,
     otrosDescuentos,
+    aporteVoluntarioAFPEmpleado,
     totalDescuentos,
     salarioNeto,
     afpEmpleador,
     sfsEmpleador,
     srlEmpleador,
     infotepEmpleador,
+    aporteVoluntarioAFPEmpresa,
     totalAportesEmpleador,
     totalCostoEmpleador,
     regaliaPascual,
@@ -238,7 +246,8 @@ export function calcularNominaQuincenal(
   const isr      = quincena === 2 ? m.isrMensual : 0
   const sfsDep   = m.sfsDependientes   // already the per-quincena amount (pre-split at period creation)
   const otros    = m.otrosDescuentos / 2
-  const totalDesc = afpEmp + sfsEmp + isr + sfsDep + otros
+  const aporteVolEmp = m.aporteVoluntarioAFPEmpleado / 2
+  const totalDesc = afpEmp + sfsEmp + isr + sfsDep + otros + aporteVolEmp
 
   return {
     ...m,
@@ -256,12 +265,14 @@ export function calcularNominaQuincenal(
     isrMensual:               isr,
     sfsDependientes:          sfsDep,
     otrosDescuentos:          otros,
+    aporteVoluntarioAFPEmpleado: aporteVolEmp,
     totalDescuentos:          totalDesc,
     salarioNeto:              bruto - totalDesc,
     afpEmpleador:             m.afpEmpleador / 2,
     sfsEmpleador:             m.sfsEmpleador / 2,
     srlEmpleador:             m.srlEmpleador / 2,
     infotepEmpleador:         m.infotepEmpleador / 2,
+    aporteVoluntarioAFPEmpresa: m.aporteVoluntarioAFPEmpresa / 2,
     totalAportesEmpleador:    m.totalAportesEmpleador / 2,
     totalCostoEmpleador:      bruto + m.totalAportesEmpleador / 2,
     regaliaPascual:           m.regaliaPascual / 2,
