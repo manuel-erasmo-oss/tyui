@@ -565,17 +565,13 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   conceptos/totales de la factura oficial de TSS (AFP/SFS/SRL/Infotep separados
   empleado/empleador) y un equivalente de retención mensual de ISR acumulada,
   para que contabilidad concilie sin recalcular a mano.
-- ~~Validador de archivo de transferencia bancaria (ACH)~~ — **implementado**
-  (vía agente en worktree aislado) como capa de validación sobre el reporte
-  "Planilla Bancaria / ACH" ya existente en Reportería (esa planilla es una
-  lista legible para carga manual al banco, no un archivo de formato bancario
-  real — no existía ningún generador de archivo ACH propiamente dicho, así
-  que la validación se aplicó sobre los datos de esa planilla). Reglas
-  genéricas (documentadas como interpretación propia de Cielo Cloud, sin
-  specs oficiales exactas por banco): cuenta+banco obligatorios, formato de
-  número de cuenta (solo dígitos/guiones, 8-20 caracteres), caracteres
-  inválidos en el nombre, cuentas duplicadas, monto debe ser mayor a cero,
-  reconciliación de suma total vs. filas.
+- **Validador de archivo de transferencia bancaria (ACH)** — reglas de
+  formato/longitud/caracteres por banco, corre sobre el archivo ya generado y
+  señala línea/campo del error antes de enviarlo. (En progreso vía agente en
+  worktree aislado — pendiente de fusionar.)
+- **Topes legales de horas extras** — alertar si se excede 24h semanales al
+  35% o 80h trimestrales acumuladas (Art. 155 Código de Trabajo). (En progreso
+  vía agente en worktree aislado — pendiente de fusionar.)
 - ~~Bandas/niveles salariales~~ — **implementado** (vía agente en worktree
   aislado). Nuevo tipo `BandaSalarial` (posición + mín/medio/máx) y contexto
   `bandas-salariales-context.tsx` (mismo patrón que `prestamos-context.tsx`).
@@ -584,16 +580,6 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   Banda" (por debajo del mínimo o sobre el máximo, con la diferencia en RD$),
   y una vista de distribución salarial por rangos con barras simples (sin
   librería externa).
-- ~~Topes legales de horas extras~~ — **implementado** (vía agente en
-  worktree aislado), extendiendo el reporte "Horas Extras" ya existente en
-  Reportería. Tope trimestral (80h acumuladas, Art. 155) calculado de forma
-  exacta agrupando los períodos ya registrados por trimestre calendario. Tope
-  "semanal" (24h) implementado como una APROXIMACIÓN explícitamente rotulada
-  en la UI — el sistema registra horas extra por período mensual/quincenal,
-  no por semana calendario individual, así que el promedio semanal se estima
-  dividiendo las horas del período entre semanas del período (mensual÷4.33,
-  quincenal÷2.17). Un control exacto del tope semanal requeriría capturar
-  horas extra con fecha/semana específica, que hoy no se registra.
 - ~~Checklist/asistente de inicio de año~~ — **implementado** (vía agente en
   worktree aislado). Nueva página `/inicio-de-ano` con: tramos ISR y topes
   TSS vigentes como referencia (de solo lectura, ya que viven en
