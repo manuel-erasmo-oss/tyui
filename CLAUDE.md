@@ -548,24 +548,63 @@ se extrajo el formulario completo de `src/app/empleados/page.tsx`
   un período): detectar automáticamente cambios de `salarioBase` o
   `fechaIngreso` posteriores al cierre del período anterior, y sugerir
   (editable) el prorrateo o el ajuste de retroactivo correspondiente.
-- **Reporte de cumplimiento de preaviso en renuncias (Art. 76)** — capturar
-  fecha de notificación de renuncia vs. fecha efectiva, calcular automáticamente
-  si cumplió los días mínimos según antigüedad (7/14/28), mostrar la diferencia.
+- ~~Reporte de cumplimiento de preaviso en renuncias (Art. 76)~~ — **implementado**
+  (vía agente en worktree aislado). Nuevo campo opcional
+  `RegistroLiquidacion.fechaNotificacionRenuncia` — solo aplica cuando
+  `motivo === 'renuncia'`. `getDiasPreavisoRequeridos()` (nuevo export en
+  `dominican-labor.ts`, mismos tramos que `calcularPreaviso` pero en días
+  exigidos: 7/14/28) compara contra la anticipación real capturada en
+  `liquidacion/page.tsx`, mostrando badge "Cumplió"/"Incumplió por N días" en
+  vivo antes de finalizar. Nuevo reporte "Cumplimiento de Preaviso" dentro de
+  Reportería (no ruta nueva — se integró como un `ReportId` más siguiendo el
+  patrón ya establecido de esa página) que lista el historial de renuncias con
+  el dato capturado. Verificado en navegador: empleado con 5 años 7 meses de
+  antigüedad, notificación 35 días antes de la fecha de salida → "Cumplió" con
+  el detalle exacto "+7 días de más" (mínimo exigido 28).
 - **Conciliación mensual TSS y DGII** — reporte que reproduce los mismos
   conceptos/totales de la factura oficial de TSS (AFP/SFS/SRL/Infotep separados
   empleado/empleador) y un equivalente de retención mensual de ISR acumulada,
   para que contabilidad concilie sin recalcular a mano.
-- **Validador de archivo de transferencia bancaria (ACH)** — reglas de
-  formato/longitud/caracteres por banco, corre sobre el archivo ya generado y
-  señala línea/campo del error antes de enviarlo.
-- **Bandas/niveles salariales** — tabla de niveles (mín/medio/máx) por
-  posición, reporte de "empleados fuera de banda", dashboard de distribución
-  salarial.
-- **Topes legales de horas extras** — alertar si se excede 24h semanales al
-  35% o 80h trimestrales acumuladas (Art. 155 Código de Trabajo).
-- **Checklist/asistente de inicio de año** — actualizar tabla ISR, calendario
-  de feriados, calendario de pago anual; recordatorio de IR-13 (declaración
-  jurada anual de retenciones DGII).
+- ~~Validador de archivo de transferencia bancaria (ACH)~~ — **implementado**
+  (vía agente en worktree aislado) como capa de validación sobre el reporte
+  "Planilla Bancaria / ACH" ya existente en Reportería (esa planilla es una
+  lista legible para carga manual al banco, no un archivo de formato bancario
+  real — no existía ningún generador de archivo ACH propiamente dicho, así
+  que la validación se aplicó sobre los datos de esa planilla). Reglas
+  genéricas (documentadas como interpretación propia de Cielo Cloud, sin
+  specs oficiales exactas por banco): cuenta+banco obligatorios, formato de
+  número de cuenta (solo dígitos/guiones, 8-20 caracteres), caracteres
+  inválidos en el nombre, cuentas duplicadas, monto debe ser mayor a cero,
+  reconciliación de suma total vs. filas.
+- ~~Bandas/niveles salariales~~ — **implementado** (vía agente en worktree
+  aislado). Nuevo tipo `BandaSalarial` (posición + mín/medio/máx) y contexto
+  `bandas-salariales-context.tsx` (mismo patrón que `prestamos-context.tsx`).
+  Nueva página `/bandas-salariales`: CRUD de bandas (matching de posición
+  contra `Empleado.cargo`, case-insensitive), tabla de "Empleados Fuera de
+  Banda" (por debajo del mínimo o sobre el máximo, con la diferencia en RD$),
+  y una vista de distribución salarial por rangos con barras simples (sin
+  librería externa).
+- ~~Topes legales de horas extras~~ — **implementado** (vía agente en
+  worktree aislado), extendiendo el reporte "Horas Extras" ya existente en
+  Reportería. Tope trimestral (80h acumuladas, Art. 155) calculado de forma
+  exacta agrupando los períodos ya registrados por trimestre calendario. Tope
+  "semanal" (24h) implementado como una APROXIMACIÓN explícitamente rotulada
+  en la UI — el sistema registra horas extra por período mensual/quincenal,
+  no por semana calendario individual, así que el promedio semanal se estima
+  dividiendo las horas del período entre semanas del período (mensual÷4.33,
+  quincenal÷2.17). Un control exacto del tope semanal requeriría capturar
+  horas extra con fecha/semana específica, que hoy no se registra.
+- ~~Checklist/asistente de inicio de año~~ — **implementado** (vía agente en
+  worktree aislado). Nueva página `/inicio-de-ano` con: tramos ISR y topes
+  TSS vigentes como referencia (de solo lectura, ya que viven en
+  `dominican-labor.ts` y rara vez cambian), calendario de feriados nacionales
+  editable, calendario de pago anual (12 filas mensual / 24 quincenal, según
+  `empresa.modalidadNomina`), y recordatorio informativo de IR-13 (sin fecha
+  fija — remite a confirmar en dgii.gov.do para no afirmar un dato legal
+  impreciso). Nuevo contexto `inicio-de-ano-context.tsx` con estado
+  `ChecklistAnualEstado` indexado por año calendario — el checklist se
+  "reinicia" automáticamente cada año nuevo sin lógica explícita, porque el
+  año en curso simplemente no tiene registro previo todavía.
 
 ### 🟡 Media prioridad
 
