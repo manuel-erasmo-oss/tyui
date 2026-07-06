@@ -691,8 +691,16 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
 - Nómina en moneda USD — principio de diseño clave: el motor tributario
   siempre calcula en RD$; USD es solo una capa de presentación con tasa
   configurable, nunca la base del cálculo.
-- Reporte "empleados activos sin ingresos en el mes completo" — validación de
-  integridad pre-cierre (prerequisito también de una futura integración TSS).
+- ~~Reporte "empleados activos sin ingresos en el mes completo"~~ — **implementado**
+  (vía agente en worktree aislado). Nuevo `ReportId` "Empleados Sin Ingresos"
+  en Reportería. "Activo durante el mes" = unión de activos hoy con
+  `fechaIngreso ≤ fin de mes` MÁS empleados ya liquidados hoy cuya
+  `fechaTerminacion` cae después de ese mes (el mes completo debía pagarse
+  por nómina normal); excluye liquidaciones dentro/antes del mes (su pago
+  salió de Liquidación, no de Nómina) y cualquier `suspendido` vigente hoy.
+  Señal principal: el empleado no aparece en `empleadosProcesados` del
+  período; señal secundaria: `totalBruto` calculado en RD$0. Nota siempre
+  visible en la UI explicando la metodología exacta.
 - Reporte "Salario vs. Inasistencias" — detalle de días descontados por
   motivo (licencia/permiso/ausencia) con impacto exacto en el salario.
 - ~~Ampliar procesamiento individual existente con filtros de selección
