@@ -17,13 +17,13 @@ import { usePeriodos } from '@/lib/periodos-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
-import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo, getDiasPreavisoRequeridos } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo, getDiasPreavisoRequeridos, TASAS_TSS } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatCedula, fullName,
   formatAnosServicio, contratoLabel, contratoBadgeClass,
 } from '@/lib/utils'
 import { exportarExcel } from '@/lib/excel-export'
-import type { AjusteLinea, PeriodoNomina, Empresa, RegistroLiquidacion } from '@/types'
+import type { AjusteLinea, PeriodoNomina, Empresa, RegistroLiquidacion, CategoriaRiesgoSRL } from '@/types'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -49,7 +49,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'nomina',       label: 'Nómina por Período',      icon: FileText,   desc: 'Detalle de nómina por período' },
   { id: 'empleados',    label: 'Listado de Empleados',    icon: Users,      desc: 'Plantilla y datos laborales' },
   { id: 'prestamos',    label: 'Reporte de Préstamos',    icon: CreditCard, desc: 'Cartera de préstamos y saldos' },
-  { id: 'tss',          label: 'Cumplimiento Fiscal',     icon: Shield,     desc: 'TSS, ISR y retenciones regulatorias' },
+  { id: 'tss',          label: 'Cumplimiento Fiscal',     icon: Shield,     desc: 'Conciliación TSS/DGII — factura CNSS e ISR retenido' },
   { id: 'departamento', label: 'Costo por Departamento',  icon: Building2,  desc: 'Masa salarial y headcount por área' },
   { id: 'bancaria',     label: 'Planilla Bancaria / ACH', icon: Landmark,   desc: 'Transferencias agrupadas por banco' },
   { id: 'horas_extras', label: 'Horas Extras',            icon: Clock,      desc: 'HE 35 % / 100 % y topes Art. 155' },
@@ -1192,7 +1192,92 @@ function ReporteTSS({
     infotep:     acc.infotep     + res.infotepEmpleador,
     totalTSS:    acc.totalTSS    + totalTSS,
     isr:         acc.isr         + res.isrMensual,
-  }), { cotizable: 0, afpEmp: 0, sfsEmp: 0, afpEmpl: 0, sfsEmpl: 0, srl: 0, infotep: 0, totalTSS: 0, isr: 0 }), [filas])
+    sfsDependientes: acc.sfsDependientes + res.sfsDependientes,
+  }), { cotizable: 0, afpEmp: 0, sfsEmp: 0, afpEmpl: 0, sfsEmpl: 0, srl: 0, infotep: 0, totalTSS: 0, isr: 0, sfsDependientes: 0 }), [filas])
+
+  // ─── Planilla de Conciliación TSS (formato "factura") ──────────────────────
+  // SRL se remite por categoría de riesgo (I-IV), cada una con su propia tasa —
+  // se agrupa por categoría real de cada empleado en vez de asumir una sola tasa.
+  const TASA_SRL_POR_CATEGORIA: Record<CategoriaRiesgoSRL, number> = {
+    I: TASAS_TSS.srlCategoriaI, II: TASAS_TSS.srlCategoriaII,
+    III: TASAS_TSS.srlCategoriaIII, IV: TASAS_TSS.srlCategoriaIV,
+  }
+
+  const srlPorCategoria = useMemo(() => {
+    const grupos = new Map<CategoriaRiesgoSRL, { categoria: CategoriaRiesgoSRL; tasa: number; monto: number; count: number }>()
+    for (const { emp, res } of filas) {
+      const cat = emp.categoriaRiesgo ?? 'I'
+      const g = grupos.get(cat) ?? { categoria: cat, tasa: TASA_SRL_POR_CATEGORIA[cat], monto: 0, count: 0 }
+      g.monto += res.srlEmpleador
+      g.count += 1
+      grupos.set(cat, g)
+    }
+    return [...grupos.values()].sort((a, b) => a.categoria.localeCompare(b.categoria))
+  }, [filas])
+
+  interface FilaConciliacion {
+    concepto: string
+    tasaEmpleado: string
+    tasaEmpleador: string
+    montoEmpleado: number
+    montoEmpleador: number
+    total: number
+  }
+
+  const conciliacionFilas = useMemo<FilaConciliacion[]>(() => {
+    if (filas.length === 0) return []
+    const rows: FilaConciliacion[] = [
+      {
+        concepto: 'AFP — Pensiones (Ley 87-01)',
+        tasaEmpleado: `${(TASAS_TSS.afpEmpleado * 100).toFixed(2)}%`,
+        tasaEmpleador: `${(TASAS_TSS.afpEmpleador * 100).toFixed(2)}%`,
+        montoEmpleado: totales.afpEmp,
+        montoEmpleador: totales.afpEmpl,
+        total: totales.afpEmp + totales.afpEmpl,
+      },
+      {
+        concepto: 'SFS — Seguro Familiar de Salud (Ley 87-01)',
+        tasaEmpleado: `${(TASAS_TSS.sfsEmpleado * 100).toFixed(2)}%`,
+        tasaEmpleador: `${(TASAS_TSS.sfsEmpleador * 100).toFixed(2)}%`,
+        montoEmpleado: totales.sfsEmp,
+        montoEmpleador: totales.sfsEmpl,
+        total: totales.sfsEmp + totales.sfsEmpl,
+      },
+    ]
+    if (totales.sfsDependientes > 0) {
+      rows.push({
+        concepto: 'SFS — Dependientes Adicionales (Res. 624-02 CNSS)',
+        tasaEmpleado: 'Cuota fija',
+        tasaEmpleador: '—',
+        montoEmpleado: totales.sfsDependientes,
+        montoEmpleador: 0,
+        total: totales.sfsDependientes,
+      })
+    }
+    for (const g of srlPorCategoria) {
+      rows.push({
+        concepto: `SRL — Riesgos Laborales, Categoría ${g.categoria} (${g.count} emp.)`,
+        tasaEmpleado: '—',
+        tasaEmpleador: `${(g.tasa * 100).toFixed(2)}%`,
+        montoEmpleado: 0,
+        montoEmpleador: g.monto,
+        total: g.monto,
+      })
+    }
+    rows.push({
+      concepto: 'Infotep — Capacitación Laboral (Ley 116-80)',
+      tasaEmpleado: '—',
+      tasaEmpleador: `${(TASAS_TSS.infotepEmpleador * 100).toFixed(2)}%`,
+      montoEmpleado: 0,
+      montoEmpleador: totales.infotep,
+      total: totales.infotep,
+    })
+    return rows
+  }, [filas, totales, srlPorCategoria])
+
+  const totalTSSRemitir = useMemo(() => conciliacionFilas.reduce((s, r) => s + r.total, 0), [conciliacionFilas])
+  const totalTSSRemitirEmpleado  = useMemo(() => conciliacionFilas.reduce((s, r) => s + r.montoEmpleado, 0), [conciliacionFilas])
+  const totalTSSRemitirEmpleador = useMemo(() => conciliacionFilas.reduce((s, r) => s + r.montoEmpleador, 0), [conciliacionFilas])
 
   function generar() {
     setLoading(true)
@@ -1202,7 +1287,49 @@ function ReporteTSS({
   function exportarPDF() {
     if (!periodo || filas.length === 0) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    pdfHeader(doc, empresa, 'Reporte TSS / IR-2', periodoLabel(periodo))
+
+    // ─── Página 1: Planilla de Conciliación (formato "factura" TSS) ─────────
+    pdfHeader(doc, empresa, 'Planilla de Conciliación TSS / DGII', periodoLabel(periodo))
+
+    autoTable(doc, {
+      startY: 44,
+      head: [['Concepto','Tasa Empleado','Tasa Empleador','Monto Empleado','Monto Empleador','Total']],
+      body: conciliacionFilas.map(f => [
+        f.concepto, f.tasaEmpleado, f.tasaEmpleador,
+        f.montoEmpleado > 0 ? f.montoEmpleado.toFixed(2) : '—',
+        f.montoEmpleador > 0 ? f.montoEmpleador.toFixed(2) : '—',
+        f.total.toFixed(2),
+      ]),
+      foot: [['TOTAL TSS A REMITIR (CNSS)','','',
+        totalTSSRemitirEmpleado.toFixed(2), totalTSSRemitirEmpleador.toFixed(2), totalTSSRemitir.toFixed(2),
+      ]],
+      theme: 'striped',
+      headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      footStyles: { fillColor: [240, 240, 240], textColor: NAVY, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        1: { halign: 'right' }, 2: { halign: 'right' },
+        3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' },
+      },
+    })
+
+    const docTyped = doc as jsPDF & { lastAutoTable: { finalY: number } }
+    const afterConciliacion = docTyped.lastAutoTable?.finalY ?? 44
+    autoTable(doc, {
+      startY: afterConciliacion + 10,
+      head: [['Retención ISR (DGII)', '']],
+      body: [['Retención mensual acumulada — Ley 11-92 Art. 309', formatRD(totales.isr, 2)]],
+      theme: 'plain',
+      headStyles: { fillColor: [255, 255, 255], textColor: NAVY, fontStyle: 'bold', fontSize: 9 },
+      bodyStyles: { fontSize: 9, fontStyle: 'bold' },
+      columnStyles: { 1: { halign: 'right' } },
+      tableWidth: 140,
+    })
+
+    // ─── Página 2: Detalle por Empleado (auditoría/soporte) ─────────────────
+    doc.addPage()
+    pdfHeader(doc, empresa, 'Reporte TSS / IR-2 — Detalle por Empleado', periodoLabel(periodo))
 
     autoTable(doc, {
       startY: 44,
@@ -1244,21 +1371,34 @@ function ReporteTSS({
       nombreArchivo: `tss-${periodoLabel(periodo).replace(/\s+/g, '-').toLowerCase()}`,
       empresa: empresa.nombre,
       rnc: empresa.rnc,
-      hojas: [{
-        nombre: 'TSS',
-        titulo: 'Reporte TSS / IR-2',
-        subtitulo: periodoLabel(periodo),
-        encabezados: ['Nombre','Cédula','S. Cotizable','AFP Emp.','SFS Emp.','AFP Empl.','SFS Empl.','SRL Empl.','Infotep','Total TSS','ISR Retenido'],
-        filas: filas.map(({ emp, res, totalTSS }) => [
-          fullName(emp), formatCedula(emp.cedula),
-          res.salarioCotizable, res.afpEmpleado, res.sfsEmpleado,
-          res.afpEmpleador, res.sfsEmpleador, res.srlEmpleador, res.infotepEmpleador,
-          totalTSS, res.isrMensual,
-        ]),
-        totales: ['TOTALES','', totales.cotizable, totales.afpEmp, totales.sfsEmp,
-          totales.afpEmpl, totales.sfsEmpl, totales.srl, totales.infotep, totales.totalTSS, totales.isr],
-        anchos: [30, 18, 16, 14, 14, 14, 14, 12, 12, 16, 14],
-      }],
+      hojas: [
+        {
+          nombre: 'Conciliación',
+          titulo: 'Planilla de Conciliación TSS / DGII',
+          subtitulo: periodoLabel(periodo),
+          encabezados: ['Concepto','Tasa Empleado','Tasa Empleador','Monto Empleado','Monto Empleador','Total'],
+          filas: conciliacionFilas.map(f => [
+            f.concepto, f.tasaEmpleado, f.tasaEmpleador, f.montoEmpleado, f.montoEmpleador, f.total,
+          ]),
+          totales: ['TOTAL TSS A REMITIR (CNSS)','','', totalTSSRemitirEmpleado, totalTSSRemitirEmpleador, totalTSSRemitir],
+          anchos: [42, 14, 14, 16, 16, 16],
+        },
+        {
+          nombre: 'TSS',
+          titulo: 'Reporte TSS / IR-2 — Detalle por Empleado',
+          subtitulo: periodoLabel(periodo),
+          encabezados: ['Nombre','Cédula','S. Cotizable','AFP Emp.','SFS Emp.','AFP Empl.','SFS Empl.','SRL Empl.','Infotep','Total TSS','ISR Retenido'],
+          filas: filas.map(({ emp, res, totalTSS }) => [
+            fullName(emp), formatCedula(emp.cedula),
+            res.salarioCotizable, res.afpEmpleado, res.sfsEmpleado,
+            res.afpEmpleador, res.sfsEmpleador, res.srlEmpleador, res.infotepEmpleador,
+            totalTSS, res.isrMensual,
+          ]),
+          totales: ['TOTALES','', totales.cotizable, totales.afpEmp, totales.sfsEmp,
+            totales.afpEmpl, totales.sfsEmpl, totales.srl, totales.infotep, totales.totalTSS, totales.isr],
+          anchos: [30, 18, 16, 14, 14, 14, 14, 12, 12, 16, 14],
+        },
+      ],
     })
   }
 
@@ -1266,7 +1406,7 @@ function ReporteTSS({
     <div className="space-y-5">
       <ReportHeader
         title="Cumplimiento Fiscal"
-        desc="Aportes a la Tesorería de la Seguridad Social (CNSS) y retención de ISR para declaración a la DGII."
+        desc="Planilla de conciliación TSS (CNSS) y retención de ISR (DGII) — mismo formato de la factura oficial, para conciliar sin recalcular a mano."
         onPDF={filas.length > 0 ? exportarPDF : undefined}
         onExcel={filas.length > 0 ? exportarXlsx : undefined}
       />
@@ -1321,6 +1461,60 @@ function ReporteTSS({
             </div>
           </div>
 
+          {/* Planilla de Conciliación TSS — mismo desglose de conceptos/tasas que la factura oficial CNSS */}
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
+            <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3">
+              <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Planilla de Conciliación TSS</p>
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                Desglose por concepto y tasa, empleado vs. empleador — mismo formato de la factura oficial de la CNSS, para conciliar directo contra lo remitido.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Concepto</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 whitespace-nowrap">Tasa Empleado</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 whitespace-nowrap">Tasa Empleador</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-rose-500 dark:text-rose-400 whitespace-nowrap">Monto Empleado</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400 whitespace-nowrap">Monto Empleador</th>
+                    <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 whitespace-nowrap">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                  {conciliacionFilas.map(f => (
+                    <tr key={f.concepto} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                      <td className="px-5 py-3 text-zinc-800 dark:text-zinc-200 whitespace-nowrap">{f.concepto}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{f.tasaEmpleado}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{f.tasaEmpleador}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{f.montoEmpleado > 0 ? formatRD(f.montoEmpleado, 2) : '—'}</td>
+                      <td className="px-4 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{f.montoEmpleador > 0 ? formatRD(f.montoEmpleador, 2) : '—'}</td>
+                      <td className="px-5 py-3 text-right tabular-nums font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{formatRD(f.total, 2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold">
+                    <td className="px-5 py-3 text-xs uppercase tracking-wide whitespace-nowrap">Total TSS a Remitir (CNSS)</td>
+                    <td className="px-4 py-3" />
+                    <td className="px-4 py-3" />
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{formatRD(totalTSSRemitirEmpleado, 2)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">{formatRD(totalTSSRemitirEmpleador, 2)}</td>
+                    <td className="px-5 py-3 text-right tabular-nums whitespace-nowrap">{formatRD(totalTSSRemitir, 2)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <div className="border-t border-zinc-100 dark:border-[#1d2035] bg-[#eef0fb]/40 dark:bg-indigo-950/10 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">Retención ISR — DGII</p>
+                <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">Ley 11-92 Art. 309 — retención mensual acumulada de todos los empleados de este período (equivalente para IR-13/declaración jurada).</p>
+              </div>
+              <p className="text-xl font-bold text-[#1B2980] dark:text-indigo-400 tabular-nums whitespace-nowrap">{formatRD(totales.isr, 2)}</p>
+            </div>
+          </div>
+
+          {/* Detalle por empleado — soporte y auditoría de la planilla de conciliación de arriba */}
           <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-400 shrink-0" />
