@@ -661,8 +661,19 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   presupuesto. Empleado beneficiario es opcional/informativo (el impuesto lo
   paga la empresa sin importar quién reciba el beneficio). Verificado en
   navegador: línea de RD$20,000 → Impuesto Sustitutivo exacto RD$5,400.
-- Calendario anual de feriados administrable que alimente el cálculo de H.E.
-  100% automáticamente.
+- ~~Calendario anual de feriados administrable que alimente el cálculo de H.E.
+  100%~~ — **implementado.** El calendario de feriados ya existía en
+  `/inicio-de-ano` (`ChecklistAnualEstado.feriados`, contexto
+  `inicio-de-ano-context.tsx`); se conectó a `nomina/page.tsx` — al agregar un
+  ajuste `horas_extras_35`/`horas_extras_100` a un empleado, se muestra un
+  aviso con los feriados registrados del mes del período abierto, sugiriendo
+  clasificar como H.E. 100% (Art. 203) si las horas cargadas corresponden a
+  esa fecha. No se automatiza la clasificación en sí (el sistema no captura
+  la fecha exacta de las horas trabajadas, solo un total por período), así
+  que el aviso es informativo — el usuario sigue eligiendo el concepto
+  correcto. Verificado en navegador: feriado registrado "16 ago 2026 — Día de
+  la Restauración" → aviso exacto al seleccionar H.E. 35% en un ajuste de
+  Agosto 2026.
 - Importador de horas trabajadas vía CSV/Excel con plantilla y validación previa.
 - Nómina en moneda USD — principio de diseño clave: el motor tributario
   siempre calcula en RD$; USD es solo una capa de presentación con tasa
