@@ -36,7 +36,7 @@ import {
   enviarComprobante, plantillaComprobanteDefault, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
 } from '@/lib/comprobante-email'
 import type { PlantillaComprobante } from '@/lib/comprobante-email'
-import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo } from '@/lib/dominican-labor'
 import { formatRD, fullName, formatCedula, formatDate } from '@/lib/utils'
 import jsPDF from 'jspdf'
 import type {
@@ -606,7 +606,7 @@ export default function NominaPage() {
           tipo: 'deduccion' as const,
           concepto: 'dependiente_sfs' as const,
           descripcion: `SFS Dep. — ${d.nombre} ${d.apellido}`,
-          valor: Math.round((nuevoTipo === 'quincenal' ? cuotaMensualDep / 2 : cuotaMensualDep) * 100) / 100,
+          valor: prorratearMontoFijo(cuotaMensualDep, nuevoTipo),
         }))
         ajustesIniciales[emp.id] = [...(ajustesIniciales[emp.id] ?? []), ...depAjustes]
       }

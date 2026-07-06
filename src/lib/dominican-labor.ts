@@ -1,4 +1,4 @@
-import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, Empleado, Empresa, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa } from '@/types'
+import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, Empleado, Empresa, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa, TipoPeriodo } from '@/types'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -76,6 +76,16 @@ export const CUOTA_DEP_SFS_MENSUAL = 1_919.78
 
 export function cuotaDependienteSFS(): number {
   return CUOTA_DEP_SFS_MENSUAL
+}
+
+// ─── Prorrateo de descuentos/aportes fijos entre períodos ─────────────────────
+// Helper genérico para cualquier monto fijo mensual (cuota Dep. SFS y futuros
+// descuentos/aportes recurrentes) que deba dividirse a la mitad en nómina
+// quincenal, redondeado a centavos. Reemplaza la lógica que antes vivía
+// inline solo para Dep. SFS en nomina/page.tsx.
+export function prorratearMontoFijo(montoMensual: number, tipo: TipoPeriodo): number {
+  if (tipo !== 'quincenal') return montoMensual
+  return Math.round((montoMensual / 2) * 100) / 100
 }
 
 // ─── Parámetros laborales (Código de Trabajo Ley 16-92) ──────────────────────
