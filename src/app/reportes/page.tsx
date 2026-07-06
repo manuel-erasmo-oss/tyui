@@ -6,11 +6,12 @@ import {
   Download, FileSpreadsheet, ChevronRight, Loader2,
   TrendingUp, Wallet, Building2, Receipt, AlertCircle,
   Calendar, Briefcase, Info, Search, Landmark, Clock, Target, Timer,
-  CheckCircle2, XCircle,
+  CheckCircle2, XCircle, ShieldAlert,
 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Toast } from '@/components/ui/Toast'
+import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { usePrestamos } from '@/lib/prestamos-context'
@@ -51,7 +52,7 @@ const SIDEBAR_ITEMS: SidebarItem[] = [
   { id: 'tss',          label: 'Cumplimiento Fiscal',     icon: Shield,     desc: 'TSS, ISR y retenciones regulatorias' },
   { id: 'departamento', label: 'Costo por Departamento',  icon: Building2,  desc: 'Masa salarial y headcount por área' },
   { id: 'bancaria',     label: 'Planilla Bancaria / ACH', icon: Landmark,   desc: 'Transferencias agrupadas por banco' },
-  { id: 'horas_extras', label: 'Horas Extras',            icon: Clock,      desc: 'HE 35 % y 100 % por período' },
+  { id: 'horas_extras', label: 'Horas Extras',            icon: Clock,      desc: 'HE 35 % / 100 % y topes Art. 155' },
   { id: 'proyeccion',   label: 'Proyección Anual',        icon: Target,     desc: 'Costo proyectado vs ejecutado YTD' },
   { id: 'preaviso',     label: 'Cumplimiento de Preaviso', icon: Timer,     desc: 'Renuncias — anticipación vs. Art. 76' },
 ]
@@ -1635,6 +1636,97 @@ function ReportePlanillaACH({
 
   const totalNeto = useMemo(() => filas.reduce((s, f) => s + f.neto, 0), [filas])
 
+  // ─── Validación antes de enviar ────────────────────────────────────────────
+  // No existen especificaciones públicas oficiales, exactas y unificadas por
+  // banco dominicano para un archivo de transferencia (ACH) — cada institución
+  // maneja su propio formato interno. Las reglas de abajo son una
+  // interpretación GENÉRICA y defendible de Cielo Cloud (no una spec bancaria
+  // oficial), pensada para atrapar los errores de captura más comunes antes de
+  // cargar la planilla al banco manualmente.
+  const validacion = useMemo(() => {
+    const issues: { empId: string; nombre: string; banco: string; nivel: 'error' | 'advertencia'; motivo: string }[] = []
+
+    // Regla 1 (bloqueante): cuenta bancaria requerida. Se evalúa sobre TODOS
+    // los empleados activos, sin importar el filtro de banco seleccionado —
+    // es un requisito de completitud de datos, no de la vista filtrada, y un
+    // empleado sin cuenta no puede recibir su pago por ACH en absoluto.
+    for (const e of empleados) {
+      if (!e.activo) continue
+      if (!e.banco && !e.numeroCuenta) {
+        issues.push({ empId: e.id, nombre: fullName(e), banco: '—', nivel: 'error', motivo: 'Sin banco ni número de cuenta registrados' })
+      } else if (!e.banco) {
+        issues.push({ empId: e.id, nombre: fullName(e), banco: '—', nivel: 'error', motivo: 'Falta el banco' })
+      } else if (!e.numeroCuenta) {
+        issues.push({ empId: e.id, nombre: fullName(e), banco: e.banco, nivel: 'error', motivo: 'Falta el número de cuenta' })
+      }
+    }
+
+    // Conteo de "banco + # cuenta" (normalizado) dentro de la planilla ya generada, para la Regla 4
+    const conteoCuentas = new Map<string, number>()
+    for (const { emp } of filas) {
+      const norm = (emp.numeroCuenta ?? '').replace(/[-\s]/g, '')
+      const clave = `${emp.banco}|${norm}`
+      conteoCuentas.set(clave, (conteoCuentas.get(clave) ?? 0) + 1)
+    }
+
+    for (const { emp, neto } of filas) {
+      const nombre = fullName(emp)
+      const banco = emp.banco ?? '—'
+      const cuentaRaw = emp.numeroCuenta ?? ''
+      const cuentaNorm = cuentaRaw.replace(/[-\s]/g, '')
+
+      // Regla 2 (bloqueante): formato de número de cuenta — solo dígitos (se
+      // permiten guiones/espacios como separadores visuales) y una longitud
+      // razonable de 8 a 20 caracteres. Umbral genérico: cubre cuentas de
+      // ahorro/corriente típicas de la banca dominicana sin atarse a la regla
+      // interna exacta de un banco en particular.
+      if (!/^\d+$/.test(cuentaNorm) || cuentaNorm.length < 8 || cuentaNorm.length > 20) {
+        issues.push({ empId: emp.id, nombre, banco, nivel: 'error', motivo: `Formato de cuenta inválido ("${cuentaRaw}") — se esperan solo dígitos y 8–20 caracteres` })
+      }
+
+      // Regla 3 (bloqueante): caracteres que rompen archivos de texto plano /
+      // delimitados que suelen usar los bancos para carga masiva (comillas,
+      // pipe "|" o tabulador).
+      if (/["'|\t]/.test(nombre)) {
+        issues.push({ empId: emp.id, nombre, banco, nivel: 'error', motivo: 'El nombre contiene caracteres no permitidos (comillas, "|" o tabulador)' })
+      }
+
+      // Regla 4 (advertencia, no bloqueante): cuentas duplicadas — mismo banco
+      // y mismo número de cuenta en dos empleados de la misma planilla. Puede
+      // ser legítimo en casos raros (p. ej. una cuenta mancomunada), así que
+      // se señala pero no bloquea el envío.
+      const clave = `${emp.banco}|${cuentaNorm}`
+      if ((conteoCuentas.get(clave) ?? 0) > 1) {
+        issues.push({ empId: emp.id, nombre, banco, nivel: 'advertencia', motivo: `Cuenta compartida con otro(s) empleado(s) de esta planilla (${conteoCuentas.get(clave)} coinciden)` })
+      }
+
+      // Regla 5 (bloqueante): el monto neto a transferir debe ser mayor a cero
+      if (neto <= 0) {
+        issues.push({ empId: emp.id, nombre, banco, nivel: 'error', motivo: `Monto a transferir inválido (${formatRD(neto, 2)}) — debe ser mayor a cero` })
+      }
+    }
+
+    // Regla 6: reconciliación de suma — control de integridad simple, debería
+    // ser trivialmente cierto, pero se verifica como sanity check.
+    const sumaFilas = filas.reduce((s, f) => s + f.neto, 0)
+    const reconciliaOk = Math.abs(sumaFilas - totalNeto) < 0.01
+
+    const idsConError = new Set(issues.filter(i => i.nivel === 'error').map(i => i.empId))
+    const idsConAdvertencia = new Set(issues.filter(i => i.nivel === 'advertencia' && !idsConError.has(i.empId)).map(i => i.empId))
+    // Universo de "candidatos a fila": los que sí están en la planilla filtrada,
+    // más los empleados activos excluidos de entrada por falta de cuenta (Regla 1).
+    const totalCandidatos = filas.length + empleados.filter(e => e.activo && (!e.banco || !e.numeroCuenta)).length
+    const pasaron = Math.max(0, totalCandidatos - idsConError.size - idsConAdvertencia.size)
+
+    return {
+      errores: issues.filter(i => i.nivel === 'error'),
+      advertencias: issues.filter(i => i.nivel === 'advertencia'),
+      reconciliaOk,
+      pasaron,
+      totalCandidatos,
+    }
+  }, [empleados, filas, totalNeto])
+
   function exportarPDF() {
     if (!periodo || filas.length === 0) return
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -1672,7 +1764,14 @@ function ReportePlanillaACH({
 
   return (
     <div className="space-y-5">
-      <ReportHeader title="Planilla Bancaria / ACH" desc="Lista de transferencias por período, agrupadas por banco. Formato optimizado para carga bancaria." onPDF={filas.length > 0 ? exportarPDF : undefined} onExcel={filas.length > 0 ? exportarXlsx : undefined} />
+      <ReportHeader
+        title="Planilla Bancaria / ACH"
+        desc="Lista de transferencias por período, agrupadas por banco. Formato optimizado para carga bancaria."
+        onPDF={filas.length > 0 ? exportarPDF : undefined}
+        onExcel={filas.length > 0 ? exportarXlsx : undefined}
+        disabled={validacion.errores.length > 0}
+        disabledReason="Corrige los errores bloqueantes de la validación antes de exportar la planilla."
+      />
       <FilterBar>
         <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
           Período:
@@ -1709,6 +1808,57 @@ function ReportePlanillaACH({
               </div>
             )}
           </div>
+
+          {/* Validación antes de enviar — reglas genéricas de Cielo Cloud (ver comentario en `validacion` arriba) */}
+          <div className={`rounded-xl border p-4 ${
+            validacion.errores.length > 0
+              ? 'border-rose-200 dark:border-rose-800/40 bg-rose-50/60 dark:bg-rose-950/10'
+              : validacion.advertencias.length > 0
+              ? 'border-amber-200 dark:border-amber-800/40 bg-amber-50/60 dark:bg-amber-950/10'
+              : 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/60 dark:bg-emerald-950/10'
+          }`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                {validacion.errores.length > 0
+                  ? <XCircle className="h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400" />
+                  : <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />}
+                <div>
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Validación antes de enviar</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md">
+                    Reglas genéricas de formato bancario — interpretación propia de Cielo Cloud ante la falta de especificaciones públicas exactas por banco.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm shrink-0 pl-7 sm:pl-0">
+                <span className="tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{validacion.pasaron} OK</span>
+                <span className="tabular-nums font-semibold text-rose-700 dark:text-rose-400">{validacion.errores.length} error{validacion.errores.length === 1 ? '' : 'es'}</span>
+                <span className="tabular-nums font-semibold text-amber-700 dark:text-amber-400">{validacion.advertencias.length} advertencia{validacion.advertencias.length === 1 ? '' : 's'}</span>
+              </div>
+            </div>
+
+            {(validacion.errores.length > 0 || validacion.advertencias.length > 0) && (
+              <div className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-zinc-200/70 dark:border-[#252840]/70 divide-y divide-zinc-200/70 dark:divide-[#252840]/70 bg-white/60 dark:bg-[#0d0f1a]/40">
+                {[...validacion.errores, ...validacion.advertencias].map((iss, idx) => (
+                  <div key={idx} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-sm">
+                    {iss.nivel === 'error'
+                      ? <XCircle className="h-3.5 w-3.5 shrink-0 text-rose-500" />
+                      : <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                    <span className="font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">{iss.nombre}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500 whitespace-nowrap">{iss.banco}</span>
+                    <span className={`text-xs ${iss.nivel === 'error' ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`}>{iss.motivo}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!validacion.reconciliaOk && (
+              <p className="mt-3 flex items-center gap-2 text-xs font-medium text-rose-600 dark:text-rose-400">
+                <XCircle className="h-3.5 w-3.5 shrink-0" />
+                La suma de las filas individuales no coincide con el total mostrado — posible problema de datos, revisa antes de enviar.
+              </p>
+            )}
+          </div>
+
           <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
             <div className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-2.5 flex items-center gap-2">
               <Search className="h-4 w-4 text-zinc-400 shrink-0" />
@@ -1803,6 +1953,68 @@ function ReporteHorasExtras({
     nocturnas: acc.nocturnas + r.nocturnas, impNocturno: acc.impNocturno + r.impNocturno,
     total: acc.total + r.total,
   }), { he35: 0, imp35: 0, he100: 0, imp100: 0, nocturnas: 0, impNocturno: 0, total: 0 }), [filas])
+
+  // ─── Topes legales de horas extras (Art. 155, Código de Trabajo) ───────────
+  // Decisión de alcance: horas_extras_35 Y horas_extras_100 cuentan para AMBOS
+  // topes (trimestral y semanal aprox.). El Art. 155 limita el NÚMERO de horas
+  // extraordinarias trabajadas más allá de la jornada ordinaria — no distingue
+  // según la tarifa de recargo con que se pagaron (35% ordinario vs 100%
+  // feriado). En una alerta de cumplimiento es más prudente sumar todas las
+  // horas extraordinarias que fraccionar el criterio y subestimar el riesgo
+  // real de exceso frente a la ley.
+  //
+  // Tope trimestral (80h): cálculo EXACTO — se agrupan los períodos por
+  // trimestre calendario y se suman las horas registradas, sin aproximación.
+  //
+  // Tope "semanal" (24h): el sistema NO registra horas por semana calendario
+  // (solo por período mensual/quincenal), así que este valor es una
+  // APROXIMACIÓN explícita — horas del período ÷ semanas aproximadas que
+  // contiene el período (mensual ≈ 4.33, quincenal ≈ 2.17). Se advierte esto
+  // visiblemente en la UI (ver nota debajo del título de la sección).
+  const datosTopePeriodo = useMemo(() => {
+    if (!generado) return []
+    const rows: { empId: string; per: string; trimestre: 1 | 2 | 3 | 4; horas: number; semanas: number; promedioSemanal: number }[] = []
+    for (const p of periodos.filter(p => p.anio === anioFiltro && p.estado !== 'en_proceso')) {
+      const semanas = p.tipo === 'quincenal' ? 2.17 : 4.33
+      const trimestre = Math.ceil(p.mes / 3) as 1 | 2 | 3 | 4
+      for (const [empId, ajustes] of Object.entries(p.ajustesPorEmpleado ?? {})) {
+        if (!empMap[empId]) continue
+        const he35  = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
+        const he100 = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
+        const horas = he35 + he100
+        if (horas === 0) continue
+        rows.push({ empId, per: periodoLabel(p), trimestre, horas, semanas, promedioSemanal: horas / semanas })
+      }
+    }
+    return rows
+  }, [generado, periodos, anioFiltro, empMap])
+
+  const TOPE_TRIMESTRAL_HORAS = 80
+  const TOPE_SEMANAL_HORAS = 24
+  const UMBRAL_ALERTA_PCT = 0.9 // ámbar desde 90% del tope; rojo al superarlo
+  const TRIMESTRE_LABEL: Record<number, string> = { 1: 'T1 (Ene–Mar)', 2: 'T2 (Abr–Jun)', 3: 'T3 (Jul–Sep)', 4: 'T4 (Oct–Dic)' }
+
+  const alertasTrimestrales = useMemo(() => {
+    const map = new Map<string, { empId: string; trimestre: 1 | 2 | 3 | 4; horas: number }>()
+    for (const r of datosTopePeriodo) {
+      const key = `${r.empId}-${r.trimestre}`
+      const cur = map.get(key) ?? { empId: r.empId, trimestre: r.trimestre, horas: 0 }
+      cur.horas += r.horas
+      map.set(key, cur)
+    }
+    return [...map.values()]
+      .filter(a => a.horas >= TOPE_TRIMESTRAL_HORAS * UMBRAL_ALERTA_PCT)
+      .sort((a, b) => b.horas - a.horas || a.trimestre - b.trimestre)
+  }, [datosTopePeriodo])
+
+  const alertasSemanales = useMemo(() =>
+    datosTopePeriodo
+      .filter(r => r.promedioSemanal >= TOPE_SEMANAL_HORAS * UMBRAL_ALERTA_PCT)
+      .sort((a, b) => b.promedioSemanal - a.promedioSemanal),
+    [datosTopePeriodo]
+  )
+
+  const hayAlertasTopes = alertasTrimestrales.length > 0 || alertasSemanales.length > 0
 
   function exportarPDF() {
     if (filas.length === 0) return
@@ -1929,6 +2141,116 @@ function ReporteHorasExtras({
                 </tfoot>
               </table>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
+            <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-3.5 flex items-start gap-2">
+              <ShieldAlert className="h-4 w-4 text-[#1B2980] dark:text-indigo-400 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Alertas de Topes Legales (Art. 155, Código de Trabajo)</h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Empleados que superan o se acercan (≥90%) al límite de 80 horas extraordinarias acumuladas por trimestre calendario de {anioFiltro}, o a un promedio semanal aproximado de 24 horas. Incluye horas al 35% y al 100%.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-b border-zinc-100 dark:border-[#1d2035] bg-amber-50/60 dark:bg-amber-950/10 flex items-start gap-2">
+              <Info className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
+                <strong>El tope trimestral (80h) es un cálculo exacto</strong> — suma las horas registradas en los períodos de cada trimestre calendario.
+                <strong> El promedio semanal (24h) es una aproximación</strong>: el sistema registra horas extra por período mensual o quincenal, no por
+                semana calendario individual — el valor mostrado divide las horas del período entre el número aproximado de semanas que contiene
+                (≈4.33 en nómina mensual, ≈2.17 en quincenal). Para un control exacto de este límite se requeriría registrar horas extra por semana calendario.
+              </p>
+            </div>
+
+            {!hayAlertasTopes ? (
+              <div className="px-5 py-8 flex flex-col items-center gap-2 text-center">
+                <CheckCircle2 className="h-6 w-6 text-emerald-400" />
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">Ningún empleado se acerca a los topes de horas extras en {anioFiltro}.</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-100 dark:divide-[#1d2035]">
+                {alertasTrimestrales.length > 0 && (
+                  <div className="px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">Tope trimestral — 80 horas acumuladas (cálculo exacto)</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left">
+                            <th className="pr-4 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Empleado</th>
+                            <th className="pr-4 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Trimestre</th>
+                            <th className="pr-4 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Horas Acumuladas</th>
+                            <th className="pr-4 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Progreso</th>
+                            <th className="py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                          {alertasTrimestrales.map(a => {
+                            const emp = empMap[a.empId]
+                            const pct = a.horas / TOPE_TRIMESTRAL_HORAS * 100
+                            const excede = a.horas > TOPE_TRIMESTRAL_HORAS
+                            return (
+                              <tr key={`${a.empId}-${a.trimestre}`}>
+                                <td className="pr-4 py-2 font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{emp ? fullName(emp) : a.empId}</td>
+                                <td className="pr-4 py-2 text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{TRIMESTRE_LABEL[a.trimestre]} {anioFiltro}</td>
+                                <td className="pr-4 py-2 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{a.horas.toFixed(1)} hrs</td>
+                                <td className="pr-4 py-2">
+                                  <div className="w-28 h-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] overflow-hidden">
+                                    <div className={`h-full rounded-full ${excede ? 'bg-rose-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, pct)}%` }} />
+                                  </div>
+                                </td>
+                                <td className="py-2">
+                                  <Badge variant={excede ? 'danger' : 'warning'}>
+                                    {excede ? `+${(a.horas - TOPE_TRIMESTRAL_HORAS).toFixed(1)}h sobre el tope` : `${pct.toFixed(0)}% del tope`}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {alertasSemanales.length > 0 && (
+                  <div className="px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">Tope semanal — 24 horas (promedio aproximado por período, ver nota arriba)</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left">
+                            <th className="pr-4 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Empleado</th>
+                            <th className="pr-4 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Período</th>
+                            <th className="pr-4 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Horas del Período</th>
+                            <th className="pr-4 py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Promedio Semanal Aprox.</th>
+                            <th className="py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                          {alertasSemanales.map((r, idx) => {
+                            const emp = empMap[r.empId]
+                            const excede = r.promedioSemanal > TOPE_SEMANAL_HORAS
+                            return (
+                              <tr key={`${r.empId}-${idx}`}>
+                                <td className="pr-4 py-2 font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{emp ? fullName(emp) : r.empId}</td>
+                                <td className="pr-4 py-2 text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{r.per}</td>
+                                <td className="pr-4 py-2 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{r.horas.toFixed(1)} hrs</td>
+                                <td className="pr-4 py-2 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">≈ {r.promedioSemanal.toFixed(1)} hrs/sem.</td>
+                                <td className="py-2">
+                                  <Badge variant={excede ? 'danger' : 'warning'}>{excede ? 'Excede aprox.' : 'Cerca del tope'}</Badge>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
@@ -2358,12 +2680,15 @@ function FilterBar({ children }: { children: React.ReactNode }) {
 }
 
 function ReportHeader({
-  title, desc, onPDF, onExcel,
+  title, desc, onPDF, onExcel, disabled, disabledReason,
 }: {
   title: string
   desc: string
   onPDF?: () => void
   onExcel?: () => void
+  /** Cuando es true, deshabilita visualmente los botones de exportación (p. ej. hay errores de validación bloqueantes) sin ocultarlos — el usuario ve que existe la acción pero no puede usarla hasta corregir los datos. */
+  disabled?: boolean
+  disabledReason?: string
 }) {
   return (
     <div className="flex items-start justify-between gap-4">
@@ -2376,7 +2701,13 @@ function ReportHeader({
           {onExcel && (
             <button
               onClick={onExcel}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 transition-colors"
+              disabled={disabled}
+              title={disabled ? disabledReason : undefined}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                disabled
+                  ? 'border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                  : 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/50'
+              }`}
             >
               <FileSpreadsheet className="h-4 w-4" />
               Excel
@@ -2385,7 +2716,13 @@ function ReportHeader({
           {onPDF && (
             <button
               onClick={onPDF}
-              className="flex items-center gap-1.5 rounded-lg border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-950/30 px-3 py-1.5 text-sm font-medium text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50 transition-colors"
+              disabled={disabled}
+              title={disabled ? disabledReason : undefined}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                disabled
+                  ? 'border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] text-zinc-400 dark:text-zinc-600 cursor-not-allowed'
+                  : 'border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-950/50'
+              }`}
             >
               <Download className="h-4 w-4" />
               PDF
