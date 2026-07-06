@@ -457,3 +457,40 @@ export interface ChecklistAnualEstado {
   feriados: FeriadoNacional[]        // calendario de feriados nacionales confirmado para el año
   calendarioPago: PagoPlanificado[]  // fechas de pago planificadas por mes/quincena
 }
+
+// ─── Aumentos salariales (selección por criterio + aprobación) ───────────────
+// Antes de este tipo, "Aumentos Salariales" escribía directo en
+// Empleado.salarioBase sin dejar ningún rastro. Ahora cada solicitud (manual
+// por criterio, o importada por Excel) queda registrada aquí con un estado
+// explícito — solo `aplicar()` (en aumentos-context.tsx), y únicamente cuando
+// el registro ya está 'aprobado', sobreescribe el salario real.
+//
+// La app no tiene roles de acceso multiusuario reales (mismo caso ya
+// documentado para BitacoraDesposteo/desposteo de nómina) — no hay forma de
+// exigir que "aprobadoPor" sea una persona distinta de "solicitadoPor". La
+// salvaguarda real es la confirmación EXPLÍCITA: un campo de texto obligatorio
+// "Aprobado por" que el usuario debe llenar a mano antes de que el registro
+// pueda pasar a 'aplicado', dejando un rastro auditable (igual enfoque que el
+// desposteo).
+export type EstadoAumento = 'pendiente_aprobacion' | 'aprobado' | 'rechazado' | 'aplicado'
+
+export interface RegistroAumento {
+  id: string
+  empleadoId: string
+  salarioAnterior: number
+  salarioNuevo: number
+  tipoAjuste: 'porcentaje' | 'fijo'
+  valorAjuste: number            // % (tipoAjuste 'porcentaje') o monto RD$ sumado al salario anterior (tipoAjuste 'fijo')
+  motivo: string
+  fechaSolicitud: string          // ISO timestamp
+  solicitadoPor?: string          // email de la sesión activa al momento de solicitar (best-effort, no hay roles reales)
+  origen?: 'manual' | 'importacion_excel'
+  estado: EstadoAumento
+  // fechaAprobacion se fija tanto al aprobar como al rechazar — es la fecha de
+  // RESOLUCIÓN de la solicitud, no exclusivamente de aprobación; el campo
+  // conserva el nombre del enunciado original para no divergir de él.
+  fechaAprobacion?: string
+  aprobadoPor?: string            // nombre capturado en el campo de confirmación explícita al aprobar
+  motivoRechazo?: string          // solo si estado === 'rechazado'
+  fechaAplicacion?: string        // ISO timestamp — se fija cuando aplicar() sobreescribe salarioBase
+}
