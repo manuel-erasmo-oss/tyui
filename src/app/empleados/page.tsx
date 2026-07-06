@@ -10,13 +10,14 @@ import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getDivisorSalarioDiario } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getDivisorSalarioDiario, aplicarSaldoISRFavor } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
   fullName, contratoBadgeClass, contratoLabel,
 } from '@/lib/utils'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
+import { useSaldoISR } from '@/lib/saldo-isr-context'
 import {
   getPais, formatDocNumber, labelTipoDoc, calcularEdad, downloadBase64,
   EMPTY_EMP_FORM, toEmpForm, formToEmpleado, validateEmpForm,
@@ -228,6 +229,11 @@ function EmpleadoDrawer({
 }) {
   const { update, suspender, reactivar } = useEmpleados()
   const { periodos } = usePeriodos()
+  const { registrar: registrarSaldoISR, getSaldosActivos, getMontoAplicadoEnPeriodo } = useSaldoISR()
+  const [showSaldoISRForm, setShowSaldoISRForm] = useState(false)
+  const [saldoISRMonto, setSaldoISRMonto] = useState('')
+  const [saldoISRMotivo, setSaldoISRMotivo] = useState('')
+  const [saldoISRAnio, setSaldoISRAnio] = useState(() => new Date().getFullYear())
   const [winState, setWinState] = useState<WindowState>('normal')
   const [mostrarSuspension, setMostrarSuspension] = useState(false)
   const [motivoSusp, setMotivoSusp] = useState('')
@@ -245,6 +251,7 @@ function EmpleadoDrawer({
   const preaviso  = calcularPreaviso(empleado.salarioBase, anos, getDivisorSalarioDiario(empleado))
   const supervisor = todosEmpleados.find(e => e.id === empleado.supervisorId)
   const pais       = empleado.nacionalidad ? getPais(empleado.nacionalidad) : undefined
+  const saldosISRActivos = getSaldosActivos(empleado.id)
   const isMax      = winState === 'maximized'
   const isMin      = winState === 'minimized'
 
@@ -526,6 +533,92 @@ function EmpleadoDrawer({
                   ))}
                 </div>
               </section>
+
+              {/* Saldo ISR a Favor */}
+              <section>
+                <div className="mb-1 flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                    Saldo ISR a Favor
+                  </h3>
+                  <button type="button" onClick={() => setShowSaldoISRForm(v => !v)}
+                    className="text-[11px] font-medium text-[#1B2980] dark:text-indigo-400 hover:underline">
+                    + Registrar
+                  </button>
+                </div>
+                <p className="mb-3 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  ISR retenido de más — se descuenta automáticamente del ISR calculado en próximos
+                  períodos hasta agotarse, o se liquida contra prestaciones si se desvincula antes.
+                </p>
+
+                {showSaldoISRForm && (
+                  <div className="mb-3 space-y-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Monto (RD$)</label>
+                        <input type="number" min="0" step="0.01" value={saldoISRMonto}
+                          onChange={e => setSaldoISRMonto(e.target.value)}
+                          className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Año Fiscal</label>
+                        <input type="number" value={saldoISRAnio}
+                          onChange={e => setSaldoISRAnio(Number(e.target.value))}
+                          className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Motivo</label>
+                      <input type="text" value={saldoISRMotivo}
+                        onChange={e => setSaldoISRMotivo(e.target.value)}
+                        placeholder="Ej. cambio de tramo ISR a mitad de año"
+                        className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none" />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      <button type="button"
+                        onClick={() => { setShowSaldoISRForm(false); setSaldoISRMonto(''); setSaldoISRMotivo('') }}
+                        className="rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-1.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-400 hover:bg-white dark:hover:bg-[#141722] transition-colors">
+                        Cancelar
+                      </button>
+                      <button type="button"
+                        onClick={() => {
+                          const monto = Number(saldoISRMonto)
+                          if (!monto || monto <= 0) return
+                          registrarSaldoISR({
+                            empleadoId: empleado.id,
+                            monto,
+                            motivo: saldoISRMotivo.trim() || 'Sin especificar',
+                            anio: saldoISRAnio,
+                            fechaRegistro: new Date().toISOString().slice(0, 10),
+                          })
+                          setShowSaldoISRForm(false)
+                          setSaldoISRMonto('')
+                          setSaldoISRMotivo('')
+                        }}
+                        className="rounded-lg bg-[#1B2980] hover:bg-[#151f66] px-3 py-1.5 text-[11px] font-semibold text-white transition-colors">
+                        Guardar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {saldosISRActivos.length === 0 ? (
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500 italic">Sin saldo pendiente.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {saldosISRActivos.map(s => (
+                      <div key={s.id} className="rounded-lg border border-teal-100 dark:border-teal-900/40 bg-teal-50 dark:bg-teal-950/20 px-4 py-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{s.motivo}</p>
+                            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Año {s.anio} · original {formatRD(s.monto, 0)}</p>
+                          </div>
+                          <span className="text-sm font-bold tabular-nums text-teal-600 dark:text-teal-400">{formatRD(s.saldoPendiente, 0)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
 
           </div>
@@ -698,7 +791,11 @@ function EmpleadoDrawer({
             })
             .map(p => {
               const ajustes = p.ajustesPorEmpleado?.[empleado.id] ?? []
-              const resultado = calcNominaConAjustes(empleado, ajustes, p.tipo, p.quincena ?? 1)
+              const base = calcNominaConAjustes(empleado, ajustes, p.tipo, p.quincena ?? 1)
+              // Reconstrucción histórica: usa lo que realmente se aplicó en ese
+              // período (no el saldoPendiente actual, que ya pudo cambiar).
+              const montoAplicado = getMontoAplicadoEnPeriodo(empleado.id, p.id)
+              const { resultado } = aplicarSaldoISRFavor(base, montoAplicado)
               return { periodo: p, resultado }
             })
             .sort((a, b) => new Date(b.periodo.fechaGeneracion).getTime() - new Date(a.periodo.fechaGeneracion).getTime())

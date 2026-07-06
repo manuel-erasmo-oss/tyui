@@ -7,6 +7,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
+import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica, calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario } from '@/lib/dominican-labor'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
 import type { MotivoLiquidacion } from '@/types'
@@ -67,6 +68,7 @@ export default function LiquidacionPage() {
   const { getPrestamosActivos, registrarPago } = usePrestamos()
   const { periodos } = usePeriodos()
   const { liquidaciones, registrar } = useLiquidaciones()
+  const { getSaldosActivos, liquidar: liquidarSaldoISR } = useSaldoISR()
   const [empleadoId, setEmpleadoId] = useState<string>('')
   const [motivo, setMotivo] = useState<Motivo | ''>('')
   const [fechaTerminacion, setFechaTerminacion] = useState<string>(
@@ -86,6 +88,8 @@ export default function LiquidacionPage() {
   // ── Calculation ────────────────────────────────────────────────────────────
   const emp = empleadosActivos.find(e => e.id === empleadoId) ?? null
   const prestamosActivos = emp ? getPrestamosActivos(emp.id) : []
+  const saldosISRActivos = emp ? getSaldosActivos(emp.id) : []
+  const saldoISRPendiente = saldosISRActivos.reduce((s, x) => s + x.saldoPendiente, 0)
 
   const resultado = (() => {
     if (!emp || !motivo) return null
@@ -142,14 +146,17 @@ export default function LiquidacionPage() {
       const p = prestamosActivos.find(x => x.id === pid)
       return s + (p?.saldoPendiente ?? 0)
     }, 0)
-    const total = Math.max(0, subtotal - totalPrestamos)
+    // Saldo ISR a favor pendiente: la empresa se lo debe al empleado (ISR
+    // retenido de más en el pasado que nunca terminó de acreditarse vía
+    // nómina) — se reembolsa completo en la liquidación, no se descuenta.
+    const total = Math.max(0, subtotal + saldoISRPendiente - totalPrestamos)
 
-    return { anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario, cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, total }
+    return { anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario, cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, saldoISR: saldoISRPendiente, total }
   })()
 
   function handleExportCSV() {
     if (!emp || !resultado || !motivo) return
-    const { cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, total } = resultado
+    const { cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, saldoISR, total } = resultado
     const rows: (string | number)[][] = [
       ['Cesantía', cesantia > 0 ? 'Sí' : 'No', cesantia.toFixed(2)],
       ['Preaviso', preaviso > 0 ? 'Sí' : 'No', preaviso.toFixed(2)],
@@ -158,6 +165,9 @@ export default function LiquidacionPage() {
       ['Regalía Proporcional', 'Sí', regalia.toFixed(2)],
       ['Subtotal Prestaciones', '', subtotal.toFixed(2)],
     ]
+    if (saldoISR > 0) {
+      rows.push(['Saldo ISR a Favor', 'Sí', saldoISR.toFixed(2)])
+    }
     if (totalPrestamos > 0) {
       rows.push(['Descuento Préstamos Pendientes', 'Sí', (-totalPrestamos).toFixed(2)])
     }
@@ -185,6 +195,13 @@ export default function LiquidacionPage() {
       })
     }
 
+    // Cualquier saldo ISR a favor pendiente se reembolsa completo aquí
+    // (ya está incluido en resultado.total) — se marca 'liquidado' para
+    // que no se vuelva a aplicar ni a mostrar como pendiente.
+    for (const s of saldosISRActivos) {
+      liquidarSaldoISR(s.id)
+    }
+
     // Persist the liquidation record — this is the source of truth for
     // the termination details (motivo, montos, fecha)
     registrar({
@@ -198,6 +215,7 @@ export default function LiquidacionPage() {
       vacaciones: resultado.vacaciones,
       regalia: resultado.regalia,
       totalPrestamosDescontados: resultado.totalPrestamos,
+      saldoISRReembolsado: resultado.saldoISR,
       totalPagado: resultado.total,
     })
 
@@ -483,6 +501,24 @@ export default function LiquidacionPage() {
                   {formatRD(resultado.regalia, 2)}
                 </p>
               </div>
+
+              {/* Saldo ISR a Favor */}
+              {resultado.saldoISR > 0 && (
+                <div className="rounded-xl border border-teal-200 dark:border-teal-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">Saldo ISR a Favor</p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">ISR retenido de más — se reembolsa</p>
+                    </div>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-500 dark:text-teal-400">
+                      <Banknote className="h-4 w-4" />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-2xl font-bold tabular-nums text-teal-700 dark:text-teal-300">
+                    {formatRD(resultado.saldoISR, 2)}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Préstamos pendientes */}
@@ -584,6 +620,14 @@ export default function LiquidacionPage() {
                     <p className="text-zinc-500 uppercase tracking-wide">Regalía</p>
                     <p className="font-semibold mt-0.5 text-emerald-300">{formatRD(resultado.regalia, 0)}</p>
                   </div>
+                  {resultado.saldoISR > 0 && (
+                    <div className="col-span-2 md:col-span-5 border-t border-zinc-800 pt-3">
+                      <p className="text-zinc-500 uppercase tracking-wide">Saldo ISR a Favor</p>
+                      <p className="font-semibold mt-0.5 text-teal-300">
+                        +{formatRD(resultado.saldoISR, 0)}
+                      </p>
+                    </div>
+                  )}
                   {resultado.totalPrestamos > 0 && (
                     <div className="col-span-2 md:col-span-5 border-t border-zinc-800 pt-3">
                       <p className="text-zinc-500 uppercase tracking-wide">Desc. Préstamos</p>

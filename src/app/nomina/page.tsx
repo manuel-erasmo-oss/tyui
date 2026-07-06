@@ -30,12 +30,13 @@ import { usePeriodos, esPeriodoMasReciente, periodoAnterior } from '@/lib/period
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
+import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { useAuth } from '@/lib/auth-context'
 import {
   enviarComprobante, plantillaComprobanteDefault, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
 } from '@/lib/comprobante-email'
 import type { PlantillaComprobante } from '@/lib/comprobante-email'
-import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor } from '@/lib/dominican-labor'
 import { formatRD, fullName, formatCedula, formatDate } from '@/lib/utils'
 import jsPDF from 'jspdf'
 import type {
@@ -290,6 +291,14 @@ function descargarComprobantePDF(
   doc.setDrawColor(220, 220, 220)
   doc.line(14, y, W - 14, y)
   y += 5
+  if (nomina.saldoISRAplicado > 0) {
+    doc.setFontSize(6.5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(16, 150, 100)
+    doc.text(`Crédito ISR a favor aplicado: -${formatRD(nomina.saldoISRAplicado)}`, 14, y)
+    y += 4
+  }
+
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(170, 170, 170)
@@ -382,6 +391,11 @@ function DetalleNomina({
                   ISR: anticipo de quincena (se liquida en 2ª quincena)
                 </p>
               )}
+              {nomina.saldoISRAplicado > 0 && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 italic">
+                  Incluye crédito ISR a favor aplicado: -{formatRD(nomina.saldoISRAplicado)}
+                </p>
+              )}
               <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-2 flex justify-between font-semibold text-sm">
                 <span className="text-zinc-800 dark:text-zinc-200">Total Descuentos</span>
                 <span className="text-rose-700 dark:text-rose-400 tabular-nums">({formatRD(nomina.totalDescuentos)})</span>
@@ -462,7 +476,21 @@ export default function NominaPage() {
   const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago } = usePrestamos()
   const { liquidaciones } = useLiquidaciones()
+  const { getSaldosActivos, getMontoAplicadoEnPeriodo, aplicar: aplicarSaldoISR } = useSaldoISR()
   const { user } = useAuth()
+
+  // Aplica el saldo ISR a favor sobre un resultado ya calculado. Si el
+  // empleado ya fue procesado en este período, usa el monto histórico
+  // realmente aplicado (fijo, no cambia aunque el saldoPendiente actual sí);
+  // si aún no se procesa, muestra una vista previa en vivo contra el saldo
+  // disponible ahora mismo (se "congela" recién al procesar).
+  function conSaldoISR(empleado: Empleado, base: ResultadoNomina, periodo: PeriodoNomina): ResultadoNomina {
+    const yaProcesado = periodo.empleadosProcesados?.includes(empleado.id) ?? false
+    const monto = yaProcesado
+      ? getMontoAplicadoEnPeriodo(empleado.id, periodo.id)
+      : (getSaldosActivos(empleado.id)[0]?.saldoPendiente ?? 0)
+    return aplicarSaldoISRFavor(base, monto).resultado
+  }
 
   // View state
   const [periodoAbierto, setPeriodoAbierto] = useState<string | null>(null)
@@ -610,7 +638,7 @@ export default function NominaPage() {
     const ajustesPorEmp  = periodoActual.ajustesPorEmpleado ?? {}
     const quincenaActual: 1 | 2 = periodoActual.quincena ?? 1
     const rows = empleadosEnNomina.map(e => {
-      const r = calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual)
+      const r = conSaldoISR(e, calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual), periodoActual)
       return [
         fullName(e), e.cargo, e.departamento,
         r.totalBruto.toFixed(2), r.afpEmpleado.toFixed(2), r.sfsEmpleado.toFixed(2),
@@ -662,6 +690,22 @@ export default function NominaPage() {
     setNewDesc('')
   }
 
+  // Congela el crédito ISR usado por un empleado al momento de procesarlo:
+  // consume el saldo más antiguo disponible y registra la aplicación, para
+  // que el monto quede fijo en el historial aunque el saldoPendiente cambie después.
+  function congelarCreditoISR(empId: string) {
+    if (!periodoActual) return
+    const emp = empleadosEnNomina.find(e => e.id === empId)
+    if (!emp) return
+    const saldo = getSaldosActivos(emp.id)[0]
+    if (!saldo) return
+    const base = calcularConAjustes(emp, (periodoActual.ajustesPorEmpleado ?? {})[emp.id] ?? [], periodoActual.tipo, periodoActual.quincena ?? 1)
+    const { montoAplicado } = aplicarSaldoISRFavor(base, saldo.saldoPendiente)
+    if (montoAplicado > 0) {
+      aplicarSaldoISR(saldo.id, periodoActual.id, periodoActualLabel, montoAplicado)
+    }
+  }
+
   function handleProcesarEmpleado(empId: string) {
     if (!periodoActual) return
     const procesadosActuales = new Set(periodoActual.empleadosProcesados ?? [])
@@ -670,12 +714,14 @@ export default function NominaPage() {
       setAuditoriaIds([empId])
       return
     }
+    congelarCreditoISR(empId)
     marcarProcesados(periodoActual.id, [empId])
     setSelectedEmps(prev => { const s = new Set(prev); s.delete(empId); return s })
   }
 
   function confirmarAuditoria() {
     if (!periodoActual || !auditoriaIds) return
+    auditoriaIds.forEach(congelarCreditoISR)
     marcarProcesados(periodoActual.id, auditoriaIds)
     setSelectedEmps(new Set())
     setToast('Todos los empleados procesados')
@@ -696,6 +742,7 @@ export default function NominaPage() {
       setAuditoriaIds(ids)
       return
     }
+    ids.forEach(congelarCreditoISR)
     marcarProcesados(periodoActual.id, ids)
     setSelectedEmps(new Set())
     setToast(selectedEmps.size > 0 ? `${ids.length} empleado(s) procesado(s)` : 'Todos los empleados procesados')
@@ -975,7 +1022,7 @@ export default function NominaPage() {
 
           const filas = empleadosEnNomina.map(e => ({
             empleado: e,
-            resultado: calcularConAjustes(e, ajustesEnvio[e.id] ?? [], periodoEnvio.tipo, periodoEnvio.quincena ?? 1),
+            resultado: conSaldoISR(e, calcularConAjustes(e, ajustesEnvio[e.id] ?? [], periodoEnvio.tipo, periodoEnvio.quincena ?? 1), periodoEnvio),
           }))
 
           const fechaPagoTexto = periodoEnvio.fechaPago ? formatDate(periodoEnvio.fechaPago) : ''
@@ -1167,7 +1214,7 @@ export default function NominaPage() {
 
   const nominas = empleadosEnNomina.map(e => ({
     empleado: e,
-    resultado: calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual),
+    resultado: conSaldoISR(e, calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual), periodoActual),
   }))
 
   const totales = {

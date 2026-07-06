@@ -384,5 +384,6 @@ export interface RegistroLiquidacion {
   vacaciones: number
   regalia: number
   totalPrestamosDescontados: number
+  saldoISRReembolsado?: number  // saldo ISR a favor pendiente que se reembolsó en esta liquidación
   totalPagado: number
 }
