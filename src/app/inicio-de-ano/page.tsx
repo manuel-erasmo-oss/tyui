@@ -245,7 +245,7 @@ export default function InicioDeAnoPage() {
         <ChecklistCard
           icon={PartyPopper}
           titulo="Confirmar calendario de feriados del año"
-          descripcion="Registra las fechas de los feriados nacionales confirmados para este año. Se usan como referencia manual (ej. para calcular horas extra al 100% en días feriados); no se recalculan automáticamente en nómina todavía."
+          descripcion="Registra las fechas de los feriados nacionales confirmados para este año. Se usan como recordatorio automático al cargar horas extra en Procesar Nómina — el sistema avisa si el mes tiene un feriado registrado, para clasificar las horas correctamente entre H.E. 35% y H.E. 100% (Art. 203)."
           completado={estado.itemsCompletados.includes('feriados')}
           onToggle={() => handleToggle('feriados')}
         >
