@@ -694,7 +694,13 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   exactamente al empleado de ese departamento pendiente de procesar.
 - Aumento masivo de salario: selección por criterio + importación Excel +
   aprobación de segundo usuario antes de impactar nómina.
-- Reporte de antigüedad de plantilla (agrupado por posición/rango de años).
+- ~~Reporte de antigüedad de plantilla~~ — **implementado** (vía agente en
+  worktree aislado), extendiendo Reportería con un nuevo `ReportId`
+  "Antigüedad de Plantilla". Dos agrupaciones en tabs (Por Rango de Años:
+  &lt;1/1-3/3-5/5-10/10+ años, con barra visual; Por Posición: antigüedad
+  promedio por cargo, mayor a menor) más tabla de detalle por empleado
+  buscable. Exportación PDF (2 páginas: resúmenes + detalle) y Excel
+  (3 hojas).
 - ~~Crédito de ISR por gastos educativos (Ley 179-09)~~ — **implementado.**
   En vez de duplicar toda la máquina de `SaldoISRFavor` (registrar/aplicar/
   liquidar/FIFO por fecha), se generalizó ese mismo mecanismo — ya usado para
