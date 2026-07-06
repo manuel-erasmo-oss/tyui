@@ -20,6 +20,7 @@ import {
   FileClock,
   BarChart2,
   CalendarCheck,
+  Landmark,
   LogOut,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { href: '/prestamos',       icon: HandCoins,       label: 'Préstamos' },
   { href: '/licencias',       icon: FileClock,       label: 'Licencias' },
   { href: '/bonificacion',    icon: Percent,         label: 'Bonificación Utilidades' },
+  { href: '/retribuciones-complementarias', icon: Landmark, label: 'Retribuciones Complementarias' },
   { href: '/liquidacion',     icon: UserMinus,       label: 'Liquidación' },
   { href: '/aumentos',        icon: TrendingUp,      label: 'Aumentos Salariales' },
   { href: '/bandas-salariales', icon: BarChart2,     label: 'Bandas Salariales' },
