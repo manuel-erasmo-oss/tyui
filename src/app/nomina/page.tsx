@@ -603,8 +603,15 @@ export default function NominaPage() {
   // créditos ISR aplicados — un desajuste silencioso que se propaga a las
   // cards de la lista de períodos, el Dashboard y toda Reportería, que leen
   // periodo.totales directamente en vez de recalcular en vivo.
+  //
+  // Solo mientras en_proceso: un período procesada/cerrada es un registro
+  // histórico — recalcular con datos EN VIVO de empleadosEnNomina lo dejaría
+  // vulnerable a que un cambio salarial posterior (aumento, etc.) infle
+  // retroactivamente el bruto/neto de un mes ya cerrado y pagado, aunque ese
+  // monto nunca se pagó realmente. Al reabrir (desposteo) el estado vuelve a
+  // en_proceso y el recálculo en vivo se reanuda correctamente.
   useEffect(() => {
-    if (!periodoActual) return
+    if (!periodoActual || periodoActual.estado !== 'en_proceso') return
     const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
     const rs = empleadosEnNomina.map(e =>
       conSaldoISR(e, calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, periodoActual.quincena ?? 1), periodoActual)

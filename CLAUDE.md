@@ -928,6 +928,26 @@ diffs inspeccionados, verificados y aplicados manualmente):
   tope ni redondeo — un error de tipeo podía distorsionar las stat cards sin
   aviso. Ahora se redondea y se topa en 365 días.
 
+**Fase 5 — Reportería:**
+- **[FIXED — regresión propia]** El `useEffect` de recálculo de totales
+  (Fase 2) recalculaba con datos EN VIVO cada vez que se ABRÍA un período,
+  sin importar si ya estaba `procesada`/`cerrada`. Un período histórico
+  cerrado, al reabrirse solo para verlo semanas después, se inflaba
+  retroactivamente si el empleado había recibido un aumento salarial
+  después. Fix: solo recalcula mientras `estado === 'en_proceso'` — un
+  período cerrado es un registro histórico inmutable salvo desposteo
+  explícito. Verificado: María (aumento RD$55,000→60,500) ya no infla el
+  bruto de julio (se mantiene en RD$321,500 exacto) al reabrir ese período.
+- **[HALLAZGO, sin corregir — gap arquitectónico]** El sistema no
+  guarda ningún snapshot de salarioBase por período — "Nómina por Período"
+  en Reportería, el tab "Historial Nómina" de Empleados, y
+  `calcularSalarioPromedioUltimos12Meses` (usado en Liquidación) reconstruyen
+  nóminas pasadas con el salarioBase ACTUAL del empleado, no con el que
+  realmente aplicaba en ese momento. Confirmado con el mismo caso de
+  María: el reporte le atribuye RD$60,500 en julio cuando realmente se le
+  pagaron RD$55,000. Requiere un cambio de modelo de datos (snapshot por
+  período) — se reporta para decisión del usuario.
+
 Detalle exhaustivo de cada hallazgo (pasos de reproducción, números exactos
 verificados) en el reporte de QA que se entrega al usuario al cerrar la Fase 7.
 
