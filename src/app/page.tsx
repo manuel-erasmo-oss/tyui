@@ -117,12 +117,16 @@ export default function DashboardPage() {
   const netoRatio  = totalBruto > 0 ? totalNeto / totalBruto : 0
   const LINE_DATA  = BAR_DATA.map(d => ({ mes: d.mes, valor: Math.round(d.nomina * netoRatio) }))
 
-  const prevBruto  = BAR_DATA[3].nomina
-  const prevCosto  = BAR_DATA[3].nomina + BAR_DATA[3].tss
-  const prevNeto   = LINE_DATA[3].valor
-  const deltaBruto = prevBruto > 0 ? ((BAR_DATA[4].nomina   - prevBruto) / prevBruto) * 100 : 0
-  const deltaCosto = prevCosto > 0 ? ((costoTotal             - prevCosto) / prevCosto) * 100 : 0
-  const deltaNeto  = prevNeto  > 0 ? ((LINE_DATA[4].valor    - prevNeto)  / prevNeto)  * 100 : 0
+  // BAR_DATA/LINE_DATA pueden tener entre 2 y 5 elementos (según cuántos
+  // períodos mensuales reales existan) — nunca asumir 5 elementos fijos.
+  const ultimoIdx  = BAR_DATA.length - 1
+  const anteriorIdx = ultimoIdx - 1
+  const prevBruto  = anteriorIdx >= 0 ? BAR_DATA[anteriorIdx].nomina : 0
+  const prevCosto  = anteriorIdx >= 0 ? BAR_DATA[anteriorIdx].nomina + BAR_DATA[anteriorIdx].tss : 0
+  const prevNeto   = anteriorIdx >= 0 ? LINE_DATA[anteriorIdx].valor : 0
+  const deltaBruto = prevBruto > 0 ? ((BAR_DATA[ultimoIdx].nomina  - prevBruto) / prevBruto) * 100 : 0
+  const deltaCosto = prevCosto > 0 ? ((costoTotal                   - prevCosto) / prevCosto) * 100 : 0
+  const deltaNeto  = prevNeto  > 0 ? ((LINE_DATA[ultimoIdx].valor  - prevNeto)  / prevNeto)  * 100 : 0
 
   const DONUT_DATA = [
     { name: 'Salario neto',  value: totalNeto,        color: '#1B2980' },

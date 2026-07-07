@@ -104,6 +104,7 @@ export function cargarDatosDemo(uid?: string | null): void {
     zonaFranca: false,
     rolUsuario: 'dueño',
     onboardingCompleto: true,
+    configuracionInicialOfrecida: true,
   }
 
   // ── 2. Empleados (same as MOCK — already in context) ─────────────────────────
