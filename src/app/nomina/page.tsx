@@ -80,6 +80,23 @@ function exportarCSV(filename: string, headers: string[], rows: (string | number
 }
 
 // ── Label helpers ─────────────────────────────────────────────────────────────
+// Nómina en USD — capa de presentación pura, nunca la base del cálculo. El
+// motor tributario (dominican-labor.ts) siempre calcula y persiste en RD$;
+// esta función solo convierte lo que ya se calculó para mostrarlo en pantalla,
+// usando la tasa que la empresa configura manualmente en Configuración (sin
+// conexión a ningún servicio de tasas en vivo). El comprobante en PDF, el CSV
+// exportado y la plantilla de correo de pago siguen mostrando RD$ siempre —
+// son el registro legal/financiero real, no una vista de conveniencia.
+function formatMoneda(amountRD: number, empresa: Empresa, mostrarUSD: boolean, decimals = 2): string {
+  if (mostrarUSD && empresa.tasaCambioUSD) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: 'USD',
+      minimumFractionDigits: decimals, maximumFractionDigits: decimals,
+    }).format(amountRD / empresa.tasaCambioUSD)
+  }
+  return formatRD(amountRD, decimals)
+}
+
 function labelPeriodo(p: PeriodoNomina): string {
   const mes = MESES[p.mes - 1]
   if (p.tipo === 'quincenal') {
@@ -325,14 +342,17 @@ function DetalleNomina({
   empleado,
   nomina,
   periodoLabel,
+  mostrarUSD,
   onClose,
 }: {
   empleado: Empleado
   nomina: ResultadoNomina
   periodoLabel: string
+  mostrarUSD: boolean
   onClose: () => void
 }) {
   const { empresa } = useEmpresa()
+  const fmt = (amount: number, decimals = 2) => formatMoneda(amount, empresa, mostrarUSD, decimals)
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div
@@ -371,12 +391,12 @@ function DetalleNomina({
               ].filter(r => !r.hide).map(row => (
                 <div key={row.label} className="flex justify-between text-sm">
                   <span className="text-zinc-600 dark:text-zinc-400">{row.label}</span>
-                  <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">{formatRD(row.value)}</span>
+                  <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">{fmt(row.value)}</span>
                 </div>
               ))}
               <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-2 flex justify-between font-semibold text-sm">
                 <span className="text-zinc-800 dark:text-zinc-200">Total Bruto</span>
-                <span className="text-emerald-700 dark:text-emerald-400 tabular-nums">{formatRD(nomina.totalBruto)}</span>
+                <span className="text-emerald-700 dark:text-emerald-400 tabular-nums">{fmt(nomina.totalBruto)}</span>
               </div>
             </div>
           </div>
@@ -394,7 +414,7 @@ function DetalleNomina({
               ].filter(r => !r.hide).map(row => (
                 <div key={row.label} className="flex justify-between text-sm">
                   <span className="text-zinc-600 dark:text-zinc-400">{row.label}</span>
-                  <span className="tabular-nums font-medium text-rose-700 dark:text-rose-400">({formatRD(row.value)})</span>
+                  <span className="tabular-nums font-medium text-rose-700 dark:text-rose-400">({fmt(row.value)})</span>
                 </div>
               ))}
               {nomina.isrMensual === 0 && (
@@ -404,18 +424,18 @@ function DetalleNomina({
               )}
               {nomina.saldoISRAplicado > 0 && (
                 <p className="text-[11px] text-emerald-600 dark:text-emerald-400 italic">
-                  Incluye crédito ISR a favor aplicado: -{formatRD(nomina.saldoISRAplicado)}
+                  Incluye crédito ISR a favor aplicado: -{fmt(nomina.saldoISRAplicado)}
                 </p>
               )}
               {(empleado.ingresoOtroEmpleadorMensual ?? 0) > 0 && (
                 <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
-                  ISR consolidado con ingreso de otro empleador ({formatRD(empleado.ingresoOtroEmpleadorMensual!, 0)}/mes)
+                  ISR consolidado con ingreso de otro empleador ({fmt(empleado.ingresoOtroEmpleadorMensual!, 0)}/mes)
                   — esta empresa solo retiene su porción proporcional
                 </p>
               )}
               <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-2 flex justify-between font-semibold text-sm">
                 <span className="text-zinc-800 dark:text-zinc-200">Total Descuentos</span>
-                <span className="text-rose-700 dark:text-rose-400 tabular-nums">({formatRD(nomina.totalDescuentos)})</span>
+                <span className="text-rose-700 dark:text-rose-400 tabular-nums">({fmt(nomina.totalDescuentos)})</span>
               </div>
             </div>
           </div>
@@ -424,10 +444,10 @@ function DetalleNomina({
         <div className="grid grid-cols-2 gap-4 border-t border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] p-6 rounded-b-xl">
           <div className="rounded-xl bg-white dark:bg-[#141722] border border-zinc-200 dark:border-[#252840] p-4">
             <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-semibold tracking-wide">Salario Neto a Pagar</p>
-            <p className="mt-1 text-2xl font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">{formatRD(nomina.salarioNeto, 0)}</p>
+            <p className="mt-1 text-2xl font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">{fmt(nomina.salarioNeto, 0)}</p>
             {nomina.grossingUpEmpresa > 0 && (
               <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
-                Incluye reembolso de grossing-up: +{formatRD(nomina.grossingUpEmpresa)}
+                Incluye reembolso de grossing-up: +{fmt(nomina.grossingUpEmpresa)}
               </p>
             )}
           </div>
@@ -435,42 +455,42 @@ function DetalleNomina({
             <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-semibold tracking-wide mb-2">Aportes Empresa (TSS)</p>
             <div className="flex justify-between text-xs">
               <span className="text-zinc-600 dark:text-zinc-400">AFP Empleador (7.10%)</span>
-              <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.afpEmpleador)}</span>
+              <span className="tabular-nums font-medium dark:text-zinc-200">{fmt(nomina.afpEmpleador)}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-zinc-600 dark:text-zinc-400">SFS Empleador (7.09%)</span>
-              <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.sfsEmpleador)}</span>
+              <span className="tabular-nums font-medium dark:text-zinc-200">{fmt(nomina.sfsEmpleador)}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-zinc-600 dark:text-zinc-400">SRL Empleador</span>
-              <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.srlEmpleador)}</span>
+              <span className="tabular-nums font-medium dark:text-zinc-200">{fmt(nomina.srlEmpleador)}</span>
             </div>
             <div className="flex justify-between text-xs">
               <span className="text-zinc-600 dark:text-zinc-400">Infotep (1.00%)</span>
-              <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.infotepEmpleador)}</span>
+              <span className="tabular-nums font-medium dark:text-zinc-200">{fmt(nomina.infotepEmpleador)}</span>
             </div>
             {nomina.aporteVoluntarioAFPEmpresa > 0 && (
               <div className="flex justify-between text-xs">
                 <span className="text-zinc-600 dark:text-zinc-400">Aporte Voluntario AFP (empresa)</span>
-                <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.aporteVoluntarioAFPEmpresa)}</span>
+                <span className="tabular-nums font-medium dark:text-zinc-200">{fmt(nomina.aporteVoluntarioAFPEmpresa)}</span>
               </div>
             )}
             {nomina.grossingUpEmpresa > 0 && (
               <div className="flex justify-between text-xs">
                 <span className="text-zinc-600 dark:text-zinc-400">Grossing-up (ISR/TSS empleado)</span>
-                <span className="tabular-nums font-medium dark:text-zinc-200">{formatRD(nomina.grossingUpEmpresa)}</span>
+                <span className="tabular-nums font-medium dark:text-zinc-200">{fmt(nomina.grossingUpEmpresa)}</span>
               </div>
             )}
             <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-1.5 flex justify-between text-xs font-bold">
               <span className="dark:text-zinc-200">Costo Total Empresa</span>
-              <span className="text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(nomina.totalCostoEmpleador)}</span>
+              <span className="text-amber-700 dark:text-amber-400 tabular-nums">{fmt(nomina.totalCostoEmpleador)}</span>
             </div>
           </div>
         </div>
 
         <div className="border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex gap-4 text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Regalía/período: <strong className="text-zinc-800 dark:text-zinc-200">{formatRD(nomina.regaliaPascual, 0)}</strong></span>
+            <span>Regalía/período: <strong className="text-zinc-800 dark:text-zinc-200">{fmt(nomina.regaliaPascual, 0)}</strong></span>
             <span>Vacaciones: <strong className="text-zinc-800 dark:text-zinc-200">{nomina.vacacionesMensualesDias.toFixed(2)} días</strong></span>
           </div>
           <button
@@ -512,6 +532,12 @@ export default function NominaPage() {
 
   // View state
   const [periodoAbierto, setPeriodoAbierto] = useState<string | null>(null)
+
+  // Nómina en USD — toggle de presentación en pantalla, solo disponible si la
+  // empresa configuró una tasa de cambio manual. No afecta ningún cálculo,
+  // el PDF de comprobante, el CSV exportado ni la plantilla de correo.
+  const [mostrarUSD, setMostrarUSD] = useState(false)
+  const fmt = (amount: number, decimals = 2) => formatMoneda(amount, empresa, mostrarUSD, decimals)
 
   // Create period form
   const [nuevoTipo, setNuevoTipo]         = useState<TipoPeriodo>('mensual')
@@ -994,13 +1020,13 @@ export default function NominaPage() {
                     <div className="flex justify-between items-baseline">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400">Neto Total</span>
                       <span className="text-lg font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">
-                        {formatRD(p.totales.neto, 0)}
+                        {fmt(p.totales.neto, 0)}
                       </span>
                     </div>
                     <div className="flex justify-between items-baseline">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400">Costo Empresa</span>
                       <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
-                        {formatRD(p.totales.costoTotal, 0)}
+                        {fmt(p.totales.costoTotal, 0)}
                       </span>
                     </div>
                     {p.estado === 'cerrada' && (
@@ -1354,6 +1380,23 @@ export default function NominaPage() {
               <Download className="h-4 w-4" />
               Exportar CSV
             </button>
+            {empresa.tasaCambioUSD && (
+              <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]" title="Solo cambia lo que se muestra en pantalla — el PDF, el CSV y el correo siguen en RD$">
+                {(['RD$', 'USD'] as const).map(moneda => (
+                  <button
+                    key={moneda}
+                    onClick={() => setMostrarUSD(moneda === 'USD')}
+                    className={`px-3 py-2 text-sm font-medium transition-colors ${
+                      (moneda === 'USD') === mostrarUSD
+                        ? 'bg-[#1B2980] text-white'
+                        : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                    }`}
+                  >
+                    {moneda}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         }
       />
@@ -1364,28 +1407,28 @@ export default function NominaPage() {
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           <StatCard
             label="Total Bruto"
-            value={formatRD(totales.bruto, 0)}
+            value={fmt(totales.bruto, 0)}
             sub="Suma devengados"
             icon={Wallet}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
           />
           <StatCard
             label="Total Neto"
-            value={formatRD(totales.neto, 0)}
+            value={fmt(totales.neto, 0)}
             sub="A transferir empleados"
             icon={BarChart3}
             iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
           />
           <StatCard
             label="Aportes TSS Empresa"
-            value={formatRD(totales.aportes, 0)}
+            value={fmt(totales.aportes, 0)}
             sub="AFP + SFS + SRL + Infotep"
             icon={TrendingUp}
             iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
           />
           <StatCard
             label="ISR Retenido"
-            value={formatRD(totales.isr, 0)}
+            value={fmt(totales.isr, 0)}
             sub={periodoActual.tipo === 'quincenal' && quincenaActual === 1 ? 'Anticipo — sin ISR' : 'Por remitir a DGII'}
             icon={Receipt}
             iconColor="bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
@@ -1549,7 +1592,7 @@ export default function NominaPage() {
                                 }`}
                               >
                                 {labelConcepto(a.concepto)}{' '}
-                                {isHorasConcepto(a.concepto) ? `${a.valor}h` : formatRD(a.valor, 0)}
+                                {isHorasConcepto(a.concepto) ? `${a.valor}h` : fmt(a.valor, 0)}
                                 {esEnProceso && (
                                   <button
                                     onClick={() => handleRemoveAjuste(empleado.id, a.id)}
@@ -1574,26 +1617,26 @@ export default function NominaPage() {
                         </td>
 
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
-                          {formatRD(resultado.totalBruto, 0)}
+                          {fmt(resultado.totalBruto, 0)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                          {formatRD(resultado.afpEmpleado + resultado.sfsEmpleado, 0)}
+                          {fmt(resultado.afpEmpleado + resultado.sfsEmpleado, 0)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {resultado.isrMensual === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
-                            : formatRD(resultado.isrMensual, 0)}
+                            : fmt(resultado.isrMensual, 0)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {resultado.sfsDependientes === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
-                            : formatRD(resultado.sfsDependientes, 0)}
+                            : fmt(resultado.sfsDependientes, 0)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
-                          {formatRD(resultado.salarioNeto, 0)}
+                          {fmt(resultado.salarioNeto, 0)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                          {formatRD(resultado.totalCostoEmpleador, 0)}
+                          {fmt(resultado.totalCostoEmpleador, 0)}
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5">
@@ -1746,13 +1789,13 @@ export default function NominaPage() {
                   <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400" colSpan={esEnProceso ? 3 : 2}>
                     TOTALES — {empleadosEnNomina.length} empleados
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{formatRD(totales.bruto, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{fmt(totales.bruto, 0)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                    {formatRD(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0), 0)}
+                    {fmt(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0), 0)}
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(totales.isr, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">{formatRD(totales.neto, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(totales.costoTotal, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totales.isr, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">{fmt(totales.neto, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totales.costoTotal, 0)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -1786,6 +1829,7 @@ export default function NominaPage() {
             empleado={detalleModal.emp}
             nomina={detalleModal.nom}
             periodoLabel={periodoActualLabel}
+            mostrarUSD={mostrarUSD}
             onClose={() => setDetalleModal(null)}
           />
         </>
@@ -1910,7 +1954,7 @@ export default function NominaPage() {
                                 <tr key={f.empleado.id}>
                                   <td className="px-3 py-2 font-medium text-zinc-800 dark:text-zinc-200">{fullName(f.empleado)}</td>
                                   <td className={`px-3 py-2 text-right tabular-nums ${f.netoNegativo ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-zinc-600 dark:text-zinc-300'}`}>
-                                    {formatRD(f.neto, 0)}
+                                    {fmt(f.neto, 0)}
                                   </td>
                                   <td className="px-3 py-2">
                                     <div className="flex flex-wrap gap-1">

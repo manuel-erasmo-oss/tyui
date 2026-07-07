@@ -277,6 +277,13 @@ export interface Empresa {
   onboardingCompleto?: boolean
   configuracionInicialOfrecida?: boolean  // true una vez que se le presentó (y resolvió, con o sin
                                            // datos) la invitación a cargar saldos iniciales tras el onboarding
+  // ─── Nómina en USD (capa de presentación) ────────────────────────────────
+  // Principio de diseño clave: el motor tributario SIEMPRE calcula y persiste
+  // en RD$ — esto es solo una conversión de visualización con una tasa que
+  // el usuario configura manualmente (no hay integración con un servicio de
+  // tasas de cambio en vivo). Nunca se usa como base de ningún cálculo legal
+  // (ISR/TSS/prestaciones siguen calculándose y reportándose en RD$).
+  tasaCambioUSD?: number  // RD$ por 1 USD
 }
 
 export type EstadoPrestamo = 'activo' | 'pagado' | 'cancelado'

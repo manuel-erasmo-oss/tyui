@@ -508,6 +508,27 @@ export default function ConfiguracionPage() {
                 </p>
               </div>
 
+              {/* Tasa de Cambio USD — presentación, nunca base de cálculo */}
+              <div>
+                <label htmlFor="tasaCambioUSD" className={LABEL_CLASS}>Tasa de Cambio (RD$ por USD)</label>
+                <input
+                  id="tasaCambioUSD"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.tasaCambioUSD ?? ''}
+                  onChange={e => setForm(prev => ({ ...prev, tasaCambioUSD: e.target.value ? Number(e.target.value) : undefined }))}
+                  placeholder="Ej. 60.50"
+                  className="w-full max-w-xs rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10"
+                />
+                <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  Opcional — habilita el selector RD$/USD en Procesar Nómina. Es solo una
+                  conversión de visualización manual (sin conexión a un servicio de tasas en
+                  vivo); el motor de cálculo, la retención de ISR/TSS y todos los reportes
+                  siguen calculándose y remitiéndose en RD$ sin excepción.
+                </p>
+              </div>
+
               <div className="flex justify-end pt-2">
                 <button
                   type="submit"
