@@ -473,10 +473,17 @@ export function calcularSalarioPromedioUltimos12Meses(
     // Si el período trackea quién fue procesado, respeta esa membresía;
     // si no, asume que todo período procesada/cerrada incluyó al empleado.
     if (p.empleadosProcesados && !p.empleadosProcesados.includes(empleado.id)) continue
-    const ajustes = p.ajustesPorEmpleado?.[empleado.id] ?? []
-    const resultado = calcularConPeriodo(empleado, ajustes, p)
+    // Preferir el snapshot histórico congelado al momento de procesar (fuente
+    // fidedigna de lo que realmente se pagó) — recalcular con el Empleado en
+    // vivo usaría un salarioBase que pudo cambiar después (aumento, etc.),
+    // distorsionando el promedio real de los últimos 12 meses. Solo se
+    // recalcula en vivo para períodos anteriores a este campo (sin snapshot).
+    const snapshot = p.resultadosPorEmpleado?.[empleado.id]
+    const totalBruto = snapshot
+      ? snapshot.totalBruto
+      : calcularConPeriodo(empleado, p.ajustesPorEmpleado?.[empleado.id] ?? [], p).totalBruto
     const key = `${p.anio}-${p.mes}`
-    totalPorMes.set(key, (totalPorMes.get(key) ?? 0) + resultado.totalBruto)
+    totalPorMes.set(key, (totalPorMes.get(key) ?? 0) + totalBruto)
   }
 
   // Sin historial real en el sistema (recién migrado): usa el salario

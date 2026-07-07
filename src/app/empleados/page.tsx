@@ -815,6 +815,14 @@ function EmpleadoDrawer({
               return fechaIngreso <= fechaPeriodo && p.estado !== 'en_proceso'
             })
             .map(p => {
+              // Preferir el snapshot histórico congelado al momento de
+              // procesar (fuente fidedigna de lo que realmente se pagó) —
+              // recalcular con el Empleado en vivo mostraría un salario que
+              // pudo cambiar después (aumento, etc.) para un período ya
+              // cerrado. Solo se reconstruye en vivo para períodos
+              // anteriores a este campo (sin snapshot todavía).
+              const snapshot = p.resultadosPorEmpleado?.[empleado.id]
+              if (snapshot) return { periodo: p, resultado: snapshot }
               const ajustes = p.ajustesPorEmpleado?.[empleado.id] ?? []
               const base = calcNominaConAjustes(empleado, ajustes, p.tipo, p.quincena ?? 1)
               // Reconstrucción histórica: usa lo que realmente se aplicó en ese
@@ -941,8 +949,10 @@ function EmpleadoDrawer({
         {mostrarSuspension && (
           <div className="shrink-0 border-t border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/20 px-6 py-4 space-y-3">
             <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
-              Suspender contrato — el empleado no se incluirá en la próxima nómina ni acumulará
-              vacaciones/regalía hasta que lo reactives. Conserva su antigüedad.
+              Suspender contrato — no acumulará vacaciones/regalía hasta que lo reactives, pero
+              conserva su antigüedad. Si ya trabajó parte del período de nómina en curso antes de
+              esta fecha, se le paga el prorrateo correspondiente; los períodos siguientes no lo
+              incluirán mientras siga suspendido.
             </p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>

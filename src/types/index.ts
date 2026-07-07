@@ -230,6 +230,17 @@ export interface PeriodoNomina {
   }
   ajustesPorEmpleado?: Record<string, AjusteLinea[]>
   empleadosProcesados?: string[]
+  // Snapshot inmutable del ResultadoNomina REALMENTE calculado y pagado a cada
+  // empleado, capturado en el momento exacto en que se procesa (no recalculado
+  // después). Es la fuente fidedigna del histórico — a diferencia de recalcular
+  // con el Empleado en vivo (que cambiaría retroactivamente si el salario u
+  // otros datos del empleado cambian después), este campo nunca cambia una vez
+  // escrito. Toda pantalla que reconstruya una nómina PASADA (Reportería,
+  // Historial Nómina del empleado, promedio de 12 meses para Liquidación) debe
+  // preferir este campo sobre recalcular en vivo. Ausente en períodos creados
+  // antes de este campo o en empleados aún no procesados dentro de un período
+  // en_proceso — esos casos deben recalcular en vivo (comportamiento anterior).
+  resultadosPorEmpleado?: Record<string, ResultadoNomina>
   bitacoraDesposteos?: BitacoraDesposteo[]
   pagada?: boolean       // true una vez confirmada la transferencia ACH del período cerrado
   fechaPago?: string     // fecha en que se confirmó el pago (ISO date), solo si pagada === true

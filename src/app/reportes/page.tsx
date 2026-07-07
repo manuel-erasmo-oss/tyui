@@ -24,7 +24,7 @@ import {
   formatAnosServicio, contratoLabel, contratoBadgeClass,
 } from '@/lib/utils'
 import { exportarExcel } from '@/lib/excel-export'
-import type { AjusteLinea, PeriodoNomina, Empresa, RegistroLiquidacion, CategoriaRiesgoSRL, Licencia, TipoLicencia } from '@/types'
+import type { AjusteLinea, PeriodoNomina, Empresa, RegistroLiquidacion, CategoriaRiesgoSRL, Licencia, TipoLicencia, Empleado, ResultadoNomina } from '@/types'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -107,6 +107,19 @@ function periodoLabel(p: PeriodoNomina): string {
   return `${mes} ${p.anio}`
 }
 
+// Preferir el snapshot histórico congelado al momento de procesar (fuente
+// fidedigna de lo que realmente se pagó) sobre recalcular con el Empleado en
+// vivo — que usaría un salarioBase u otros datos que pudieron cambiar
+// después (aumento salarial, etc.), inflando o distorsionando retroactivamente
+// un período ya cerrado y pagado. Solo recalcula en vivo para períodos
+// anteriores a este campo (sin ningún snapshot todavía).
+function resultadoHistorico(emp: Empleado, periodo: PeriodoNomina): ResultadoNomina {
+  const snapshot = periodo.resultadosPorEmpleado?.[emp.id]
+  if (snapshot) return snapshot
+  const ajustes = periodo.ajustesPorEmpleado?.[emp.id] ?? []
+  return calcularConPeriodo(emp, ajustes, periodo)
+}
+
 // ─── Reporte Gerencial ────────────────────────────────────────────────────────
 function ReporteGerencial({
   empresa, empleados, periodos,
@@ -160,8 +173,7 @@ function ReporteGerencial({
     if (!ultimoPeriodo) return []
     const groups: Record<string, { bruto: number; neto: number; costo: number; headcount: number }> = {}
     for (const emp of activos) {
-      const ajustes: AjusteLinea[] = ultimoPeriodo.ajustesPorEmpleado?.[emp.id] ?? []
-      const res = calcularConPeriodo(emp, ajustes, ultimoPeriodo)
+      const res = resultadoHistorico(emp, ultimoPeriodo)
       const d = emp.departamento || 'Sin Departamento'
       if (!groups[d]) groups[d] = { bruto: 0, neto: 0, costo: 0, headcount: 0 }
       groups[d].bruto    += res.totalBruto
@@ -487,6 +499,20 @@ function ReporteNomina({
 
   const filas = useMemo(() => {
     if (!periodo || !generado) return []
+    // Preferir el snapshot histórico congelado al momento de procesar cada
+    // empleado (fuente fidedigna de lo que realmente se pagó) — recalcular
+    // con el Empleado en vivo mostraría un salario que pudo cambiar después
+    // (aumento, etc.) para un período ya cerrado y pagado. Solo se recalcula
+    // en vivo para períodos anteriores a este campo (sin ningún snapshot).
+    const tieneSnapshots = periodo.resultadosPorEmpleado && Object.keys(periodo.resultadosPorEmpleado).length > 0
+    if (tieneSnapshots) {
+      return Object.entries(periodo.resultadosPorEmpleado!)
+        .map(([empId, res]) => {
+          const emp = empleados.find(e => e.id === empId)
+          return emp ? { emp, res } : null
+        })
+        .filter((x): x is { emp: Empleado; res: ResultadoNomina } => x !== null)
+    }
     const activos = empleados.filter(e => e.activo)
     return activos.map(emp => {
       const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
@@ -1145,8 +1171,7 @@ function ReporteTSS({
   const filas = useMemo(() => {
     if (!periodo || !generado) return []
     return empleados.filter(e => e.activo).map(emp => {
-      const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
-      const res = calcularConPeriodo(emp, ajustes, periodo)
+      const res = resultadoHistorico(emp, periodo)
       const totalTSS = res.afpEmpleado + res.sfsEmpleado + res.afpEmpleador + res.sfsEmpleador + res.srlEmpleador + res.infotepEmpleador
       return { emp, res, totalTSS }
     })
@@ -1644,8 +1669,7 @@ function ReporteCostoPorDepto({
     if (!periodo || !generado) return []
     const groups: Record<string, { headcount: number; bruto: number; neto: number; tss: number; costo: number }> = {}
     for (const emp of empleados.filter(e => e.activo)) {
-      const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
-      const res = calcularConPeriodo(emp, ajustes, periodo)
+      const res = resultadoHistorico(emp, periodo)
       const d = emp.departamento || 'Sin Departamento'
       if (!groups[d]) groups[d] = { headcount: 0, bruto: 0, neto: 0, tss: 0, costo: 0 }
       groups[d].headcount++
@@ -1819,8 +1843,7 @@ function ReportePlanillaACH({
       .filter(e => e.activo && e.numeroCuenta && e.banco)
       .filter(e => filtroBanco === 'todos' || e.banco === filtroBanco)
       .map(emp => {
-        const ajustes: AjusteLinea[] = periodo.ajustesPorEmpleado?.[emp.id] ?? []
-        const res = calcularConPeriodo(emp, ajustes, periodo)
+        const res = resultadoHistorico(emp, periodo)
         return { emp, neto: res.salarioNeto }
       })
       .sort((a, b) => (a.emp.banco ?? '').localeCompare(b.emp.banco ?? '') || fullName(a.emp).localeCompare(fullName(b.emp)))
@@ -2125,7 +2148,7 @@ function ReporteHorasExtras({
         if (he35 === 0 && he100 === 0 && nocturnas === 0) continue
         const emp = empMap[empId]
         if (!emp) continue
-        const res = calcularConPeriodo(emp, ajustes, p)
+        const res = resultadoHistorico(emp, p)
         rows.push({
           empId, per: periodoLabel(p), he35, imp35: res.importeHE35, he100, imp100: res.importeHE100,
           nocturnas, impNocturno: res.importeNocturno,
@@ -2474,7 +2497,7 @@ function ReporteProyeccionAnual({
       for (const [empId, ajustes] of Object.entries(p.ajustesPorEmpleado ?? {})) {
         const emp = empleados.find(e => e.id === empId)
         if (!emp) continue
-        const res = calcularConPeriodo(emp, ajustes, p)
+        const res = resultadoHistorico(emp, p)
         map[empId] = (map[empId] ?? 0) + res.totalCostoEmpleador
       }
     }
@@ -3285,8 +3308,8 @@ function ReporteSinIngresos({
   // período no trackea `empleadosProcesados` (períodos anteriores a esa
   // función), se asume que incluyó a todos, para no generar falsos positivos
   // masivos sobre datos históricos.
-  // Señal secundaria (usa calcularConPeriodo, con los ajustes reales del
-  // período): aunque conste como procesado, si el bruto calculado terminó en
+  // Señal secundaria (usa resultadoHistorico, con el snapshot o los ajustes
+  // reales del período): aunque conste como procesado, si el bruto terminó en
   // cero o negativo (ej. salario base mal configurado en 0) también se marca
   // — cobertura de borde adicional, poco común en la práctica.
   const filas = useMemo(() => {
@@ -3295,8 +3318,7 @@ function ReporteSinIngresos({
     const rows: { emp: typeof candidatos[number]; motivo: MotivoSinIngreso }[] = []
     for (const emp of candidatos) {
       const noProcesado = procesados !== undefined && !procesados.includes(emp.id)
-      const ajustes = periodo.ajustesPorEmpleado?.[emp.id] ?? []
-      const res = calcularConPeriodo(emp, ajustes, periodo)
+      const res = resultadoHistorico(emp, periodo)
       const brutoCero = res.totalBruto <= 0
       if (noProcesado || brutoCero) {
         rows.push({ emp, motivo: noProcesado ? 'no_procesado' : 'bruto_cero' })

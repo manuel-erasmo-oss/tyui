@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import type { PeriodoNomina, AjusteLinea } from '@/types'
+import type { PeriodoNomina, AjusteLinea, ResultadoNomina } from '@/types'
 import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-periodos'
@@ -38,7 +38,7 @@ interface PeriodosCtx {
   eliminar: (id: string) => void
   actualizarAjustes: (periodoId: string, empleadoId: string, ajustes: AjusteLinea[]) => void
   actualizarTotales: (periodoId: string, totales: PeriodoNomina['totales']) => void
-  marcarProcesados: (periodoId: string, empleadoIds: string[]) => void
+  marcarProcesados: (periodoId: string, resultados: Record<string, ResultadoNomina>) => void
   reabrir: (id: string, usuarioEmail: string) => boolean
   marcarPagada: (id: string, fechaPago: string) => void
 }
@@ -127,17 +127,24 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  function marcarProcesados(periodoId: string, empleadoIds: string[]) {
+  // `resultados` es el ResultadoNomina REAL calculado para cada empleado en
+  // el momento exacto de procesarlo — se guarda tal cual en
+  // resultadosPorEmpleado como registro histórico inmutable (fuente
+  // fidedigna de lo que realmente se pagó), independiente de que el
+  // Empleado en vivo cambie después (aumento salarial, etc.). Ver
+  // PeriodoNomina.resultadosPorEmpleado en types/index.ts.
+  function marcarProcesados(periodoId: string, resultados: Record<string, ResultadoNomina>) {
     setPeriodos(prev => {
       const next = prev.map(p => {
         if (p.id !== periodoId) return p
         const ya = new Set(p.empleadosProcesados ?? [])
-        empleadoIds.forEach(id => ya.add(id))
+        Object.keys(resultados).forEach(id => ya.add(id))
         const procesados = [...ya]
         const todosProcesados = procesados.length >= p.totalEmpleados
         return {
           ...p,
           empleadosProcesados: procesados,
+          resultadosPorEmpleado: { ...(p.resultadosPorEmpleado ?? {}), ...resultados },
           estado: todosProcesados ? 'procesada' as const : p.estado,
         }
       })
@@ -169,6 +176,9 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
           ...p,
           estado: 'en_proceso' as const,
           empleadosProcesados: [],
+          // Los snapshots del histórico quedan obsoletos al reabrir — se
+          // vuelven a capturar cuando cada empleado se reprocese.
+          resultadosPorEmpleado: {},
           bitacoraDesposteos: [...(p.bitacoraDesposteos ?? []), registro],
         }
       })

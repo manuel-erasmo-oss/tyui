@@ -125,11 +125,16 @@ function isHorasConcepto(concepto: ConceptoAjuste): boolean {
 }
 
 // ── calcularConAjustes ────────────────────────────────────────────────────────
+// `diasOverride` prorratea el salario base cuando el empleado no trabajó el
+// período completo (ver diasSuspensionEnPeriodo) — ambos valores son días
+// calendario en la MISMA unidad, así que la razón diasTrabajados/diasLaborablesMes
+// es válida tanto para un período mensual como para media quincena.
 function calcularConAjustes(
   empleado: Empleado,
   ajustes: AjusteLinea[],
   tipo: TipoPeriodo,
   quincena: 1 | 2,
+  diasOverride?: { diasTrabajados: number; diasLaborablesMes: number } | null,
 ): ResultadoNomina {
   const horasExtras35   = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
   const horasExtras100  = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
@@ -138,10 +143,76 @@ function calcularConAjustes(
   const comisiones      = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
   const sfsDependientes = ajustes.filter(a => a.concepto === 'dependiente_sfs').reduce((s, a) => s + a.valor, 0)
   const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
-  const params: ParametrosNomina = { horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
+  const params: ParametrosNomina = {
+    horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos,
+    ...(diasOverride ? { diasTrabajados: diasOverride.diasTrabajados, diasLaborablesMes: diasOverride.diasLaborablesMes } : {}),
+  }
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
     : calcularNomina(empleado, params)
+}
+
+// ── Prorrateo por suspensión a mitad de período ────────────────────────────────
+// Rango de fechas calendario que cubre un período — el mes completo para
+// mensual, o la mitad correspondiente (1-15 / 16-fin) para quincenal.
+function rangoPeriodo(
+  mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { inicio: Date; fin: Date } {
+  const diasEnMes = new Date(anio, mes, 0).getDate()
+  if (tipo === 'mensual') return { inicio: new Date(anio, mes - 1, 1), fin: new Date(anio, mes - 1, diasEnMes) }
+  return quincena === 1
+    ? { inicio: new Date(anio, mes - 1, 1), fin: new Date(anio, mes - 1, 15) }
+    : { inicio: new Date(anio, mes - 1, 16), fin: new Date(anio, mes - 1, diasEnMes) }
+}
+
+// Si el empleado está suspendido y su fecha de suspensión cae DENTRO (o
+// después) del rango de este período, devuelve cuántos días calendario
+// trabajó antes de suspenderse, sobre el total de días del período — para
+// prorratear su salario en vez de pagarle el período completo o excluirlo
+// por completo. `null` si no aplica (no suspendido, o ya estaba suspendido
+// desde ANTES de que este período empezara — ese caso se excluye del todo
+// en empleadosDelPeriodo, no se prorratea).
+function diasSuspensionEnPeriodo(
+  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { diasTrabajados: number; diasLaborablesMes: number } | null {
+  if (!empleado.suspendido || !empleado.fechaSuspension) return null
+  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
+  const fechaSuspension = new Date(empleado.fechaSuspension)
+  if (fechaSuspension < inicio) return null
+  const finEfectivo = fechaSuspension < fin ? fechaSuspension : fin
+  const msPorDia = 24 * 3600 * 1000
+  const diasTrabajados     = Math.floor((finEfectivo.getTime() - inicio.getTime()) / msPorDia) + 1
+  const diasLaborablesMes  = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
+  return { diasTrabajados, diasLaborablesMes }
+}
+
+// Lista de empleados que participan de un período específico: los normales
+// (empleadosEnNomina) más cualquier empleado suspendido cuya fecha de
+// suspensión cae dentro de este período — porque sí trabajó una parte y le
+// corresponde su pago prorrateado, aunque hoy ya esté suspendido. Un
+// empleado suspendido desde ANTES de que el período comenzara no se agrega
+// (0 días trabajados, correctamente excluido).
+function empleadosDelPeriodo(
+  todos: Empleado[], normales: Empleado[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): Empleado[] {
+  const extra = todos.filter(e =>
+    e.activo && e.suspendido && !normales.some(n => n.id === e.id) &&
+    diasSuspensionEnPeriodo(e, mes, anio, tipo, quincena) !== null
+  )
+  return extra.length ? [...normales, ...extra] : normales
+}
+
+// Envoltorio de conveniencia: calcula la nómina de un empleado para un
+// período específico, aplicando automáticamente el prorrateo por suspensión
+// si corresponde — evita tener que acordarse de calcular diasSuspensionEnPeriodo
+// en cada call-site.
+function calcularParaPeriodo(
+  empleado: Empleado, ajustes: AjusteLinea[],
+  periodo: { mes: number; anio: number; tipo: TipoPeriodo; quincena?: 1 | 2 },
+): ResultadoNomina {
+  const quincena = periodo.quincena ?? 1
+  const dias = diasSuspensionEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
+  return calcularConAjustes(empleado, ajustes, periodo.tipo, quincena, dias)
 }
 
 // ── Comprobante PDF ───────────────────────────────────────────────────────────
@@ -530,6 +601,18 @@ export default function NominaPage() {
     return aplicarSaldoISRFavor(base, monto, empleado.grossingUpPct).resultado
   }
 
+  // Fuente única de verdad para "cuánto se le pagó/se le va a pagar a este
+  // empleado en este período": si ya existe un snapshot congelado (empleado
+  // ya procesado), lo usa tal cual — es el registro fidedigno de lo
+  // realmente calculado en ese momento, inmune a cambios posteriores del
+  // Empleado (aumento salarial, etc.). Si aún no se procesa, calcula una
+  // vista previa en vivo (con el prorrateo por suspensión si aplica).
+  function resultadoDePeriodo(empleado: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
+    const snapshot = periodo.resultadosPorEmpleado?.[empleado.id]
+    if (snapshot) return snapshot
+    return conSaldoISR(empleado, calcularParaPeriodo(empleado, ajustes, periodo), periodo)
+  }
+
   // View state
   const [periodoAbierto, setPeriodoAbierto] = useState<string | null>(null)
 
@@ -588,6 +671,14 @@ export default function NominaPage() {
   const periodoActual = periodos.find(p => p.id === periodoAbierto) ?? null
   const periodoActualLabel = periodoActual ? labelPeriodo(periodoActual) : ''
 
+  // Empleados que participan del período abierto — incluye, además de los
+  // normales, a cualquier suspendido a mitad de ESTE período (ver
+  // empleadosDelPeriodo). Sustituye a empleadosEnNomina en todo lo que sea
+  // específico del período actualmente abierto.
+  const empleadosPeriodo = periodoActual
+    ? empleadosDelPeriodo(empleados, empleadosEnNomina, periodoActual.mes, periodoActual.anio, periodoActual.tipo, periodoActual.quincena ?? 1)
+    : empleadosEnNomina
+
   // If the open period was deleted, reset to list view without calling setState during render
   useEffect(() => {
     if (periodoAbierto && !periodos.find(p => p.id === periodoAbierto)) {
@@ -613,8 +704,8 @@ export default function NominaPage() {
   useEffect(() => {
     if (!periodoActual || periodoActual.estado !== 'en_proceso') return
     const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
-    const rs = empleadosEnNomina.map(e =>
-      conSaldoISR(e, calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, periodoActual.quincena ?? 1), periodoActual)
+    const rs = empleadosPeriodo.map(e =>
+      conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual), periodoActual)
     )
     const round = (n: number) => Math.round(n * 100) / 100
     const nuevos = {
@@ -629,11 +720,12 @@ export default function NominaPage() {
     const cambiaron = (Object.keys(nuevos) as (keyof typeof nuevos)[]).some(k => nuevos[k] !== actuales[k])
     if (cambiaron) actualizarTotales(periodoActual.id, nuevos)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodoActual?.id, periodoActual?.ajustesPorEmpleado, periodoActual?.empleadosProcesados, periodoActual?.estado, empleadosEnNomina, saldosISR])
+  }, [periodoActual?.id, periodoActual?.ajustesPorEmpleado, periodoActual?.empleadosProcesados, periodoActual?.estado, empleadosPeriodo, saldosISR])
 
   function calcularTotalesRapido(ajustesPorEmp: Record<string, AjusteLinea[]> = {}) {
-    const rs = empleadosEnNomina.map(e =>
-      calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], nuevoTipo, nuevaQuincena)
+    const empleadosNuevoPeriodo = empleadosDelPeriodo(empleados, empleadosEnNomina, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
+    const rs = empleadosNuevoPeriodo.map(e =>
+      calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], { mes: nuevoMes, anio: nuevoAnio, tipo: nuevoTipo, quincena: nuevaQuincena })
     )
     return {
       bruto:      rs.reduce((s, r) => s + r.totalBruto, 0),
@@ -658,9 +750,11 @@ export default function NominaPage() {
       return
     }
 
+    const empleadosNuevoPeriodo = empleadosDelPeriodo(empleados, empleadosEnNomina, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
+
     // Pre-load active loan installments as deductions per employee
     const ajustesIniciales: Record<string, AjusteLinea[]> = {}
-    for (const emp of empleadosEnNomina) {
+    for (const emp of empleadosNuevoPeriodo) {
       const loans = getPrestamosActivos(emp.id)
       if (loans.length > 0) {
         ajustesIniciales[emp.id] = loans.map(p => {
@@ -676,7 +770,7 @@ export default function NominaPage() {
         })
       }
     }
-    for (const emp of empleadosEnNomina) {
+    for (const emp of empleadosNuevoPeriodo) {
       const deps = emp.dependientes ?? []
       if (deps.length > 0) {
         const cuotaMensualDep = cuotaDependienteSFS()
@@ -696,7 +790,7 @@ export default function NominaPage() {
       mes:                nuevoMes,
       anio:               nuevoAnio,
       estado:             'en_proceso',
-      totalEmpleados:     empleadosEnNomina.length,
+      totalEmpleados:     empleadosNuevoPeriodo.length,
       totales:            calcularTotalesRapido(ajustesIniciales),
       ajustesPorEmpleado: ajustesIniciales,
     })
@@ -728,9 +822,8 @@ export default function NominaPage() {
   function handleExportar() {
     if (!periodoActual) return
     const ajustesPorEmp  = periodoActual.ajustesPorEmpleado ?? {}
-    const quincenaActual: 1 | 2 = periodoActual.quincena ?? 1
-    const rows = empleadosEnNomina.map(e => {
-      const r = conSaldoISR(e, calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual), periodoActual)
+    const rows = empleadosPeriodo.map(e => {
+      const r = resultadoDePeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual)
       return [
         fullName(e), e.cargo, e.departamento,
         r.totalBruto.toFixed(2), r.afpEmpleado.toFixed(2), r.sfsEmpleado.toFixed(2),
@@ -782,20 +875,24 @@ export default function NominaPage() {
     setNewDesc('')
   }
 
-  // Congela el crédito ISR usado por un empleado al momento de procesarlo:
-  // consume el saldo más antiguo disponible y registra la aplicación, para
-  // que el monto quede fijo en el historial aunque el saldoPendiente cambie después.
-  function congelarCreditoISR(empId: string) {
-    if (!periodoActual) return
-    const emp = empleadosEnNomina.find(e => e.id === empId)
-    if (!emp) return
+  // Congela el resultado final de un empleado al momento de procesarlo:
+  // consume el crédito ISR más antiguo disponible (side effect sobre el
+  // contexto de saldos) y devuelve el ResultadoNomina resultante — este
+  // resultado es exactamente lo que se guarda como snapshot histórico
+  // inmutable en PeriodoNomina.resultadosPorEmpleado (ver marcarProcesados),
+  // así que a partir de aquí el número queda fijo para siempre, sin importar
+  // qué cambie después en el Empleado.
+  function congelarYCalcular(empId: string, ajustes: AjusteLinea[]): ResultadoNomina | null {
+    if (!periodoActual) return null
+    const emp = empleadosPeriodo.find(e => e.id === empId)
+    if (!emp) return null
+    const base = calcularParaPeriodo(emp, ajustes, periodoActual)
     const saldo = getSaldosActivos(emp.id)[0]
-    if (!saldo) return
-    const base = calcularConAjustes(emp, (periodoActual.ajustesPorEmpleado ?? {})[emp.id] ?? [], periodoActual.tipo, periodoActual.quincena ?? 1)
-    const { montoAplicado } = aplicarSaldoISRFavor(base, saldo.saldoPendiente)
-    if (montoAplicado > 0) {
+    const { resultado, montoAplicado } = aplicarSaldoISRFavor(base, saldo?.saldoPendiente ?? 0, emp.grossingUpPct)
+    if (saldo && montoAplicado > 0) {
       aplicarSaldoISR(saldo.id, periodoActual.id, periodoActualLabel, montoAplicado)
     }
+    return resultado
   }
 
   // Reglas de manejo de insuficiencia de fondos: si el neto de un empleado no
@@ -805,47 +902,55 @@ export default function NominaPage() {
   // legal (a diferencia de AFP/SFS/ISR, que son obligatorios). Si el neto
   // sigue negativo incluso sin las cuotas de préstamo, no se toca nada más
   // aquí — ese caso ya lo señala la auditoría pre-cierre existente. Devuelve
-  // el nombre del empleado si se omitió alguna cuota, o null si no aplicó.
-  function manejarInsuficienciaFondos(empId: string): string | null {
-    if (!periodoActual) return null
-    const emp = empleadosEnNomina.find(e => e.id === empId)
-    if (!emp) return null
+  // los ajustes FINALES a usar (para que el llamador no dependa del estado
+  // de contexto, que todavía no se actualizó dentro de este mismo ciclo de
+  // evento) y el nombre del empleado si se omitió alguna cuota.
+  function manejarInsuficienciaFondos(empId: string): { ajustesFinales: AjusteLinea[]; omitido: string | null } {
     const ajustes = getAjustes(empId)
-    const resultado = conSaldoISR(emp, calcularConAjustes(emp, ajustes, periodoActual.tipo, periodoActual.quincena ?? 1), periodoActual)
-    if (resultado.salarioNeto >= 0) return null
+    if (!periodoActual) return { ajustesFinales: ajustes, omitido: null }
+    const emp = empleadosPeriodo.find(e => e.id === empId)
+    if (!emp) return { ajustesFinales: ajustes, omitido: null }
+    const resultado = conSaldoISR(emp, calcularParaPeriodo(emp, ajustes, periodoActual), periodoActual)
+    if (resultado.salarioNeto >= 0) return { ajustesFinales: ajustes, omitido: null }
 
     const ajustesPrestamo = ajustes.filter(a => a.concepto === 'prestamo' && a.prestamoId)
-    if (ajustesPrestamo.length === 0) return null
+    if (ajustesPrestamo.length === 0) return { ajustesFinales: ajustes, omitido: null }
 
     const ajustesSinPrestamo = ajustes.filter(a => !(a.concepto === 'prestamo' && a.prestamoId))
-    const resultadoSinPrestamo = conSaldoISR(emp, calcularConAjustes(emp, ajustesSinPrestamo, periodoActual.tipo, periodoActual.quincena ?? 1), periodoActual)
-    if (resultadoSinPrestamo.salarioNeto < 0) return null // no es solo el préstamo — se deja para la auditoría
+    const resultadoSinPrestamo = conSaldoISR(emp, calcularParaPeriodo(emp, ajustesSinPrestamo, periodoActual), periodoActual)
+    if (resultadoSinPrestamo.salarioNeto < 0) return { ajustesFinales: ajustes, omitido: null } // no es solo el préstamo — se deja para la auditoría
 
     actualizarAjustes(periodoActual.id, empId, ajustesSinPrestamo)
     ajustesPrestamo.forEach(a => { if (a.prestamoId) registrarOmisionCuota(a.prestamoId) })
-    return fullName(emp)
+    return { ajustesFinales: ajustesSinPrestamo, omitido: fullName(emp) }
   }
 
   function handleProcesarEmpleado(empId: string) {
     if (!periodoActual) return
     const procesadosActuales = new Set(periodoActual.empleadosProcesados ?? [])
-    const pendientes = empleadosEnNomina.filter(e => !procesadosActuales.has(e.id))
+    const pendientes = empleadosPeriodo.filter(e => !procesadosActuales.has(e.id))
     if (pendientes.length > 0 && pendientes.every(e => e.id === empId)) {
       setAuditoriaIds([empId])
       return
     }
-    const omitido = manejarInsuficienciaFondos(empId)
-    congelarCreditoISR(empId)
-    marcarProcesados(periodoActual.id, [empId])
+    const { ajustesFinales, omitido } = manejarInsuficienciaFondos(empId)
+    const resultado = congelarYCalcular(empId, ajustesFinales)
+    if (resultado) marcarProcesados(periodoActual.id, { [empId]: resultado })
     setSelectedEmps(prev => { const s = new Set(prev); s.delete(empId); return s })
     setToast(omitido ? `Cuota de préstamo omitida para ${omitido} — el neto no alcanzaba` : 'Empleado procesado')
   }
 
   function confirmarAuditoria() {
     if (!periodoActual || !auditoriaIds) return
-    const omitidos = auditoriaIds.map(manejarInsuficienciaFondos).filter((n): n is string => n !== null)
-    auditoriaIds.forEach(congelarCreditoISR)
-    marcarProcesados(periodoActual.id, auditoriaIds)
+    const resultados: Record<string, ResultadoNomina> = {}
+    const omitidos: string[] = []
+    for (const id of auditoriaIds) {
+      const { ajustesFinales, omitido } = manejarInsuficienciaFondos(id)
+      if (omitido) omitidos.push(omitido)
+      const r = congelarYCalcular(id, ajustesFinales)
+      if (r) resultados[id] = r
+    }
+    marcarProcesados(periodoActual.id, resultados)
     setSelectedEmps(new Set())
     setToast(omitidos.length > 0
       ? `Todos los empleados procesados — cuota de préstamo omitida para: ${omitidos.join(', ')}`
@@ -857,19 +962,25 @@ export default function NominaPage() {
     if (!periodoActual) return
     const ids = selectedEmps.size > 0
       ? [...selectedEmps]
-      : empleadosEnNomina.map(e => e.id)
+      : empleadosPeriodo.map(e => e.id)
     // Si esta acción completaría el período (pasaría de en_proceso a
     // procesada), se intercepta con la auditoría pre-cierre en vez de
     // procesar directamente.
     const procesadosActuales = new Set(periodoActual.empleadosProcesados ?? [])
-    const pendientes = empleadosEnNomina.filter(e => !procesadosActuales.has(e.id))
+    const pendientes = empleadosPeriodo.filter(e => !procesadosActuales.has(e.id))
     if (pendientes.length > 0 && pendientes.every(e => ids.includes(e.id))) {
       setAuditoriaIds(ids)
       return
     }
-    const omitidos = ids.map(manejarInsuficienciaFondos).filter((n): n is string => n !== null)
-    ids.forEach(congelarCreditoISR)
-    marcarProcesados(periodoActual.id, ids)
+    const resultados: Record<string, ResultadoNomina> = {}
+    const omitidos: string[] = []
+    for (const id of ids) {
+      const { ajustesFinales, omitido } = manejarInsuficienciaFondos(id)
+      if (omitido) omitidos.push(omitido)
+      const r = congelarYCalcular(id, ajustesFinales)
+      if (r) resultados[id] = r
+    }
+    marcarProcesados(periodoActual.id, resultados)
     setSelectedEmps(new Set())
     if (omitidos.length > 0) {
       setToast(`Cuota de préstamo omitida para: ${omitidos.join(', ')}`)
@@ -887,7 +998,7 @@ export default function NominaPage() {
   }
 
   function toggleSeleccionTodos() {
-    const noProcessados = empleadosEnNomina
+    const noProcessados = empleadosPeriodo
       .filter(e => !(periodoActual?.empleadosProcesados ?? []).includes(e.id))
       .map(e => e.id)
     if (selectedEmps.size === noProcessados.length && noProcessados.length > 0) {
@@ -898,7 +1009,7 @@ export default function NominaPage() {
   }
 
   function seleccionarPorCriterio() {
-    const noProcessados = empleadosEnNomina.filter(e => !(periodoActual?.empleadosProcesados ?? []).includes(e.id))
+    const noProcessados = empleadosPeriodo.filter(e => !(periodoActual?.empleadosProcesados ?? []).includes(e.id))
     const coincidencias = noProcessados.filter(e => {
       if (filtroDepto !== 'todos' && e.departamento !== filtroDepto) return false
       if (filtroIngresoDesde && e.fechaIngreso < filtroIngresoDesde) return false
@@ -1160,10 +1271,11 @@ export default function NominaPage() {
             ? `Nómina Quincenal (${periodoEnvio.quincena}ª quincena)`
             : 'Nómina Mensual'
           const ajustesEnvio = periodoEnvio.ajustesPorEmpleado ?? {}
+          const empleadosEnvio = empleadosDelPeriodo(empleados, empleadosEnNomina, periodoEnvio.mes, periodoEnvio.anio, periodoEnvio.tipo, periodoEnvio.quincena ?? 1)
 
-          const filas = empleadosEnNomina.map(e => ({
+          const filas = empleadosEnvio.map(e => ({
             empleado: e,
-            resultado: conSaldoISR(e, calcularConAjustes(e, ajustesEnvio[e.id] ?? [], periodoEnvio.tipo, periodoEnvio.quincena ?? 1), periodoEnvio),
+            resultado: resultadoDePeriodo(e, ajustesEnvio[e.id] ?? [], periodoEnvio),
           }))
 
           const fechaPagoTexto = periodoEnvio.fechaPago ? formatDate(periodoEnvio.fechaPago) : ''
@@ -1350,12 +1462,12 @@ export default function NominaPage() {
   const esEnProceso    = periodoActual.estado === 'en_proceso'
   const esProcesada    = periodoActual.estado === 'procesada'
   const procesados     = new Set(periodoActual.empleadosProcesados ?? [])
-  const noProcessados  = empleadosEnNomina.filter(e => !procesados.has(e.id))
+  const noProcessados  = empleadosPeriodo.filter(e => !procesados.has(e.id))
   const todosSeleccionados = noProcessados.length > 0 && noProcessados.every(e => selectedEmps.has(e.id))
 
-  const nominas = empleadosEnNomina.map(e => ({
+  const nominas = empleadosPeriodo.map(e => ({
     empleado: e,
-    resultado: conSaldoISR(e, calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, quincenaActual), periodoActual),
+    resultado: resultadoDePeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual),
   }))
 
   const totales = {
@@ -1494,7 +1606,7 @@ export default function NominaPage() {
               <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                 <Info className="h-3.5 w-3.5" />
                 {esEnProceso
-                  ? `${procesados.size}/${empleadosEnNomina.length} empleados procesados`
+                  ? `${procesados.size}/${empleadosPeriodo.length} empleados procesados`
                   : esProcesada
                     ? 'Período procesado — solo lectura'
                     : 'Período cerrado — solo lectura'}
@@ -1508,7 +1620,7 @@ export default function NominaPage() {
                 <select value={filtroDepto} onChange={e => setFiltroDepto(e.target.value)}
                   className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none">
                   <option value="todos">Todos</option>
-                  {Array.from(new Set(empleadosEnNomina.map(e => e.departamento))).sort().map(d => (
+                  {Array.from(new Set(empleadosPeriodo.map(e => e.departamento))).sort().map(d => (
                     <option key={d} value={d}>{d}</option>
                   ))}
                 </select>
@@ -1823,7 +1935,7 @@ export default function NominaPage() {
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
                   <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400" colSpan={esEnProceso ? 3 : 2}>
-                    TOTALES — {empleadosEnNomina.length} empleados
+                    TOTALES — {empleadosPeriodo.length} empleados
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{fmt(totales.bruto, 0)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
@@ -1876,7 +1988,7 @@ export default function NominaPage() {
           <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in" />
           <ImportadorHorasExcel
             empleados={empleados}
-            empleadosElegibles={empleadosEnNomina}
+            empleadosElegibles={empleadosPeriodo}
             ajustesPorEmpleado={ajustesPorEmp}
             onConfirmar={(nuevosAjustesPorEmpleado, totalAgregados) => {
               Object.entries(nuevosAjustesPorEmpleado).forEach(([empId, ajustes]) => {
@@ -1895,7 +2007,7 @@ export default function NominaPage() {
         const UMBRAL_VARIACION = 20
         const UMBRAL_DESCUENTO = 30
 
-        const filas = empleadosEnNomina
+        const filas = empleadosPeriodo
           .filter(e => auditoriaIds.includes(e.id))
           .map(e => {
             const actual = nominas.find(n => n.empleado.id === e.id)!.resultado
@@ -1903,7 +2015,7 @@ export default function NominaPage() {
             if (anterior) {
               const ajustesAnt = anterior.ajustesPorEmpleado?.[e.id]
               if (ajustesAnt !== undefined) {
-                const prev = calcularConAjustes(e, ajustesAnt, anterior.tipo, anterior.quincena ?? 1)
+                const prev = resultadoDePeriodo(e, ajustesAnt, anterior)
                 if (prev.totalBruto > 0) {
                   variacionBrutoPct = ((actual.totalBruto - prev.totalBruto) / prev.totalBruto) * 100
                 }

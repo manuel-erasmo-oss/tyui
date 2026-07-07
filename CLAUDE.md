@@ -886,14 +886,10 @@ contra datos demo reales, no solo con tsc/build.
   separado. Verificado centavo por centavo con un empleado "kitchen sink"
   (préstamo + grossing-up 50% + aporte voluntario AFP + ingreso de otro
   empleador + saldo ISR a favor, todo simultáneo).
-- **[HALLAZGO, sin corregir — requiere decisión de producto]** Suspender a un
-  empleado lo saca de inmediato de cualquier período `en_proceso` ya abierto
-  (incluyendo el mes en curso), sin prorratear los días ya trabajados —
-  contradice el texto de la propia UI, que da a entender que solo afecta
-  nóminas futuras. Corregirlo bien requiere fijar la lista de participantes
-  de un período al crearlo y diseñar prorrateo — arquitectura, no un bugfix
-  de una línea. Detalle completo y pasos de reproducción en el reporte final
-  de QA (Fase 7).
+- **[FIXED tras decisión del usuario]** Suspender a un empleado lo sacaba de
+  inmediato de cualquier período `en_proceso` ya abierto, sin prorratear los
+  días ya trabajados. Ver "Prorrateo por suspensión + histórico fidedigno"
+  más abajo — corregido con `empleadosDelPeriodo`/`diasSuspensionEnPeriodo`.
 
 **Fase 2 — Procesar Nómina:**
 - **[FIXED — crítico, alcance amplio]** `PeriodoNomina.totales` se calculaba
@@ -938,26 +934,76 @@ diffs inspeccionados, verificados y aplicados manualmente):
   período cerrado es un registro histórico inmutable salvo desposteo
   explícito. Verificado: María (aumento RD$55,000→60,500) ya no infla el
   bruto de julio (se mantiene en RD$321,500 exacto) al reabrir ese período.
-- **[HALLAZGO, sin corregir — gap arquitectónico]** El sistema no
-  guarda ningún snapshot de salarioBase por período — "Nómina por Período"
-  en Reportería, el tab "Historial Nómina" de Empleados, y
-  `calcularSalarioPromedioUltimos12Meses` (usado en Liquidación) reconstruyen
-  nóminas pasadas con el salarioBase ACTUAL del empleado, no con el que
-  realmente aplicaba en ese momento. Confirmado con el mismo caso de
-  María: el reporte le atribuye RD$60,500 en julio cuando realmente se le
-  pagaron RD$55,000. Requiere un cambio de modelo de datos (snapshot por
-  período) — se reporta para decisión del usuario.
+- **[FIXED tras decisión del usuario]** El sistema no guardaba ningún
+  snapshot de salarioBase por período — "Nómina por Período" en Reportería,
+  el tab "Historial Nómina" de Empleados, y
+  `calcularSalarioPromedioUltimos12Meses` reconstruían nóminas pasadas con
+  el salarioBase ACTUAL del empleado. Ver "Prorrateo por suspensión +
+  histórico fidedigno" más abajo — corregido con
+  `PeriodoNomina.resultadosPorEmpleado`.
 
 **Fase 6 — Transversales:** Dashboard y Auth/Onboarding ya cubiertos en la
 Fase 0. Configuración y modo oscuro verificados sin hallazgos nuevos
 (Configuración, Procesar Nómina y Reportería en dark mode — buen contraste,
 sin errores de consola).
 
-**Cierre — 9 bugs corregidos (2 críticos) y 2 hallazgos reportados sin
-corregir** (requieren decisión de producto: prorrateo al suspender un
-empleado mid-período, y snapshot histórico de salario por período).
-`tsc --noEmit` y `npm run build` limpios en los 6 commits de esta
-auditoría; todos fusionados a `main`.
+**Cierre inicial — 9 bugs corregidos (2 críticos) y 2 hallazgos reportados
+sin corregir** (requerían decisión de producto). `tsc --noEmit` y
+`npm run build` limpios en los 6 commits de esta auditoría.
+
+### Prorrateo por suspensión + histórico fidedigno (decisión del usuario, post-QA)
+
+El usuario decidió explícitamente corregir los 2 hallazgos que la Fase 7
+había dejado pendientes, en vez de solo documentarlos:
+
+1. **Prorrateo al suspender un empleado a mitad de período.** Antes,
+   suspender excluía al empleado por completo de cualquier período
+   `en_proceso` ya abierto, sin pagar los días que sí trabajó. Ahora:
+   - `empleadosDelPeriodo()` (`nomina/page.tsx`) incluye, además de los
+     empleados normales, a cualquier suspendido cuya `fechaSuspension` caiga
+     DENTRO del rango de fechas de ESE período específico (mes completo para
+     mensual, mitad correspondiente 1-15/16-fin para quincenal) — un
+     suspendido desde ANTES de que el período empezara sigue excluido del
+     todo (0 días, comportamiento correcto).
+   - `diasSuspensionEnPeriodo()` calcula la razón de días calendario
+     trabajados sobre el total de días del período y la pasa como
+     `diasTrabajados`/`diasLaborablesMes` a `calcularNomina` (mecanismo que
+     ya existía en el motor pero ningún flujo lo alimentaba hasta ahora) —
+     prorratea el salario proporcionalmente, sin tocar ningún otro cálculo.
+   - Se actualizó el texto de advertencia del formulario de suspensión en
+     `empleados/page.tsx`, que antes dejaba entender (incorrectamente) que
+     la suspensión solo afecta nóminas futuras.
+   - Verificado en navegador: José Hernández Cruz (salarioBase RD$43,000)
+     suspendido el 15 de agosto (mes de 31 días) → S. Bruto exacto
+     RD$20,806 (=43,000×15/31) en el período de Agosto 2026, con el resto
+     de la planilla sin ningún cambio.
+
+2. **Snapshot histórico fidedigno — `PeriodoNomina.resultadosPorEmpleado`.**
+   Nuevo campo (`Record<string, ResultadoNomina>`) que guarda el resultado
+   REAL calculado para cada empleado en el momento exacto de procesarlo
+   (`marcarProcesados` en `periodos-context.tsx`, poblado desde
+   `congelarYCalcular()` en `nomina/page.tsx`) — un registro inmutable de lo
+   que realmente se pagó, que nunca cambia aunque el `Empleado` cambie
+   después (aumento salarial, cambio de categoría de riesgo, etc.). Se
+   limpia (`{}`) al reabrir un período vía desposteo, ya que ese snapshot
+   quedaría obsoleto hasta que se vuelva a procesar.
+   Toda pantalla que reconstruye una nómina PASADA ahora prefiere este
+   snapshot sobre recalcular con el Empleado en vivo (con fallback al
+   cálculo en vivo solo para períodos anteriores a este campo, sin
+   snapshot): `resultadoDePeriodo()`/tabla principal y auditoría pre-cierre
+   en `nomina/page.tsx`; `resultadoHistorico()` en `reportes/page.tsx`
+   (Nómina por Período, Costo por Departamento, Cumplimiento Fiscal,
+   Planilla Bancaria, Horas Extras, Proyección Anual, Empleados Sin
+   Ingresos); el tab Historial Nómina en `empleados/page.tsx`; y
+   `calcularSalarioPromedioUltimos12Meses()` en `dominican-labor.ts` (usado
+   por Cesantía/Preaviso/Asistencia Económica en Liquidación).
+   Verificado en navegador: tras darle a José un aumento a RD$60,000
+   (tres veces su salario prorrateado real), el reporte "Nómina por
+   Período" de Agosto 2026 sigue mostrando exactamente RD$20,806 — el
+   monto real y prorrateado que se le pagó, no el salario nuevo ni el
+   salario base completo.
+
+`tsc --noEmit` y `npm run build` limpios. Todo fusionado a `main`.
 
 ## Branch de trabajo
 
