@@ -527,7 +527,7 @@ export default function NominaPage() {
     const monto = yaProcesado
       ? getMontoAplicadoEnPeriodo(empleado.id, periodo.id)
       : (getSaldosActivos(empleado.id)[0]?.saldoPendiente ?? 0)
-    return aplicarSaldoISRFavor(base, monto).resultado
+    return aplicarSaldoISRFavor(base, monto, empleado.grossingUpPct).resultado
   }
 
   // View state

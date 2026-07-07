@@ -860,6 +860,44 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   por P-SPN-002/P-SPN-004 como la combinación recomendada para el caso de uso
   dominante en pymes dominicanas.
 
+## QA a fondo — módulo por módulo (en curso)
+
+Directiva del usuario: revisar todo el sistema módulo por módulo, escenario por
+escenario, sin escatimar esfuerzo; corregir lo que no funcione; recomendar quitar
+funcionalidad que no convenga; reportar lo que no tenga sentido. Cronograma en
+7 fases por orden de dependencia (motor de cálculo primero, reportería al final
+porque agrega de todo lo demás). Cada fix se verifica en navegador con Playwright
+contra datos demo reales, no solo con tsc/build.
+
+**Fase 0 — Mapeo + datos demo frescos:**
+- **[FIXED]** `cargarDatosDemo()` no incluía `configuracionInicialOfrecida` en el
+  objeto `Empresa` semilla → cada carga de datos demo dejaba la app entera
+  bloqueada detrás del gate "Una cosa más" en la siguiente navegación.
+- **[FIXED — crítico]** Dashboard (`src/app/page.tsx`) crasheaba por completo
+  (Unhandled Runtime Error) con 2-4 períodos mensuales reales procesados —
+  el caso normal de toda empresa en sus primeros meses — por índices
+  hardcodeados `BAR_DATA[3]`/`BAR_DATA[4]` que asumían siempre 5 elementos.
+
+**Fase 1 — Motor de cálculo (dominican-labor.ts) + Empleados:**
+- **[FIXED]** `aplicarSaldoISRFavor()` no recalculaba `grossingUpEmpresa` al
+  aplicar un crédito de ISR a favor, causando que la empresa sobre-reembolsara
+  al empleado (vía grossing-up) por ISR que el crédito ya había cubierto —
+  bug de interacción entre dos features que solo se habían probado por
+  separado. Verificado centavo por centavo con un empleado "kitchen sink"
+  (préstamo + grossing-up 50% + aporte voluntario AFP + ingreso de otro
+  empleador + saldo ISR a favor, todo simultáneo).
+- **[HALLAZGO, sin corregir — requiere decisión de producto]** Suspender a un
+  empleado lo saca de inmediato de cualquier período `en_proceso` ya abierto
+  (incluyendo el mes en curso), sin prorratear los días ya trabajados —
+  contradice el texto de la propia UI, que da a entender que solo afecta
+  nóminas futuras. Corregirlo bien requiere fijar la lista de participantes
+  de un período al crearlo y diseñar prorrateo — arquitectura, no un bugfix
+  de una línea. Detalle completo y pasos de reproducción en el reporte final
+  de QA (Fase 7).
+
+Detalle exhaustivo de cada hallazgo (pasos de reproducción, números exactos
+verificados) en el reporte de QA que se entrega al usuario al cerrar la Fase 7.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

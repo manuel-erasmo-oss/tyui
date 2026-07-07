@@ -820,7 +820,7 @@ function EmpleadoDrawer({
               // Reconstrucción histórica: usa lo que realmente se aplicó en ese
               // período (no el saldoPendiente actual, que ya pudo cambiar).
               const montoAplicado = getMontoAplicadoEnPeriodo(empleado.id, p.id)
-              const { resultado } = aplicarSaldoISRFavor(base, montoAplicado)
+              const { resultado } = aplicarSaldoISRFavor(base, montoAplicado, empleado.grossingUpPct)
               return { periodo: p, resultado }
             })
             .sort((a, b) => new Date(b.periodo.fechaGeneracion).getTime() - new Date(a.periodo.fechaGeneracion).getTime())

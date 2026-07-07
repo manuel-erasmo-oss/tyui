@@ -327,19 +327,33 @@ export function calcularNominaQuincenal(
 // Función pura: no decide cuánto crédito hay disponible ni persiste consumo —
 // eso lo maneja saldo-isr-context.tsx. Aquí solo se resta lo que corresponda
 // del isrMensual, ajustando totalDescuentos/salarioNeto en consecuencia.
+// `grossingUpPct` (Empleado.grossingUpPct) es opcional porque no todo
+// llamador tiene el empleado a mano — con 0/undefined el comportamiento es
+// idéntico al de antes de este parámetro.
 export function aplicarSaldoISRFavor(
   resultado: ResultadoNomina,
   saldoDisponible: number,
+  grossingUpPct: number = 0,
 ): { resultado: ResultadoNomina; montoAplicado: number } {
   const montoAplicado = Math.min(resultado.isrMensual, Math.max(0, saldoDisponible))
   if (montoAplicado <= 0) return { resultado, montoAplicado: 0 }
+
+  // El crédito reduce el ISR realmente retenido al empleado — si la empresa
+  // además asume (grossing-up) un % de ese ISR, el reembolso debe bajar en
+  // la misma proporción: de lo contrario la empresa reembolsaría ISR que
+  // nunca llegó a retenerle al empleado (el crédito ya lo cubrió).
+  const reduccionGrossingUp = montoAplicado * (grossingUpPct / 100)
+
   return {
     resultado: {
       ...resultado,
-      isrMensual:       resultado.isrMensual - montoAplicado,
-      totalDescuentos:  resultado.totalDescuentos - montoAplicado,
-      saldoISRAplicado: montoAplicado,
-      salarioNeto:      resultado.salarioNeto + montoAplicado,
+      isrMensual:            resultado.isrMensual - montoAplicado,
+      totalDescuentos:       resultado.totalDescuentos - montoAplicado,
+      saldoISRAplicado:      montoAplicado,
+      grossingUpEmpresa:     resultado.grossingUpEmpresa - reduccionGrossingUp,
+      totalAportesEmpleador: resultado.totalAportesEmpleador - reduccionGrossingUp,
+      totalCostoEmpleador:   resultado.totalCostoEmpleador - reduccionGrossingUp,
+      salarioNeto:           resultado.salarioNeto + montoAplicado - reduccionGrossingUp,
     },
     montoAplicado,
   }
