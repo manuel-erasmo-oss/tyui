@@ -635,7 +635,18 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
 ### 🟡 Media prioridad
 
 - Catálogo configurable de tipos de ingreso/descuento (flags de qué computa
-  para prestaciones/ISR/TSS) en vez de lógica hardcodeada.
+  para prestaciones/ISR/TSS) en vez de lógica hardcodeada. **Deliberadamente
+  no implementado esta sesión**: a diferencia de los demás items de este
+  backlog, este le da al usuario control directo sobre QUÉ tributa cada
+  concepto — un error de configuración (ej. marcar mal si un concepto reduce
+  la base del ISR) llevaría a una retención incorrecta y un problema real de
+  cumplimiento legal, no solo un bug de UI. El sistema hardcodeado actual ya
+  implementa correctamente el tratamiento legal dominicano de cada concepto
+  (horas extra, comisión, dependiente SFS, etc.); generalizarlo a un catálogo
+  editable por el usuario requiere diseño cuidadoso (¿quién audita los flags?
+  ¿se versiona el catálogo por período para no alterar retroactivamente
+  nóminas ya procesadas?) que amerita su propia sesión con más contexto, no
+  una implementación apurada al final de un backlog largo.
 - ~~Reglas de manejo de insuficiencia de fondos~~ — **implementado.** Nueva
   función `manejarInsuficienciaFondos(empId)` en `nomina/page.tsx`, invocada
   justo antes de marcar procesado a un empleado (en los 3 puntos de entrada:
@@ -724,9 +735,18 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   cédulas dominicanas en una hoja de cálculo. Verificado en navegador: CSV
   con 2 filas válidas → "Se agregaron 2 ajuste(s) de horas a 2 empleado(s)",
   con el préstamo ya existente de otro empleado intacto tras la importación.
-- Nómina en moneda USD — principio de diseño clave: el motor tributario
-  siempre calcula en RD$; USD es solo una capa de presentación con tasa
-  configurable, nunca la base del cálculo.
+- ~~Nómina en moneda USD~~ — **implementado.** Nuevo campo
+  `Empresa.tasaCambioUSD` (RD$ por 1 USD, configurable a mano en
+  Configuración — sin conexión a ningún servicio de tasas en vivo). Selector
+  RD$/USD en el header de `nomina/page.tsx` (visible solo si la tasa está
+  configurada) que convierte lo ya mostrado en pantalla vía `formatMoneda()`
+  (nuevo helper) — StatCards, tabla de detalle, footer de totales y el modal
+  `DetalleNomina`. El motor de cálculo (`dominican-labor.ts`) nunca ve la
+  tasa de cambio; el PDF de comprobante, el CSV exportado y la plantilla de
+  correo de pago siguen SIEMPRE en RD$ (son el registro legal/financiero
+  real, no una vista de conveniencia). Verificado en navegador con tasa
+  RD$60/USD: Total Bruto RD$274,750 → exacto $4,579 al activar USD, mismo
+  desglose consistente en el modal de comprobante.
 - ~~Reporte "empleados activos sin ingresos en el mes completo"~~ — **implementado**
   (vía agente en worktree aislado). Nuevo `ReportId` "Empleados Sin Ingresos"
   en Reportería. "Activo durante el mes" = unión de activos hoy con
