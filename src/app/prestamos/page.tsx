@@ -319,10 +319,19 @@ function VistaDetalle({
     esProxima: row.num === numPagos + 1 && prestamo.estado === 'activo',
   }))
 
+  // Un pago manual que exceda el saldo pendiente inflaría el historial de
+  // pagos por encima del monto original del préstamo sin ningún registro de
+  // por qué (ni reembolso, ni nota) — se bloquea aquí en vez de aceptarlo y
+  // clampar en silencio, para que el usuario corrija el monto o, si en
+  // efecto quiere liquidar el préstamo, escriba exactamente el saldo
+  // pendiente.
+  const montoPagoNum  = parseFloat(pagoMonto) || 0
+  const excedeSaldo    = montoPagoNum > prestamo.saldoPendiente
+
   function handlePago(e: React.FormEvent) {
     e.preventDefault()
     const monto = parseFloat(pagoMonto)
-    if (!monto || monto <= 0) return
+    if (!monto || monto <= 0 || monto > prestamo.saldoPendiente) return
     onRegistrarPago(prestamo.id, monto)
     setPagoMonto('')
     setPagoDesc('')
@@ -499,12 +508,18 @@ function VistaDetalle({
                   <input
                     type="number"
                     min="1"
+                    max={prestamo.saldoPendiente}
                     step="0.01"
                     className={inputCls}
                     value={pagoMonto}
                     onChange={e => setPagoMonto(e.target.value)}
                     placeholder={formatRD(prestamo.cuotaBase)}
                   />
+                  {excedeSaldo && (
+                    <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400">
+                      No puede exceder el saldo pendiente ({formatRD(prestamo.saldoPendiente)}).
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>Descripción</label>
@@ -520,7 +535,7 @@ function VistaDetalle({
               <div className="mt-4 flex justify-end">
                 <button
                   type="submit"
-                  disabled={!pagoMonto || parseFloat(pagoMonto) <= 0}
+                  disabled={!pagoMonto || montoPagoNum <= 0 || excedeSaldo}
                   className="rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Registrar Pago

@@ -909,6 +909,25 @@ contra datos demo reales, no solo con tsc/build.
   exactos (−RD$3,000 ISR, −RD$1,500 grossing-up) coincidiendo entre la card
   de lista y la vista de detalle tras el recálculo.
 
+**Fase 3 — Préstamos, Liquidación, Vacaciones, Regalía Pascual, Licencias**
+(vía 4 agentes en paralelo, worktrees aislados; cada uno hizo al menos un fix
+real antes de cortarse por un límite de sesión de la infraestructura —
+diffs inspeccionados, verificados y aplicados manualmente):
+- **[FIXED]** Préstamos: un pago manual que excediera el saldo pendiente se
+  aceptaba sin más, inflando el historial por encima del monto original.
+  Bloqueado. También se clampa cualquier tasa de interés negativa en las
+  4 funciones de amortización (rompía la fórmula francesa).
+- **[FIXED]** Liquidación: la regalía proporcional contaba los meses desde
+  el 1 de enero SIN importar la fecha de ingreso real, sobreestimando la
+  regalía de empleados contratados y liquidados en el mismo año calendario.
+- **[FIXED]** Vacaciones/Regalía: texto de UI decía "÷26" como regla general
+  cuando el motor real usa 23.83 (26 solo en régimen intermitente); footers
+  usaban negro en vez del brand light-indigo que exige el sistema de diseño;
+  meses de servicio podían salir negativos con fecha de ingreso futura.
+- **[FIXED]** Licencias: el campo "Días" de licencias con subsidio no tenía
+  tope ni redondeo — un error de tipeo podía distorsionar las stat cards sin
+  aviso. Ahora se redondea y se topa en 365 días.
+
 Detalle exhaustivo de cada hallazgo (pasos de reproducción, números exactos
 verificados) en el reporte de QA que se entrega al usuario al cerrar la Fase 7.
 

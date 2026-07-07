@@ -18,10 +18,12 @@ export default function VacacionesPage() {
   const filas = empleadosEnNomina.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
-    // Fraccional, sin truncar — prorratea el mes en curso proporcionalmente
-    const mesesServicio   = anos < 1 ? anos * 12 : ((anos % 1) * 12 || 12)
+    // Fraccional, sin truncar — prorratea el mes en curso proporcionalmente.
+    // Math.max(0, …): protege contra fechaIngreso en el futuro (error de
+    // captura), que de otro modo produciría antigüedad negativa.
+    const mesesServicio   = anos < 1 ? Math.max(0, anos * 12) : ((anos % 1) * 12 || 12)
     // + saldo inicial: empleados con historial previo a Cielo Cloud (migración)
-    const diasAcumulados  = (diasAnuales / 12) * mesesServicio + (e.saldoVacacionesInicial ?? 0)
+    const diasAcumulados  = Math.max(0, (diasAnuales / 12) * mesesServicio + (e.saldoVacacionesInicial ?? 0))
     const valorDiario     = e.salarioBase / getDivisorSalarioDiario(e)
     const valorAcumulado  = diasAcumulados * valorDiario
     const puedeGozar      = anos >= 1
@@ -68,7 +70,8 @@ export default function VacacionesPage() {
           <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Vacaciones por Empleado</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              14 días laborables (1–5 años) · 18 días laborables (más de 5 años). Tarifa diaria = salario ÷ 26.
+              14 días laborables (1–5 años) · 18 días laborables (más de 5 años). Tarifa diaria = salario ÷ 23.83
+              (÷ 26 en régimen de trabajo intermitente).
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -150,10 +153,10 @@ export default function VacacionesPage() {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white">
-                  <td colSpan={4} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide">TOTAL</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-300">{totalDias.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-300">{formatRD(totalValor, 0)}</td>
+                <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
+                  <td colSpan={4} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{totalDias.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{formatRD(totalValor, 0)}</td>
                   <td />
                 </tr>
               </tfoot>

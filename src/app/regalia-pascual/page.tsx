@@ -14,7 +14,9 @@ export default function RegaliaPage() {
   const { empleadosEnNomina } = useEmpleados()
   const filas = empleadosEnNomina.map(e => {
     const mesesServicio      = Math.min(getMesesServicio(e.fechaIngreso), mesActual)
-    const mesesAcumulados    = Math.min(mesesServicio, 12)
+    // Math.max(0, …): protege contra fechaIngreso en el futuro (error de
+    // captura), que de otro modo produciría meses/porcentaje negativos.
+    const mesesAcumulados    = Math.max(0, Math.min(mesesServicio, 12))
     // Neto de lo ya pagado antes de la migración a Cielo Cloud (empleados con historial previo)
     const acumuladoBruto     = (e.salarioBase / 12) * mesesAcumulados
     const acumulado          = Math.max(0, acumuladoBruto - (e.regaliaPagadaEsteAnio ?? 0))
@@ -148,10 +150,10 @@ export default function RegaliaPage() {
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white">
-                  <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide">TOTAL</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-300">{formatRD(totalAcumulado, 0)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold">{formatRD(totalProyectado, 0)}</td>
+                <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
+                  <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700 dark:text-emerald-300">{formatRD(totalAcumulado, 0)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-zinc-700 dark:text-zinc-300">{formatRD(totalProyectado, 0)}</td>
                   <td />
                 </tr>
               </tfoot>

@@ -101,10 +101,16 @@ export default function LiquidacionPage() {
     const fechaTerm = new Date(fechaTerminacion)
     const anosServicio = (fechaTerm.getTime() - fechaHire.getTime()) / (365.25 * 24 * 3600 * 1000)
 
-    // Regalía: proportional to calendar year (Jan 1 → termination)
+    // Regalía: proportional to calendar year (Jan 1 → termination), pero nunca
+    // antes de la fecha de ingreso — un empleado contratado a mitad del año en
+    // curso (ej. junio) solo acumula regalía desde que empezó a trabajar, no
+    // desde el 1 de enero (bug: antes se ignoraba fechaIngreso por completo y
+    // se sobreestimaba la regalía de cualquier empleado con menos de un año
+    // en la empresa dentro del mismo año calendario).
     const inicioAnio = new Date(fechaTerm.getFullYear(), 0, 1)
+    const inicioComputoRegalia = fechaHire.getTime() > inicioAnio.getTime() ? fechaHire : inicioAnio
     const mesesCalendario = Math.min(
-      Math.ceil((fechaTerm.getTime() - inicioAnio.getTime()) / (30.44 * 24 * 3600 * 1000)),
+      Math.ceil((fechaTerm.getTime() - inicioComputoRegalia.getTime()) / (30.44 * 24 * 3600 * 1000)),
       12
     )
 

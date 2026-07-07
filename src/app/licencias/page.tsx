@@ -20,6 +20,12 @@ const TIPOS: TipoLicencia[] = [
   'enfermedad_comun', 'accidente_laboral', 'maternidad',
 ]
 
+// Tope de cordura para el campo "Días" de licencias con subsidio — ningún
+// certificado médico/legal individual excede razonablemente un año calendario;
+// sirve para atajar errores de tipeo (ej. "9999" en vez de "9") antes de que
+// distorsionen las stat cards y el histórico.
+const DIAS_MAX_SUBSIDIO = 365
+
 function iconoTipo(tipo: TipoLicencia) {
   switch (tipo) {
     case 'matrimonial':       return Heart
@@ -72,12 +78,24 @@ export default function LicenciasPage() {
       setToast('Seleccione un empleado')
       return
     }
-    if (conSubsidio && (!diasSubsidio || Number(diasSubsidio) <= 0)) {
-      setToast('Indique los días de licencia (según certificado médico/legal)')
-      return
+    // Días de licencia con subsidio: se capturan del certificado médico/legal
+    // y siempre son días calendario completos — se redondea por si el campo
+    // numérico trae un valor fraccional (ej. 3.5), y se pone un tope de
+    // cordura para no dejar pasar un error de tipeo (ej. un cero de más) que
+    // dispararía los totales de la página a cifras absurdas sin ningún aviso.
+    const diasNum = Math.round(Number(diasSubsidio))
+    if (conSubsidio) {
+      if (!diasSubsidio || !Number.isFinite(diasNum) || diasNum <= 0) {
+        setToast('Indique los días de licencia (según certificado médico/legal)')
+        return
+      }
+      if (diasNum > DIAS_MAX_SUBSIDIO) {
+        setToast(`Los días de licencia superan ${DIAS_MAX_SUBSIDIO} — verifique el certificado médico/legal antes de registrar`)
+        return
+      }
     }
     registrar(empleadoId, tipo, fechaInicio, emp, {
-      dias: conSubsidio ? Number(diasSubsidio) : undefined,
+      dias: conSubsidio ? diasNum : undefined,
       modalidadEnfermedad: tipo === 'enfermedad_comun' ? modalidadEnfermedad : undefined,
       disfruteSueldo: conSubsidio ? disfruteSueldo : undefined,
     })
@@ -189,6 +207,8 @@ export default function LicenciasPage() {
                   <input
                     type="number"
                     min="1"
+                    max={DIAS_MAX_SUBSIDIO}
+                    step="1"
                     value={diasSubsidio}
                     onChange={e => setDiasSubsidio(e.target.value)}
                     placeholder="Días"

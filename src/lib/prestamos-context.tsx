@@ -6,10 +6,26 @@ import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-prestamos'
 
+// Nota defensiva: una tasa de interés negativa no tiene sentido de negocio
+// (equivaldría a que la empresa le pague al empleado por tomar el préstamo) y
+// rompe matemáticamente la fórmula francesa — con r negativo, (1+r)^n cae por
+// debajo de 1 y el denominador cambia de signo, produciendo una cuota
+// artificialmente cercana a cero (ej. observado: RD$10,000 a -50%/12 cuotas
+// → cuota de RD$1.22, que casi no amortiza el préstamo). El formulario ya
+// tiene `min="0"` en el campo de tasa (bloquea el submit vía validación
+// nativa del navegador), pero estas funciones son puras y se usan también
+// para la vista previa en vivo antes de ese bloqueo — se clampa aquí como
+// segunda capa de defensa, para que ninguna llamada futura (ej. un
+// importador programático) pueda colar una tasa negativa.
+function tasaValida(tasaInteres: number): number {
+  return Number.isFinite(tasaInteres) && tasaInteres > 0 ? tasaInteres : 0
+}
+
 export function calcularCuotaBase(monto: number, tasaInteres: number, cuotas: number): number {
   if (cuotas <= 0) return 0
-  if (tasaInteres === 0) return monto / cuotas
-  const r = tasaInteres / 100
+  const tasa = tasaValida(tasaInteres)
+  if (tasa === 0) return monto / cuotas
+  const r = tasa / 100
   return (monto * r * Math.pow(1 + r, cuotas)) / (Math.pow(1 + r, cuotas) - 1)
 }
 
@@ -21,7 +37,7 @@ export function calcularCuotaBase(monto: number, tasaInteres: number, cuotas: nu
 // distinta a la de la cuota francesa.
 export function calcularCuotaSimple(monto: number, tasaInteres: number, cuotas: number): number {
   if (cuotas <= 0) return 0
-  return (monto / cuotas) + (monto * (tasaInteres / 100))
+  return (monto / cuotas) + (monto * (tasaValida(tasaInteres) / 100))
 }
 
 export interface FilaAmortizacion {
@@ -35,8 +51,9 @@ export interface FilaAmortizacion {
 // ─── Amortización francesa (cuota fija, interés sobre saldo decreciente) ───
 export function calcularAmortizacionFrancesa(monto: number, tasaInteres: number, cuotas: number): FilaAmortizacion[] {
   if (cuotas <= 0) return []
-  const cuotaBase   = calcularCuotaBase(monto, tasaInteres, cuotas)
-  const tasaMensual = tasaInteres / 100
+  const tasa        = tasaValida(tasaInteres)
+  const cuotaBase   = calcularCuotaBase(monto, tasa, cuotas)
+  const tasaMensual = tasa / 100
   const rows: FilaAmortizacion[] = []
   let saldo = monto
 
@@ -44,7 +61,7 @@ export function calcularAmortizacionFrancesa(monto: number, tasaInteres: number,
     let interes: number
     let capital: number
 
-    if (tasaInteres === 0) {
+    if (tasa === 0) {
       interes = 0
       capital = cuotaBase
     } else {
@@ -64,7 +81,7 @@ export function calcularAmortizacionFrancesa(monto: number, tasaInteres: number,
 export function calcularAmortizacionSimple(monto: number, tasaInteres: number, cuotas: number): FilaAmortizacion[] {
   if (cuotas <= 0) return []
   const capitalPorCuota = monto / cuotas
-  const interesPorCuota = monto * (tasaInteres / 100)
+  const interesPorCuota = monto * (tasaValida(tasaInteres) / 100)
   const cuotaTotal      = capitalPorCuota + interesPorCuota
   const rows: FilaAmortizacion[] = []
   let saldo = monto
