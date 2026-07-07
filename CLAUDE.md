@@ -860,7 +860,7 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   por P-SPN-002/P-SPN-004 como la combinación recomendada para el caso de uso
   dominante en pymes dominicanas.
 
-## QA a fondo — módulo por módulo (en curso)
+## QA a fondo — módulo por módulo (completado, 7/7 fases)
 
 Directiva del usuario: revisar todo el sistema módulo por módulo, escenario por
 escenario, sin escatimar esfuerzo; corregir lo que no funcione; recomendar quitar
@@ -948,8 +948,16 @@ diffs inspeccionados, verificados y aplicados manualmente):
   pagaron RD$55,000. Requiere un cambio de modelo de datos (snapshot por
   período) — se reporta para decisión del usuario.
 
-Detalle exhaustivo de cada hallazgo (pasos de reproducción, números exactos
-verificados) en el reporte de QA que se entrega al usuario al cerrar la Fase 7.
+**Fase 6 — Transversales:** Dashboard y Auth/Onboarding ya cubiertos en la
+Fase 0. Configuración y modo oscuro verificados sin hallazgos nuevos
+(Configuración, Procesar Nómina y Reportería en dark mode — buen contraste,
+sin errores de consola).
+
+**Cierre — 9 bugs corregidos (2 críticos) y 2 hallazgos reportados sin
+corregir** (requieren decisión de producto: prorrateo al suspender un
+empleado mid-período, y snapshot histórico de salario por período).
+`tsc --noEmit` y `npm run build` limpios en los 6 commits de esta
+auditoría; todos fusionados a `main`.
 
 ## Branch de trabajo
 
