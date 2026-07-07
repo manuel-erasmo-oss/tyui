@@ -895,6 +895,20 @@ contra datos demo reales, no solo con tsc/build.
   de una línea. Detalle completo y pasos de reproducción en el reporte final
   de QA (Fase 7).
 
+**Fase 2 — Procesar Nómina:**
+- **[FIXED — crítico, alcance amplio]** `PeriodoNomina.totales` se calculaba
+  UNA SOLA VEZ al crear el período y nunca se recalculaba — ni al agregar
+  ajustes, ni al procesar, ni al aplicar un crédito de Saldo ISR, ni al
+  cerrar. Ese campo congelado lo leen directamente las cards de la lista de
+  períodos, el Dashboard y **toda Reportería** (KPIs, YTD, tabla mensual,
+  PDF/Excel) — afecta el caso de uso más común (agregar ajustes después de
+  crear el período, el flujo normal). Fix: nuevo `actualizarTotales()` en
+  `periodos-context.tsx` + `useEffect` en `nomina/page.tsx` que recalcula con
+  la misma lógica que ya usa la tabla en vivo, cada vez que cambian ajustes/
+  procesados/estado/lista de empleados/saldos ISR. Verificado con deltas
+  exactos (−RD$3,000 ISR, −RD$1,500 grossing-up) coincidiendo entre la card
+  de lista y la vista de detalle tras el recálculo.
+
 Detalle exhaustivo de cada hallazgo (pasos de reproducción, números exactos
 verificados) en el reporte de QA que se entrega al usuario al cerrar la Fase 7.
 

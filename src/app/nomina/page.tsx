@@ -509,11 +509,11 @@ function DetalleNomina({
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function NominaPage() {
   const { empleados, empleadosEnNomina } = useEmpleados()
-  const { periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir, marcarPagada } = usePeriodos()
+  const { periodos, generar, cerrar, eliminar, actualizarAjustes, actualizarTotales, marcarProcesados, reabrir, marcarPagada } = usePeriodos()
   const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago, registrarOmisionCuota } = usePrestamos()
   const { liquidaciones } = useLiquidaciones()
-  const { getSaldosActivos, getMontoAplicadoEnPeriodo, aplicar: aplicarSaldoISR } = useSaldoISR()
+  const { saldos: saldosISR, getSaldosActivos, getMontoAplicadoEnPeriodo, aplicar: aplicarSaldoISR } = useSaldoISR()
   const { getEstado: getEstadoAnual } = useChecklistAnual()
   const { user } = useAuth()
 
@@ -594,6 +594,35 @@ export default function NominaPage() {
       setPeriodoAbierto(null)
     }
   }, [periodoAbierto, periodos])
+
+  // Recalcula y persiste PeriodoNomina.totales cada vez que cambian sus
+  // ajustes, la lista de procesados, o cualquier crédito de Saldo ISR.
+  // Sin esto, totales queda congelado con el valor calculado al CREAR el
+  // período (ver calcularTotalesRapido más abajo, usado solo en
+  // handleCrearPeriodo) y nunca refleja ajustes agregados después ni
+  // créditos ISR aplicados — un desajuste silencioso que se propaga a las
+  // cards de la lista de períodos, el Dashboard y toda Reportería, que leen
+  // periodo.totales directamente en vez de recalcular en vivo.
+  useEffect(() => {
+    if (!periodoActual) return
+    const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
+    const rs = empleadosEnNomina.map(e =>
+      conSaldoISR(e, calcularConAjustes(e, ajustesPorEmp[e.id] ?? [], periodoActual.tipo, periodoActual.quincena ?? 1), periodoActual)
+    )
+    const round = (n: number) => Math.round(n * 100) / 100
+    const nuevos = {
+      bruto:      round(rs.reduce((s, r) => s + r.totalBruto, 0)),
+      descuentos: round(rs.reduce((s, r) => s + r.totalDescuentos, 0)),
+      neto:       round(rs.reduce((s, r) => s + r.salarioNeto, 0)),
+      aportes:    round(rs.reduce((s, r) => s + r.totalAportesEmpleador, 0)),
+      isr:        round(rs.reduce((s, r) => s + r.isrMensual, 0)),
+      costoTotal: round(rs.reduce((s, r) => s + r.totalCostoEmpleador, 0)),
+    }
+    const actuales = periodoActual.totales
+    const cambiaron = (Object.keys(nuevos) as (keyof typeof nuevos)[]).some(k => nuevos[k] !== actuales[k])
+    if (cambiaron) actualizarTotales(periodoActual.id, nuevos)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodoActual?.id, periodoActual?.ajustesPorEmpleado, periodoActual?.empleadosProcesados, periodoActual?.estado, empleadosEnNomina, saldosISR])
 
   function calcularTotalesRapido(ajustesPorEmp: Record<string, AjusteLinea[]> = {}) {
     const rs = empleadosEnNomina.map(e =>

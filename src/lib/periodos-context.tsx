@@ -37,6 +37,7 @@ interface PeriodosCtx {
   cerrar: (id: string) => void
   eliminar: (id: string) => void
   actualizarAjustes: (periodoId: string, empleadoId: string, ajustes: AjusteLinea[]) => void
+  actualizarTotales: (periodoId: string, totales: PeriodoNomina['totales']) => void
   marcarProcesados: (periodoId: string, empleadoIds: string[]) => void
   reabrir: (id: string, usuarioEmail: string) => boolean
   marcarPagada: (id: string, fechaPago: string) => void
@@ -48,6 +49,7 @@ const Ctx = createContext<PeriodosCtx>({
   cerrar: () => {},
   eliminar: () => {},
   actualizarAjustes: () => {},
+  actualizarTotales: () => {},
   marcarProcesados: () => {},
   reabrir: () => false,
   marcarPagada: () => {},
@@ -105,6 +107,21 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
           ? { ...p, ajustesPorEmpleado: { ...(p.ajustesPorEmpleado ?? {}), [empleadoId]: ajustes } }
           : p
       )
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
+  }
+
+  // Los totales de un período se calculan a partir de ajustesPorEmpleado
+  // (y de cualquier crédito de Saldo ISR aplicado), que viven fuera de este
+  // contexto — por eso el recálculo en sí ocurre en nomina/page.tsx y aquí
+  // solo se persiste el resultado. Sin esto, totales queda congelado con el
+  // valor calculado al crear el período, y nunca refleja ajustes agregados
+  // después ni créditos ISR aplicados — visible en las cards de la lista de
+  // períodos y en toda Reportería, que leen este campo directamente.
+  function actualizarTotales(periodoId: string, totales: PeriodoNomina['totales']) {
+    setPeriodos(prev => {
+      const next = prev.map(p => p.id === periodoId ? { ...p, totales } : p)
       try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
@@ -172,7 +189,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ periodos, generar, cerrar, eliminar, actualizarAjustes, marcarProcesados, reabrir, marcarPagada }}>
+    <Ctx.Provider value={{ periodos, generar, cerrar, eliminar, actualizarAjustes, actualizarTotales, marcarProcesados, reabrir, marcarPagada }}>
       {children}
     </Ctx.Provider>
   )
