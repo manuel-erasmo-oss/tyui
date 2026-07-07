@@ -21,11 +21,13 @@ import {
   Mail,
   Send,
   Filter,
+  FileSpreadsheet,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
+import { ImportadorHorasExcel } from '@/components/nomina/ImportadorHorasExcel'
 import { useEmpleados } from '@/lib/empleados-context'
 import { usePeriodos, esPeriodoMasReciente, periodoAnterior } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
@@ -544,6 +546,10 @@ export default function NominaPage() {
   const [envioPeriodoId, setEnvioPeriodoId] = useState<string | null>(null)
   const [plantillaComprobante, setPlantillaComprobante] = useState<PlantillaComprobante>(plantillaComprobanteDefault())
   const [enviadosComprobante, setEnviadosComprobante] = useState<Set<string>>(new Set())
+
+  // Importador de horas trabajadas (Excel/CSV) — solo tiene sentido con el
+  // período en_proceso, ya que anexa AjusteLinea nuevas a los empleados.
+  const [importarHorasAbierto, setImportarHorasAbierto] = useState(false)
 
   // Modal + toast
   const [detalleModal, setDetalleModal] = useState<{ emp: Empleado; nom: ResultadoNomina } | null>(null)
@@ -1331,6 +1337,16 @@ export default function NominaPage() {
                 Cerrar
               </button>
             )}
+            {esEnProceso && (
+              <button
+                onClick={() => setImportarHorasAbierto(true)}
+                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                title="Cargar horas extra/recargo nocturno masivamente desde un archivo Excel"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Importar Horas
+              </button>
+            )}
             <button
               onClick={handleExportar}
               className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
@@ -1771,6 +1787,25 @@ export default function NominaPage() {
             nomina={detalleModal.nom}
             periodoLabel={periodoActualLabel}
             onClose={() => setDetalleModal(null)}
+          />
+        </>
+      )}
+
+      {importarHorasAbierto && esEnProceso && (
+        <>
+          <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in" />
+          <ImportadorHorasExcel
+            empleados={empleados}
+            empleadosElegibles={empleadosEnNomina}
+            ajustesPorEmpleado={ajustesPorEmp}
+            onConfirmar={(nuevosAjustesPorEmpleado, totalAgregados) => {
+              Object.entries(nuevosAjustesPorEmpleado).forEach(([empId, ajustes]) => {
+                actualizarAjustes(periodoActual.id, empId, ajustes)
+              })
+              const totalEmpleados = Object.keys(nuevosAjustesPorEmpleado).length
+              setToast(`Se agregaron ${totalAgregados} ajuste(s) de horas a ${totalEmpleados} empleado(s)`)
+            }}
+            onClose={() => setImportarHorasAbierto(false)}
           />
         </>
       )}
