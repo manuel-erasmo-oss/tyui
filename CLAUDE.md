@@ -708,7 +708,22 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
   correcto. Verificado en navegador: feriado registrado "16 ago 2026 — Día de
   la Restauración" → aviso exacto al seleccionar H.E. 35% en un ajuste de
   Agosto 2026.
-- Importador de horas trabajadas vía CSV/Excel con plantilla y validación previa.
+- ~~Importador de horas trabajadas vía CSV/Excel~~ — **implementado** (vía
+  agente en worktree aislado). Nuevo `ImportadorHorasExcel.tsx` (mismo
+  esqueleto de 3 pasos que `carga-inicial/ImportadorExcel.tsx`), botón
+  "Importar Horas" en `nomina/page.tsx` (solo visible con el período
+  `en_proceso`). Plantilla con columnas Cédula/Concepto/Horas/Descripción —
+  el concepto acepta etiquetas amigables ("H.E. 35%"/"H.E. 100%"/"Recargo
+  Nocturno") mapeadas a los valores exactos de `ConceptoAjuste`. Cada fila
+  válida se ANEXA a los ajustes ya existentes del empleado en ese período
+  (nunca los reemplaza — preserva préstamos, dependientes SFS, etc.) vía
+  `actualizarAjustes`. Corrección aplicada durante la verificación: la
+  comparación de cédula ahora tolera pérdida de ceros a la izquierda (ej.
+  "00112345678" → "112345678") que ocurre cuando Excel interpreta la columna
+  como número en vez de texto — un problema real y común al reingresar
+  cédulas dominicanas en una hoja de cálculo. Verificado en navegador: CSV
+  con 2 filas válidas → "Se agregaron 2 ajuste(s) de horas a 2 empleado(s)",
+  con el préstamo ya existente de otro empleado intacto tras la importación.
 - Nómina en moneda USD — principio de diseño clave: el motor tributario
   siempre calcula en RD$; USD es solo una capa de presentación con tasa
   configurable, nunca la base del cálculo.
