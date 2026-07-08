@@ -1036,6 +1036,24 @@ membresía real (`resultadosPorEmpleado`):
 
 `tsc --noEmit` y `npm run build` limpios.
 
+### QA — Fase 6 y cierre final
+
+Fase 6 (Dashboard, Auth/Onboarding, Configuración, dark mode, responsive):
+Dashboard y Auth/Onboarding ya cubiertos en Fase 0. Configuración revisada
+directamente (perfil de empresa, resize de logo, tasaCambioUSD) sin
+hallazgos. Modo oscuro verificado en Dashboard/Nómina/Reportería (incluye
+el footer corregido en Fase 5, legible en ambos modos) y vista móvil
+(390×844) en Dashboard — sin errores de consola, sin ruptura de layout.
+
+**Cierre — 14 bugs corregidos (3 críticos) y 1 limitación inherente
+documentada** (sin fix — no hay forma honesta de reconstruir salario
+histórico para períodos anteriores a la existencia del snapshot). Los 2
+hallazgos que la primera pasada había dejado pendientes (prorrateo por
+suspensión, snapshot histórico) fueron corregidos en la sesión intermedia
+por decisión explícita del usuario — ver sección arriba. `tsc --noEmit` y
+`npm run build` limpios en todos los commits de la auditoría. Todo
+fusionado a `main`.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
