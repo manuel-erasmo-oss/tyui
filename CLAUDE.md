@@ -1304,6 +1304,7 @@ limpios (19 rutas).
 
 | Hash | Descripción |
 |---|---|
+| `458a71c` | polish: Resumen deja de repetir el rail, agrega patrones estilo QuickBooks/SAP |
 | `3d85c59` | redesign: recrear Configuración como rail persistente + panel continuo |
 | `08725d8` | retire: eliminar módulo Inicio de Año, reubicar Feriados en Configuración |
 | `4a205a4` | feat: avances de salario — adelanto sin interés reutilizando Préstamos |
