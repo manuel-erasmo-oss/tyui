@@ -1406,6 +1406,7 @@ habilitaría compartir una empresa entre múltiples cuentas/usuarios.
 
 | Hash | Descripción |
 |---|---|
+| `503b167` | feat: multiempresa — una cuenta puede tener varias empresas |
 | `458a71c` | polish: Resumen deja de repetir el rail, agrega patrones estilo QuickBooks/SAP |
 | `3d85c59` | redesign: recrear Configuración como rail persistente + panel continuo |
 | `08725d8` | retire: eliminar módulo Inicio de Año, reubicar Feriados en Configuración |
