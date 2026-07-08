@@ -1224,6 +1224,7 @@ es interna a una sola ruta).
 
 | Hash | Descripción |
 |---|---|
+| `3d85c59` | redesign: recrear Configuración como rail persistente + panel continuo |
 | `08725d8` | retire: eliminar módulo Inicio de Año, reubicar Feriados en Configuración |
 | `4a205a4` | feat: avances de salario — adelanto sin interés reutilizando Préstamos |
 | `6779672` | feat: licencias con subsidio — enfermedad común, accidente laboral, maternidad |
