@@ -1147,6 +1147,75 @@ apareció correctamente — confirma el wiring end-to-end desde la nueva
 ubicación. Sidebar ya no muestra "Inicio de Año" y `/inicio-de-ano` devuelve
 404. `tsc --noEmit` y `npm run build` limpios (19 rutas, antes 20).
 
+## Recreación premium de Configuración (post-QA)
+
+Pedido explícito del usuario: convertir Configuración en "el mejor módulo de
+configuración visualmente hablando que hayas visto en un ERP" — no un ajuste
+menor, una recreación completa. El hub de tarjetas (click → navegación de
+página completa con botón "← Configuración") del rediseño anterior se
+reemplazó por el patrón de **rail persistente + panel de contenido continuo**
+que usan las mejores herramientas de configuración de SaaS (Stripe, Vercel,
+Linear) — sin salir nunca de una sola pantalla.
+
+**Arquitectura nueva de `src/app/configuracion/page.tsx`:**
+- **Rail izquierdo persistente** (`w-72`, oculto en móvil → franja de pills
+  horizontal scrolleable en su lugar): buscador en vivo ("Buscar en
+  configuración…", filtra por título/descripción/keywords de cada sección),
+  ítem fijo "Resumen" arriba, luego dos grupos con encabezado ("Tu Negocio":
+  Empresa/Nómina/Reglas de Negocio, "Sistema": Datos y Migración/Cumplimiento
+  Legal). Cada `NavItem` usa el mismo lenguaje visual de estado activo que
+  el `Sidebar` global (fondo `#eef0fb`, texto navy, indicador).
+- **"Resumen"** — nueva pantalla de aterrizaje (antes no existía, la vista
+  por defecto era un formulario). Card "hero" con logo/nombre/RNC de la
+  empresa + botón "Editar perfil", seguida de 5 `ResumenCard` (una por
+  sección) mostrando un stat en vivo calculado desde `empresa` real: "7/7
+  campos completos", "Mensual · Solo RD$ · 3 feriados", "Endeudamiento 25% ·
+  Variación 20%", etc. — cada card es clickeable y navega a esa sección.
+- **Un solo punto de guardado**: se eliminaron los 3 botones "Guardar
+  cambios" independientes (uno por formulario en Empresa/Nómina/Reglas, que
+  ya secretamente compartían el mismo `form`/`guardar()`). Ahora una
+  **barra flotante de cambios sin guardar** (`isDirty = JSON.stringify(form)
+  !== JSON.stringify(empresa)`, calculado con `useMemo`) aparece con
+  animación en la esquina inferior del panel de contenido — "Cambios sin
+  guardar" + botones "Descartar" (revierte `form` a `empresa`) / "Guardar
+  cambios" — visible en cualquiera de las 3 secciones tipo formulario. Hace
+  explícito lo que antes era implícito (las 3 secciones comparten el mismo
+  registro `Empresa`) y es un patrón más honesto que 3 botones idénticos.
+- **Contenido agrupado en `SettingsCard`** (icono + título + descripción +
+  cuerpo) en vez de un único formulario largo por sección — Empresa se
+  dividió en 4 cards (Identidad, Ubicación y Contacto, Clasificación para
+  Nómina, Tu Rol); Nómina en 2 (Modalidad y Moneda, Feriados Nacionales);
+  Reglas de Negocio en 2 (Umbrales de Alerta, Plantilla de Correo);
+  Cumplimiento Legal en 3 (una por tabla, con íconos distintos: Landmark
+  para TSS, Percent para ISR, Coins para Salarios Mínimos).
+- **`ThresholdSlider`** — los inputs numéricos planos de "Reglas de Negocio"
+  (endeudamiento, variación) se convirtieron en sliders con badge de valor
+  en vivo (`25%`) y track/thumb estilizados con `accent-color` +
+  `[&::-webkit-slider-thumb]`/`[&::-moz-range-thumb]` — el tipo de detalle
+  visual que distingue un ERP premium de un formulario genérico.
+- **`FieldInput`** — inputs con ícono prefijo (Building2/MapPin/Phone/Mail/
+  UserCircle2/Coins/CalendarDays) para los campos donde el ícono aporta
+  reconocimiento visual instantáneo (nombre, ciudad, teléfono, email,
+  representante legal, tasa USD, fecha de feriado).
+- **Transición de contenido**: nuevo keyframe `content-in` (`globals.css`) —
+  fade + `translateY(6px)` de 0.25s, aplicado vía `key={vista}` en el
+  wrapper de contenido para que se re-dispare en cada cambio de sección.
+- Se conserva el 100% de la lógica de negocio previa sin cambios: logo
+  (resize a canvas 320px), validación de tamaño, `handleAgregarFeriado`,
+  `handleCargarDemo`, el modal de confirmación de datos demo, y las 3 tablas
+  legales de solo lectura — la recreación es de shell/visual, no de
+  funcionalidad.
+
+Verificado en navegador (Playwright, escritorio 1440×900 + móvil 390×844,
+claro y oscuro): Resumen muestra los 5 stats correctos calculados desde
+datos demo reales; el buscador filtra en vivo (query "feriado" → solo
+"Nómina" en resultados); editar el nombre de la empresa dispara la barra
+flotante ("Cambios sin guardar": true), Guardar la hace desaparecer y
+muestra el toast "Datos guardados"; Descartar revierte sin persistir. Sin
+errores de consola en ninguna combinación de viewport/tema. `tsc --noEmit`
+y `npm run build` limpios (19 rutas, sin cambios de conteo — la recreación
+es interna a una sola ruta).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
