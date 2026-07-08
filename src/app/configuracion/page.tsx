@@ -1,16 +1,24 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import type { LucideIcon } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE_AFP, TOPE_COTIZABLE_SFS, TOPE_COTIZABLE_SRL } from '@/lib/dominican-labor'
 import { formatRD } from '@/lib/utils'
-import { Save, Settings, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2, History } from 'lucide-react'
+import {
+  Save, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2, History,
+  Wallet, ShieldCheck, ArrowLeft, ArrowRight, SlidersHorizontal, Mail,
+} from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useAuth } from '@/lib/auth-context'
 import { Toast } from '@/components/ui/Toast'
 import { cargarDatosDemo } from '@/lib/seed-data'
 import { ConfiguracionInicialFlow } from '@/components/carga-inicial/ConfiguracionInicialFlow'
-import type { Empresa, CategoriaEmpresa, SectorEmpresa, RolUsuario } from '@/types'
+import { PLACEHOLDERS_COMPROBANTE, plantillaComprobanteDefault } from '@/lib/comprobante-email'
+import {
+  UMBRAL_ENDEUDAMIENTO_DEFAULT, UMBRAL_VARIACION_BRUTO_DEFAULT,
+  type Empresa, type CategoriaEmpresa, type SectorEmpresa, type RolUsuario,
+} from '@/types'
 
 interface ParamRow {
   label: string
@@ -162,9 +170,119 @@ const ROLES_USUARIO: { value: RolUsuario; label: string }[] = [
   { value: 'otro',     label: 'Otro' },
 ]
 
+// ─── Hub de categorías ──────────────────────────────────────────────────────
+// Cada categoría agrupa configuración que responde a una pregunta distinta —
+// evita el problema de un solo formulario largo donde identidad de empresa,
+// clasificación legal, preferencias de nómina y datos de migración quedan
+// todos mezclados sin jerarquía.
+type Vista = 'hub' | 'empresa' | 'nomina' | 'reglas' | 'datos' | 'legal'
+
+interface CategoriaConfig {
+  id: Exclude<Vista, 'hub'>
+  icon: LucideIcon
+  titulo: string
+  pregunta: string
+  descripcion: string
+  items: string[]
+}
+
+const CATEGORIAS: CategoriaConfig[] = [
+  {
+    id: 'empresa',
+    icon: Building2,
+    titulo: 'Empresa',
+    pregunta: 'Quién eres',
+    descripcion: 'Identidad legal, contacto y clasificación de tu empresa para efectos de nómina.',
+    items: ['Perfil, logo y datos de contacto', 'Categoría, sector y zona franca', 'Tu rol en la empresa'],
+  },
+  {
+    id: 'nomina',
+    icon: Wallet,
+    titulo: 'Nómina',
+    pregunta: 'Cómo pagas',
+    descripcion: 'Configuración operativa de cómo se procesa y se presenta tu nómina.',
+    items: ['Modalidad de pago (mensual/quincenal)', 'Moneda de presentación (RD$/USD)'],
+  },
+  {
+    id: 'reglas',
+    icon: SlidersHorizontal,
+    titulo: 'Reglas de Negocio',
+    pregunta: 'Cómo decides tú',
+    descripcion: 'Umbrales de alerta internos y la plantilla de correo con la que le hablas a tus empleados — ajústalos a tu propio criterio.',
+    items: ['Umbral de endeudamiento/descuentos', 'Umbral de variación de nómina', 'Plantilla de correo de comprobantes'],
+  },
+  {
+    id: 'datos',
+    icon: History,
+    titulo: 'Datos y Migración',
+    pregunta: 'De dónde vienes',
+    descripcion: 'Carga el historial de una empresa que ya operaba antes de Cielo Cloud, o prueba el sistema con datos de ejemplo.',
+    items: ['Configuración inicial (saldos previos)', 'Datos de demostración'],
+  },
+  {
+    id: 'legal',
+    icon: ShieldCheck,
+    titulo: 'Cumplimiento Legal',
+    pregunta: 'Qué exige la ley',
+    descripcion: 'Parámetros fiscales vigentes en República Dominicana — el motor de cálculo ya los aplica automáticamente.',
+    items: ['Tasas TSS (CNSS)', 'Tramos ISR (DGII)', 'Salarios mínimos nacionales'],
+  },
+]
+
+function CategoriaCard({ cat, onClick }: { cat: CategoriaConfig; onClick: () => void }) {
+  const Icon = cat.icon
+  return (
+    <button
+      onClick={onClick}
+      className="group relative overflow-hidden rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-white dark:bg-[#141722] p-7 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[#1B2980]/30 dark:hover:border-indigo-500/40 hover:shadow-[0_20px_40px_-16px_rgba(27,41,128,0.25)] dark:hover:shadow-[0_20px_40px_-16px_rgba(0,0,0,0.6)]"
+    >
+      <div className="pointer-events-none absolute -right-10 -top-10 h-36 w-36 rounded-full bg-gradient-to-br from-[#1B2980]/10 to-transparent blur-2xl opacity-0 transition-opacity duration-300 group-hover:opacity-100 dark:from-indigo-500/10" />
+      <div className="relative">
+        <div className="flex items-start justify-between gap-3">
+          <div className="relative mb-5 inline-flex">
+            <div className="absolute inset-0 rounded-2xl bg-[#1B2980]/25 blur-lg dark:bg-indigo-500/25" />
+            <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] text-white shadow-lg shadow-[#1B2980]/30">
+              <Icon className="h-5 w-5" />
+            </div>
+          </div>
+          <span className="mt-1 shrink-0 rounded-full bg-[#eef0fb] dark:bg-indigo-950/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">
+            {cat.pregunta}
+          </span>
+        </div>
+        <p className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-100">{cat.titulo}</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">{cat.descripcion}</p>
+        <ul className="mt-4 space-y-1.5">
+          {cat.items.map(item => (
+            <li key={item} className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="h-1 w-1 shrink-0 rounded-full bg-[#1B2980]/40 dark:bg-indigo-500/50" />
+              {item}
+            </li>
+          ))}
+        </ul>
+        <div className="mt-5 flex items-center gap-1.5 text-sm font-semibold text-[#1B2980] dark:text-indigo-400">
+          Configurar
+          <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-1" />
+        </div>
+      </div>
+    </button>
+  )
+}
+
+function VolverBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+    >
+      <ArrowLeft className="h-3.5 w-3.5" /> Configuración
+    </button>
+  )
+}
+
 export default function ConfiguracionPage() {
   const { empresa, guardar } = useEmpresa()
   const { user } = useAuth()
+  const [vista, setVista]       = useState<Vista>('hub')
   const [form, setForm]         = useState<Empresa>(empresa)
   const [showToast, setShowToast] = useState(false)
   const [confirmDemo, setConfirmDemo] = useState(false)
@@ -222,457 +340,586 @@ export default function ConfiguracionPage() {
     setShowToast(true)
   }
 
+  // ─── Hub — pantalla principal ──────────────────────────────────────────────
+  if (vista === 'hub') {
+    return (
+      <div className="flex flex-col overflow-hidden h-full">
+        <Header title="Configuración" subtitle="Ajustes de tu empresa, agrupados por categoría" />
+        <div className="flex-1 overflow-y-auto p-6 bg-zinc-50 dark:bg-[#0d0f1a]">
+          <div className="mx-auto max-w-5xl">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {CATEGORIAS.map(cat => (
+                <CategoriaCard key={cat.id} cat={cat} onClick={() => setVista(cat.id)} />
+              ))}
+            </div>
+            <p className="mt-6 text-center text-xs text-zinc-400 dark:text-zinc-500">
+              Cielo Cloud v0.1.0 · Parámetros actualizados a 2024 · República Dominicana
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const catActual = CATEGORIAS.find(c => c.id === vista)!
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
-      <Header title="Configuración" subtitle="Perfil de empresa y parámetros fiscales vigentes" />
-      <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-zinc-50 dark:bg-[#0d0f1a]">
+      <Header title={catActual.titulo} subtitle={catActual.descripcion} actions={<VolverBtn onClick={() => setVista('hub')} />} />
+      <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
+        <div className="mx-auto w-full max-w-3xl space-y-5">
 
-        {/* Company profile card */}
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-950/40">
-              <Building2 className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
-            </div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Perfil de la Empresa</h2>
-          </div>
-
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
-            <form onSubmit={handleSave} className="space-y-4">
-              {/* Logo */}
-              <div>
-                <label className={LABEL_CLASS}>Logo de la empresa</label>
-                <div className="flex items-center gap-5">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] transition-colors hover:border-[#1B2980] dark:hover:border-indigo-500"
-                  >
-                    {form.logo ? (
-                      <img src={form.logo} alt="Logo" className="h-full w-full object-contain p-2" />
-                    ) : (
-                      <div className="flex flex-col items-center gap-1.5 text-zinc-300 dark:text-zinc-600">
-                        <Building2 className="h-7 w-7" />
-                        <span className="text-[9px] font-semibold uppercase tracking-widest">Logo</span>
-                      </div>
-                    )}
-                  </button>
-                  <div className="flex flex-col gap-2">
+          {/* ── Empresa ─────────────────────────────────────────────────── */}
+          {vista === 'empresa' && (
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
+              <form onSubmit={handleSave} className="space-y-4">
+                {/* Logo */}
+                <div>
+                  <label className={LABEL_CLASS}>Logo de la empresa</label>
+                  <div className="flex items-center gap-5">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#252840] transition-colors"
+                      className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] transition-colors hover:border-[#1B2980] dark:hover:border-indigo-500"
                     >
-                      <ImagePlus className="h-4 w-4" />
-                      {form.logo ? 'Cambiar logo' : 'Subir logo'}
+                      {form.logo ? (
+                        <img src={form.logo} alt="Logo" className="h-full w-full object-contain p-2" />
+                      ) : (
+                        <div className="flex flex-col items-center gap-1.5 text-zinc-300 dark:text-zinc-600">
+                          <Building2 className="h-7 w-7" />
+                          <span className="text-[9px] font-semibold uppercase tracking-widest">Logo</span>
+                        </div>
+                      )}
                     </button>
-                    {form.logo && (
+                    <div className="flex flex-col gap-2">
                       <button
                         type="button"
-                        onClick={() => setForm(prev => ({ ...prev, logo: undefined }))}
-                        className="flex items-center gap-2 rounded-lg border border-rose-200 dark:border-rose-800/40 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#252840] transition-colors"
                       >
-                        <Trash2 className="h-4 w-4" />
-                        Eliminar logo
+                        <ImagePlus className="h-4 w-4" />
+                        {form.logo ? 'Cambiar logo' : 'Subir logo'}
                       </button>
-                    )}
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug">
-                      JPG, PNG · Máx. 3 MB<br />
-                      Se ajusta automáticamente para PDFs y comprobantes.
-                    </p>
-                    {logoError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{logoError}</p>}
+                      {form.logo && (
+                        <button
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, logo: undefined }))}
+                          className="flex items-center gap-2 rounded-lg border border-rose-200 dark:border-rose-800/40 px-3 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Eliminar logo
+                        </button>
+                      )}
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-snug">
+                        JPG, PNG · Máx. 3 MB<br />
+                        Se ajusta automáticamente para PDFs y comprobantes.
+                      </p>
+                      {logoError && <p className="text-[11px] text-rose-600 dark:text-rose-400">{logoError}</p>}
+                    </div>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={handleLogoChange}
+                  />
+                </div>
+
+                {/* Nombre */}
+                <div>
+                  <label htmlFor="nombre" className={LABEL_CLASS}>Nombre de la empresa</label>
+                  <input
+                    id="nombre"
+                    name="nombre"
+                    type="text"
+                    value={form.nombre}
+                    onChange={handleChange}
+                    placeholder="Ej. Distribuciones del Caribe, SRL"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+
+                {/* RNC + Ciudad */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="rnc" className={LABEL_CLASS}>RNC</label>
+                    <input
+                      id="rnc"
+                      name="rnc"
+                      type="text"
+                      value={form.rnc}
+                      onChange={handleChange}
+                      placeholder="Ej. 101-12345-6"
+                      className={INPUT_CLASS}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="ciudad" className={LABEL_CLASS}>Ciudad</label>
+                    <input
+                      id="ciudad"
+                      name="ciudad"
+                      type="text"
+                      value={form.ciudad}
+                      onChange={handleChange}
+                      placeholder="Ej. Santo Domingo"
+                      className={INPUT_CLASS}
+                    />
                   </div>
                 </div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={handleLogoChange}
-                />
-              </div>
 
-              {/* Nombre */}
-              <div>
-                <label htmlFor="nombre" className={LABEL_CLASS}>Nombre de la empresa</label>
-                <input
-                  id="nombre"
-                  name="nombre"
-                  type="text"
-                  value={form.nombre}
-                  onChange={handleChange}
-                  placeholder="Ej. Distribuciones del Caribe, SRL"
-                  className={INPUT_CLASS}
-                />
-              </div>
-
-              {/* RNC + Ciudad */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {/* Dirección */}
                 <div>
-                  <label htmlFor="rnc" className={LABEL_CLASS}>RNC</label>
+                  <label htmlFor="direccion" className={LABEL_CLASS}>Dirección</label>
                   <input
-                    id="rnc"
-                    name="rnc"
+                    id="direccion"
+                    name="direccion"
                     type="text"
-                    value={form.rnc}
+                    value={form.direccion}
                     onChange={handleChange}
-                    placeholder="Ej. 101-12345-6"
+                    placeholder="Ej. Av. Winston Churchill #1099, Piantini"
                     className={INPUT_CLASS}
                   />
                 </div>
+
+                {/* Teléfono + Email */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="telefono" className={LABEL_CLASS}>Teléfono</label>
+                    <input
+                      id="telefono"
+                      name="telefono"
+                      type="text"
+                      value={form.telefono}
+                      onChange={handleChange}
+                      placeholder="Ej. 809-555-1234"
+                      className={INPUT_CLASS}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="email" className={LABEL_CLASS}>Email</label>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      value={form.email}
+                      onChange={handleChange}
+                      placeholder="Ej. admin@empresa.com"
+                      className={INPUT_CLASS}
+                    />
+                  </div>
+                </div>
+
+                {/* Representante Legal */}
                 <div>
-                  <label htmlFor="ciudad" className={LABEL_CLASS}>Ciudad</label>
+                  <label htmlFor="representanteLegal" className={LABEL_CLASS}>Representante Legal</label>
                   <input
-                    id="ciudad"
-                    name="ciudad"
+                    id="representanteLegal"
+                    name="representanteLegal"
                     type="text"
-                    value={form.ciudad}
+                    value={form.representanteLegal}
                     onChange={handleChange}
-                    placeholder="Ej. Santo Domingo"
+                    placeholder="Ej. María García Pérez"
                     className={INPUT_CLASS}
                   />
                 </div>
-              </div>
 
-              {/* Dirección */}
-              <div>
-                <label htmlFor="direccion" className={LABEL_CLASS}>Dirección</label>
-                <input
-                  id="direccion"
-                  name="direccion"
-                  type="text"
-                  value={form.direccion}
-                  onChange={handleChange}
-                  placeholder="Ej. Av. Winston Churchill #1099, Piantini"
-                  className={INPUT_CLASS}
-                />
-              </div>
+                <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-4">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+                    Clasificación para efectos de nómina
+                  </p>
 
-              {/* Teléfono + Email */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label htmlFor="telefono" className={LABEL_CLASS}>Teléfono</label>
-                  <input
-                    id="telefono"
-                    name="telefono"
-                    type="text"
-                    value={form.telefono}
-                    onChange={handleChange}
-                    placeholder="Ej. 809-555-1234"
-                    className={INPUT_CLASS}
-                  />
+                  {/* Categoría de Empresa */}
+                  <div>
+                    <label className={LABEL_CLASS}>Categoría de la empresa</label>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {CATEGORIAS_EMPRESA.map(cat => (
+                        <button
+                          key={cat.value}
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, categoriaEmpresa: cat.value }))}
+                          className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                            form.categoriaEmpresa === cat.value
+                              ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30'
+                              : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:bg-zinc-50 dark:hover:bg-[#252840]'
+                          }`}
+                        >
+                          <p className={`text-xs font-semibold ${
+                            form.categoriaEmpresa === cat.value
+                              ? 'text-[#1B2980] dark:text-indigo-300'
+                              : 'text-zinc-700 dark:text-zinc-300'
+                          }`}>
+                            {cat.label}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{cat.descripcion}</p>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                      Determina el salario mínimo legal aplicable (Res. 079-2025) y las alertas del Dashboard cuando
+                      un empleado gana menos de lo establecido. Actualízala si tu empresa crece de categoría.
+                    </p>
+                  </div>
+
+                  {/* Zona Franca */}
+                  <label className="mt-4 flex items-center gap-2.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3.5 py-2.5 cursor-pointer w-fit">
+                    <input
+                      type="checkbox"
+                      checked={form.zonaFranca ?? false}
+                      onChange={e => setForm(prev => ({ ...prev, zonaFranca: e.target.checked }))}
+                      className="h-4 w-4 rounded accent-[#1B2980]"
+                    />
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">Opera bajo régimen de zona franca</span>
+                  </label>
+
+                  {/* Sector Principal */}
+                  <div className="mt-4">
+                    <label className={LABEL_CLASS}>Sector principal de operación</label>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {SECTORES_EMPRESA.map(s => (
+                        <button
+                          key={s.value}
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, sectorEmpresa: s.value }))}
+                          className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+                            form.sectorEmpresa === s.value
+                              ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30'
+                              : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:bg-zinc-50 dark:hover:bg-[#252840]'
+                          }`}
+                        >
+                          <p className={`text-xs font-semibold ${
+                            form.sectorEmpresa === s.value
+                              ? 'text-[#1B2980] dark:text-indigo-300'
+                              : 'text-zinc-700 dark:text-zinc-300'
+                          }`}>
+                            {s.label}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{s.descripcion}</p>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                      Define la categoría de riesgo laboral (SRL) sugerida por defecto para los nuevos empleados que agregues.
+                    </p>
+                  </div>
+
+                  {/* Rol del usuario */}
+                  <div className="mt-4">
+                    <label className={LABEL_CLASS}>Tu rol en la empresa</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ROLES_USUARIO.map(r => (
+                        <button
+                          key={r.value}
+                          type="button"
+                          onClick={() => setForm(prev => ({ ...prev, rolUsuario: r.value }))}
+                          className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                            form.rolUsuario === r.value
+                              ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30 text-[#1B2980] dark:text-indigo-300'
+                              : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#252840]'
+                          }`}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label htmlFor="email" className={LABEL_CLASS}>Email</label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={form.email}
-                    onChange={handleChange}
-                    placeholder="Ej. admin@empresa.com"
-                    className={INPUT_CLASS}
-                  />
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] focus:outline-none focus:ring-2 focus:ring-[#1B2980]/40 transition-colors"
+                  >
+                    <Save className="h-4 w-4" />
+                    Guardar cambios
+                  </button>
                 </div>
-              </div>
-
-              {/* Representante Legal */}
-              <div>
-                <label htmlFor="representanteLegal" className={LABEL_CLASS}>Representante Legal</label>
-                <input
-                  id="representanteLegal"
-                  name="representanteLegal"
-                  type="text"
-                  value={form.representanteLegal}
-                  onChange={handleChange}
-                  placeholder="Ej. María García Pérez"
-                  className={INPUT_CLASS}
-                />
-              </div>
-
-              {/* Categoría de Empresa */}
-              <div>
-                <label className={LABEL_CLASS}>Categoría de la empresa</label>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {CATEGORIAS_EMPRESA.map(cat => (
-                    <button
-                      key={cat.value}
-                      type="button"
-                      onClick={() => setForm(prev => ({ ...prev, categoriaEmpresa: cat.value }))}
-                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                        form.categoriaEmpresa === cat.value
-                          ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30'
-                          : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:bg-zinc-50 dark:hover:bg-[#252840]'
-                      }`}
-                    >
-                      <p className={`text-xs font-semibold ${
-                        form.categoriaEmpresa === cat.value
-                          ? 'text-[#1B2980] dark:text-indigo-300'
-                          : 'text-zinc-700 dark:text-zinc-300'
-                      }`}>
-                        {cat.label}
-                      </p>
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{cat.descripcion}</p>
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  Determina el salario mínimo legal aplicable (Res. 079-2025) y las alertas del Dashboard cuando
-                  un empleado gana menos de lo establecido. Actualízala si tu empresa crece de categoría.
-                </p>
-              </div>
-
-              {/* Zona Franca */}
-              <label className="flex items-center gap-2.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3.5 py-2.5 cursor-pointer w-fit">
-                <input
-                  type="checkbox"
-                  checked={form.zonaFranca ?? false}
-                  onChange={e => setForm(prev => ({ ...prev, zonaFranca: e.target.checked }))}
-                  className="h-4 w-4 rounded accent-[#1B2980]"
-                />
-                <span className="text-sm text-zinc-700 dark:text-zinc-300">Opera bajo régimen de zona franca</span>
-              </label>
-
-              {/* Sector Principal */}
-              <div>
-                <label className={LABEL_CLASS}>Sector principal de operación</label>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  {SECTORES_EMPRESA.map(s => (
-                    <button
-                      key={s.value}
-                      type="button"
-                      onClick={() => setForm(prev => ({ ...prev, sectorEmpresa: s.value }))}
-                      className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-                        form.sectorEmpresa === s.value
-                          ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30'
-                          : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:bg-zinc-50 dark:hover:bg-[#252840]'
-                      }`}
-                    >
-                      <p className={`text-xs font-semibold ${
-                        form.sectorEmpresa === s.value
-                          ? 'text-[#1B2980] dark:text-indigo-300'
-                          : 'text-zinc-700 dark:text-zinc-300'
-                      }`}>
-                        {s.label}
-                      </p>
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{s.descripcion}</p>
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  Define la categoría de riesgo laboral (SRL) sugerida por defecto para los nuevos empleados que agregues.
-                </p>
-              </div>
-
-              {/* Rol del usuario */}
-              <div>
-                <label className={LABEL_CLASS}>Tu rol en la empresa</label>
-                <div className="flex flex-wrap gap-2">
-                  {ROLES_USUARIO.map(r => (
-                    <button
-                      key={r.value}
-                      type="button"
-                      onClick={() => setForm(prev => ({ ...prev, rolUsuario: r.value }))}
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                        form.rolUsuario === r.value
-                          ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30 text-[#1B2980] dark:text-indigo-300'
-                          : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#252840]'
-                      }`}
-                    >
-                      {r.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Modalidad de Nómina */}
-              <div>
-                <label className={LABEL_CLASS}>Modalidad de pago de nómina</label>
-                <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840] w-fit">
-                  {(['mensual', 'quincenal'] as const).map(m => (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => setForm(prev => ({ ...prev, modalidadNomina: m }))}
-                      className={`px-5 py-2 text-sm font-medium capitalize transition-colors ${
-                        (form.modalidadNomina ?? 'mensual') === m
-                          ? 'bg-[#1B2980] text-white'
-                          : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
-                      }`}
-                    >
-                      {m === 'mensual' ? 'Mensual' : 'Quincenal'}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  Esta configuración define el tipo de período predeterminado al crear nóminas.
-                </p>
-              </div>
-
-              {/* Tasa de Cambio USD — presentación, nunca base de cálculo */}
-              <div>
-                <label htmlFor="tasaCambioUSD" className={LABEL_CLASS}>Tasa de Cambio (RD$ por USD)</label>
-                <input
-                  id="tasaCambioUSD"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.tasaCambioUSD ?? ''}
-                  onChange={e => setForm(prev => ({ ...prev, tasaCambioUSD: e.target.value ? Number(e.target.value) : undefined }))}
-                  placeholder="Ej. 60.50"
-                  className="w-full max-w-xs rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10"
-                />
-                <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
-                  Opcional — habilita el selector RD$/USD en Procesar Nómina. Es solo una
-                  conversión de visualización manual (sin conexión a un servicio de tasas en
-                  vivo); el motor de cálculo, la retención de ISR/TSS y todos los reportes
-                  siguen calculándose y remitiéndose en RD$ sin excepción.
-                </p>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] focus:outline-none focus:ring-2 focus:ring-[#1B2980]/40 transition-colors"
-                >
-                  <Save className="h-4 w-4" />
-                  Guardar datos
-                </button>
-              </div>
-            </form>
-          </div>
-        </section>
-
-        {/* Configuración Inicial — saldos de empleados con historial previo */}
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-950/40">
-              <History className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
+              </form>
             </div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Configuración Inicial</h2>
-          </div>
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
-            <ConfiguracionInicialFlow />
-          </div>
-        </section>
+          )}
 
-        {/* Demo data loader */}
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-950/40">
-              <FlaskConical className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-            </div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Datos de Demostración</h2>
-          </div>
-          <div className="rounded-xl border border-violet-200 dark:border-violet-800/40 bg-white dark:bg-[#141722] p-5">
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-1">
-              Carga un escenario completo de demostración con 7 empleados, 2 préstamos activos y 4 períodos de nómina
-              cerrados (Marzo–Junio 2026), calculados conforme a la legislación vigente.
-            </p>
-            <ul className="mb-4 mt-2 space-y-1 text-xs text-zinc-500 dark:text-zinc-400 list-disc list-inside">
-              <li>Carlos Rodríguez — préstamo RD$80,000 (4 cuotas pagadas, saldo RD$53,333.32)</li>
-              <li>Ana Martínez — préstamo RD$18,000 (2 cuotas pagadas, saldo RD$12,000)</li>
-              <li>Bono de desempeño en Abril para María González (impacto en ISR)</li>
-              <li>Comisión en Junio para Luisa Reyes (eleva su base gravable a tramo II)</li>
-            </ul>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmDemo(true)}
-                className="flex items-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700/50 bg-violet-50 dark:bg-violet-950/30 px-4 py-2 text-sm font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors"
-              >
-                <FlaskConical className="h-4 w-4" />
-                Cargar Datos Demo
-              </button>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
-                Reemplaza todos los datos actuales. La página se recargará automáticamente.
-              </p>
-            </div>
-          </div>
-        </section>
-
-        {/* Confirm demo dialog */}
-        {confirmDemo && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-backdrop-in">
-            <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-2xl animate-modal-in">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+          {/* ── Nómina ──────────────────────────────────────────────────── */}
+          {vista === 'nomina' && (
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
+              <form onSubmit={handleSave} className="space-y-5">
+                {/* Modalidad de Nómina */}
                 <div>
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">¿Cargar datos demo?</p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    Esto reemplazará todos los datos actuales (empleados, préstamos, períodos y empresa)
-                    con el escenario de demostración. Esta acción no se puede deshacer.
+                  <label className={LABEL_CLASS}>Modalidad de pago de nómina</label>
+                  <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840] w-fit">
+                    {(['mensual', 'quincenal'] as const).map(m => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, modalidadNomina: m }))}
+                        className={`px-5 py-2 text-sm font-medium capitalize transition-colors ${
+                          (form.modalidadNomina ?? 'mensual') === m
+                            ? 'bg-[#1B2980] text-white'
+                            : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                        }`}
+                      >
+                        {m === 'mensual' ? 'Mensual' : 'Quincenal'}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                    Esta configuración define el tipo de período predeterminado al crear nóminas.
                   </p>
                 </div>
+
+                {/* Tasa de Cambio USD — presentación, nunca base de cálculo */}
+                <div>
+                  <label htmlFor="tasaCambioUSD" className={LABEL_CLASS}>Tasa de Cambio (RD$ por USD)</label>
+                  <input
+                    id="tasaCambioUSD"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.tasaCambioUSD ?? ''}
+                    onChange={e => setForm(prev => ({ ...prev, tasaCambioUSD: e.target.value ? Number(e.target.value) : undefined }))}
+                    placeholder="Ej. 60.50"
+                    className="w-full max-w-xs rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10"
+                  />
+                  <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                    Opcional — habilita el selector RD$/USD en Procesar Nómina. Es solo una
+                    conversión de visualización manual (sin conexión a un servicio de tasas en
+                    vivo); el motor de cálculo, la retención de ISR/TSS y todos los reportes
+                    siguen calculándose y remitiéndose en RD$ sin excepción.
+                  </p>
+                </div>
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] focus:outline-none focus:ring-2 focus:ring-[#1B2980]/40 transition-colors"
+                  >
+                    <Save className="h-4 w-4" />
+                    Guardar cambios
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* ── Reglas de Negocio ───────────────────────────────────────── */}
+          {vista === 'reglas' && (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
+                <form onSubmit={handleSave} className="space-y-5">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Umbrales de Alerta</h3>
+                  </div>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 -mt-3">
+                    Estos umbrales son criterio interno de tu empresa — no son topes establecidos por el
+                    Código de Trabajo. Nunca bloquean una acción, solo encienden una alerta visual para
+                    que la revises antes de continuar.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label htmlFor="umbralEndeudamientoPct" className={LABEL_CLASS}>
+                        Umbral de endeudamiento / descuentos discrecionales (%)
+                      </label>
+                      <input
+                        id="umbralEndeudamientoPct"
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={form.umbralEndeudamientoPct ?? UMBRAL_ENDEUDAMIENTO_DEFAULT}
+                        onChange={e => setForm(prev => ({ ...prev, umbralEndeudamientoPct: e.target.value ? Number(e.target.value) : undefined }))}
+                        className={INPUT_CLASS}
+                      />
+                      <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        Se usa en Préstamos (Capacidad de Pago) y en la auditoría pre-cierre de
+                        Nómina (descuentos discrecionales que superan este % del bruto).
+                      </p>
+                    </div>
+                    <div>
+                      <label htmlFor="umbralVariacionBrutoPct" className={LABEL_CLASS}>
+                        Umbral de variación de nómina vs. mes anterior (%)
+                      </label>
+                      <input
+                        id="umbralVariacionBrutoPct"
+                        type="number"
+                        min="1"
+                        max="100"
+                        step="1"
+                        value={form.umbralVariacionBrutoPct ?? UMBRAL_VARIACION_BRUTO_DEFAULT}
+                        onChange={e => setForm(prev => ({ ...prev, umbralVariacionBrutoPct: e.target.value ? Number(e.target.value) : undefined }))}
+                        className={INPUT_CLASS}
+                      />
+                      <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">
+                        Se usa en la auditoría pre-cierre de Nómina — avisa cuando el bruto de un
+                        empleado sube o baja más de este % respecto al período anterior.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-5">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
+                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Plantilla de Correo — Comprobantes de Pago</h3>
+                    </div>
+                    <p className="mt-1 mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+                      El mensaje que se pre-llena al enviar comprobantes de pago desde Procesar Nómina.
+                      Personalízalo una vez aquí — antes se reiniciaba al texto de fábrica cada vez que
+                      abrías esa pantalla.
+                    </p>
+                    <div className="space-y-3">
+                      <div>
+                        <label htmlFor="plantillaComprobanteAsunto" className={LABEL_CLASS}>Asunto</label>
+                        <input
+                          id="plantillaComprobanteAsunto"
+                          type="text"
+                          value={form.plantillaComprobanteAsunto ?? plantillaComprobanteDefault().asunto}
+                          onChange={e => setForm(prev => ({ ...prev, plantillaComprobanteAsunto: e.target.value }))}
+                          className={INPUT_CLASS}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="plantillaComprobanteCuerpo" className={LABEL_CLASS}>Cuerpo del correo</label>
+                        <textarea
+                          id="plantillaComprobanteCuerpo"
+                          rows={8}
+                          value={form.plantillaComprobanteCuerpo ?? plantillaComprobanteDefault().cuerpo}
+                          onChange={e => setForm(prev => ({ ...prev, plantillaComprobanteCuerpo: e.target.value }))}
+                          className={`${INPUT_CLASS} font-mono text-xs`}
+                        />
+                      </div>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
+                        Variables disponibles (se reemplazan por cada empleado al enviar):{' '}
+                        {PLACEHOLDERS_COMPROBANTE.map(p => p.token).join(', ')}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-2">
+                    <button
+                      type="submit"
+                      className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] focus:outline-none focus:ring-2 focus:ring-[#1B2980]/40 transition-colors"
+                    >
+                      <Save className="h-4 w-4" />
+                      Guardar cambios
+                    </button>
+                  </div>
+                </form>
               </div>
-              <div className="mt-5 flex justify-end gap-3">
-                <button
-                  onClick={() => setConfirmDemo(false)}
-                  className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleCargarDemo}
-                  className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
-                >
-                  Sí, cargar demo
-                </button>
+            </div>
+          )}
+
+          {/* ── Datos y Migración ───────────────────────────────────────── */}
+          {vista === 'datos' && (
+            <div className="space-y-5">
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-950/40">
+                    <History className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
+                  </div>
+                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Configuración Inicial</h2>
+                </div>
+                <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
+                  <ConfiguracionInicialFlow />
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-950/40">
+                    <FlaskConical className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  </div>
+                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Datos de Demostración</h2>
+                </div>
+                <div className="rounded-xl border border-violet-200 dark:border-violet-800/40 bg-white dark:bg-[#141722] p-5">
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-1">
+                    Carga un escenario completo de demostración con 7 empleados, 2 préstamos activos y 4 períodos de nómina
+                    cerrados (Marzo–Junio 2026), calculados conforme a la legislación vigente.
+                  </p>
+                  <ul className="mb-4 mt-2 space-y-1 text-xs text-zinc-500 dark:text-zinc-400 list-disc list-inside">
+                    <li>Carlos Rodríguez — préstamo RD$80,000 (4 cuotas pagadas, saldo RD$53,333.32)</li>
+                    <li>Ana Martínez — préstamo RD$18,000 (2 cuotas pagadas, saldo RD$12,000)</li>
+                    <li>Bono de desempeño en Abril para María González (impacto en ISR)</li>
+                    <li>Comisión en Junio para Luisa Reyes (eleva su base gravable a tramo II)</li>
+                  </ul>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDemo(true)}
+                      className="flex items-center gap-2 rounded-lg border border-violet-300 dark:border-violet-700/50 bg-violet-50 dark:bg-violet-950/30 px-4 py-2 text-sm font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors"
+                    >
+                      <FlaskConical className="h-4 w-4" />
+                      Cargar Datos Demo
+                    </button>
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                      Reemplaza todos los datos actuales. La página se recargará automáticamente.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Separator */}
-        <div className="flex items-center gap-4">
-          <div className="flex-1 border-t border-zinc-200 dark:border-[#252840]" />
-          <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-            Parámetros Fiscales Vigentes
-          </span>
-          <div className="flex-1 border-t border-zinc-200 dark:border-[#252840]" />
+          {/* ── Cumplimiento Legal ──────────────────────────────────────── */}
+          {vista === 'legal' && (
+            <div className="space-y-5">
+              <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5 flex items-center gap-3">
+                <Info className="h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0" />
+                <p className="text-xs text-[#151f66] dark:text-indigo-200">
+                  Los parámetros mostrados reflejan la legislación vigente en la República Dominicana.
+                  Actualice estos valores cuando la DGII, CNSS o el Comité Nacional de Salarios emitan nuevas resoluciones.
+                </p>
+              </div>
+
+              <section>
+                <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Tasas TSS — Tesorería de la Seguridad Social</h2>
+                <ParamTable rows={PARAMS_TSS} />
+              </section>
+
+              <section>
+                <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Tramos ISR Asalariados — DGII</h2>
+                <ParamTable rows={PARAMS_ISR} />
+              </section>
+
+              <section>
+                <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Salarios Mínimos Nacionales — Sector Privado No Sectorizado</h2>
+                <ParamTable rows={PARAMS_SALARIOS} />
+              </section>
+            </div>
+          )}
         </div>
-
-        <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5 flex items-center gap-3">
-          <Info className="h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0" />
-          <p className="text-xs text-[#151f66] dark:text-indigo-200">
-            Los parámetros mostrados reflejan la legislación vigente en la República Dominicana.
-            Actualice estos valores cuando la DGII, CNSS o el Comité Nacional de Salarios emitan nuevas resoluciones.
-          </p>
-        </div>
-
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/40">
-              <Settings className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            </div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Tasas TSS — Tesorería de la Seguridad Social</h2>
-          </div>
-          <ParamTable rows={PARAMS_TSS} />
-        </section>
-
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-950/40">
-              <Settings className="h-4 w-4 text-violet-600 dark:text-violet-400" />
-            </div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Tramos ISR Asalariados — DGII</h2>
-          </div>
-          <ParamTable rows={PARAMS_ISR} />
-        </section>
-
-        <section>
-          <div className="mb-3 flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950/40">
-              <Building2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Salarios Mínimos Nacionales — Sector Privado No Sectorizado</h2>
-          </div>
-          <ParamTable rows={PARAMS_SALARIOS} />
-        </section>
-
-        <p className="text-center text-xs text-zinc-400 dark:text-zinc-500">
-          Cielo Cloud v0.1.0 · Parámetros actualizados a 2024 · República Dominicana
-        </p>
       </div>
+
+      {/* Confirm demo dialog */}
+      {confirmDemo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-backdrop-in">
+          <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-2xl animate-modal-in">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">¿Cargar datos demo?</p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Esto reemplazará todos los datos actuales (empleados, préstamos, períodos y empresa)
+                  con el escenario de demostración. Esta acción no se puede deshacer.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDemo(false)}
+                className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleCargarDemo}
+                className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700 transition-colors"
+              >
+                Sí, cargar demo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showToast && (
         <Toast

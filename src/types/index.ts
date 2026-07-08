@@ -295,7 +295,31 @@ export interface Empresa {
   // tasas de cambio en vivo). Nunca se usa como base de ningún cálculo legal
   // (ISR/TSS/prestaciones siguen calculándose y reportándose en RD$).
   tasaCambioUSD?: number  // RD$ por 1 USD
+
+  // ─── Reglas de negocio internas (configurables, no son topes legales) ────
+  // Cada empresa puede ajustar estos umbrales de referencia según su propio
+  // criterio de riesgo — sin valor definido, el sistema usa el default
+  // histórico (30% / 20%) para no romper el comportamiento existente.
+  umbralEndeudamientoPct?: number    // % del salario cubierto por descuentos discrecionales
+                                      // (préstamos/otros) que dispara la alerta de Capacidad de
+                                      // Pago (Préstamos) y de descuento discrecional (auditoría
+                                      // pre-cierre de Nómina) — mismo umbral en ambos módulos.
+  umbralVariacionBrutoPct?: number   // % de variación del bruto de un empleado vs. el período
+                                      // anterior que dispara la alerta en la auditoría pre-cierre.
+
+  // ─── Plantilla de correo de comprobantes de pago ──────────────────────────
+  // Si no se configura, se usa plantillaComprobanteDefault() — el mismo texto
+  // que ya existía como valor inicial no persistido.
+  plantillaComprobanteAsunto?: string
+  plantillaComprobanteCuerpo?: string
 }
+
+// Defaults de referencia para los umbrales de negocio configurables —
+// centralizados aquí para que Configuración y los módulos que los consumen
+// (Nómina, Préstamos) lean siempre el mismo valor si la empresa no los
+// personalizó.
+export const UMBRAL_ENDEUDAMIENTO_DEFAULT = 30
+export const UMBRAL_VARIACION_BRUTO_DEFAULT = 20
 
 export type EstadoPrestamo = 'activo' | 'pagado' | 'cancelado'
 

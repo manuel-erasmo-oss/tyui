@@ -62,6 +62,21 @@ Saludos,
   }
 }
 
+// Plantilla efectiva de la empresa — usa lo que el usuario personalizó y
+// guardó en Configuración (Empresa.plantillaComprobanteAsunto/Cuerpo), o el
+// default de fábrica si nunca la personalizó. Antes de esto, el modal de
+// envío de comprobantes solo tenía un useState inicializado con el default:
+// cualquier personalización se perdía al salir de la pantalla o recargar.
+export function plantillaComprobanteDeEmpresa(
+  empresa: Pick<import('@/types').Empresa, 'plantillaComprobanteAsunto' | 'plantillaComprobanteCuerpo'>
+): PlantillaComprobante {
+  const base = plantillaComprobanteDefault()
+  return {
+    asunto: empresa.plantillaComprobanteAsunto?.trim() || base.asunto,
+    cuerpo: empresa.plantillaComprobanteCuerpo?.trim() || base.cuerpo,
+  }
+}
+
 export function resolverPlantilla(
   plantilla: PlantillaComprobante,
   valores: Record<string, string>

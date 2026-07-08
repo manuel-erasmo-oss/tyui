@@ -18,9 +18,10 @@ import {
 import type { FilaAmortizacion } from '@/lib/prestamos-context'
 import { formatRD, fullName, formatDate } from '@/lib/utils'
 import type { Prestamo, EstadoPrestamo } from '@/types'
-
-// Umbral de referencia para la alerta de Capacidad de Pago — ver PanelCapacidadPago.
-const UMBRAL_CAPACIDAD_PAGO = 30
+// Default de referencia para la alerta de Capacidad de Pago — ver
+// PanelCapacidadPago. Configurable por empresa (Configuración → Reglas de
+// Negocio), este es solo el valor cuando no se ha personalizado.
+import { UMBRAL_ENDEUDAMIENTO_DEFAULT } from '@/types'
 
 // Límite de cuotas para renderizar la tabla de amortización en vivo en el
 // formulario (protección de rendimiento ante números de cuotas atípicos).
@@ -187,16 +188,17 @@ function TablaAmortizacion({
 
 // ── Panel de Capacidad de Pago ─────────────────────────────────────────────────
 function PanelCapacidadPago({
-  salarioBase, sumaCuotasActivas, cantidadPrestamosActivos, nuevaCuota,
+  salarioBase, sumaCuotasActivas, cantidadPrestamosActivos, nuevaCuota, umbral,
 }: {
   salarioBase: number
   sumaCuotasActivas: number
   cantidadPrestamosActivos: number
   nuevaCuota: number
+  umbral: number
 }) {
   const totalCuotas = sumaCuotasActivas + nuevaCuota
   const pct         = salarioBase > 0 ? (totalCuotas / salarioBase) * 100 : 0
-  const excede      = pct > UMBRAL_CAPACIDAD_PAGO
+  const excede      = pct > umbral
 
   return (
     <div
@@ -238,14 +240,15 @@ function PanelCapacidadPago({
         <div className="flex items-start gap-2 border-t border-amber-200 dark:border-amber-800/40 pt-2.5">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
           <p className="text-[11px] leading-relaxed text-amber-800 dark:text-amber-300">
-            Las cuotas totales (activas + esta nueva) superan el {UMBRAL_CAPACIDAD_PAGO}% del salario base. Este
-            umbral es una regla de negocio interna de Cielo Cloud, no un límite establecido por el Código de
-            Trabajo — el otorgamiento no se bloquea, la decisión final queda a tu criterio.
+            Las cuotas totales (activas + esta nueva) superan el {umbral}% del salario base. Este
+            umbral es una regla de negocio interna configurable (Configuración → Reglas de
+            Negocio), no un límite establecido por el Código de Trabajo — el otorgamiento no se
+            bloquea, la decisión final queda a tu criterio.
           </p>
         </div>
       ) : (
         <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-          Referencia informativa (umbral interno de Cielo Cloud, {UMBRAL_CAPACIDAD_PAGO}% del salario base) — no bloquea el otorgamiento.
+          Referencia informativa (umbral configurable, {umbral}% del salario base) — no bloquea el otorgamiento.
         </p>
       )}
     </div>
@@ -1103,6 +1106,7 @@ export default function PrestamosPage() {
                   sumaCuotasActivas={sumaCuotasActivasEmp}
                   cantidadPrestamosActivos={prestamosActivosEmp.length}
                   nuevaCuota={previewCuota}
+                  umbral={empresa.umbralEndeudamientoPct ?? UMBRAL_ENDEUDAMIENTO_DEFAULT}
                 />
               )}
 

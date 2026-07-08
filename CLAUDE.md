@@ -1054,6 +1054,59 @@ por decisión explícita del usuario — ver sección arriba. `tsc --noEmit` y
 `npm run build` limpios en todos los commits de la auditoría. Todo
 fusionado a `main`.
 
+## Rediseño de Configuración — hub por categorías (post-QA)
+
+`src/app/configuracion/page.tsx` era un único formulario largo (perfil de
+empresa, clasificación legal, rol del usuario, modalidad de nómina y tasa
+USD, todo en una sola card) seguido de secciones sin jerarquía (Configuración
+Inicial, Datos Demo, 3 tablas legales de solo lectura) — el usuario lo
+describió como "un conjunto de cosas metidas en una ventana". Referencia dada
+por el usuario: capturas de Alegra (hub de tarjetas por categoría, cada una
+con descripción + lista de accesos). Instrucción explícita: replicar el
+*patrón* (organización, propósito claro por sección), no el estilo visual
+literal de Alegra — mantener la identidad navy de Cielo Cloud.
+
+**Estructura nueva**: pantalla principal con 4→5 tarjetas de categoría
+(ícono con degradado navy + halo, mismo lenguaje visual ya usado en
+Configuración Inicial), cada una con un badge de "razón de ser" en 3
+palabras y una vista dedicada con botón "← Configuración":
+
+- **Empresa** ("Quién eres") — perfil, logo, contacto, categoría/sector,
+  zona franca, rol del usuario.
+- **Nómina** ("Cómo pagas") — modalidad de pago, tasa de cambio USD.
+- **Reglas de Negocio** ("Cómo decides tú") — ver abajo, nueva.
+- **Datos y Migración** ("De dónde vienes") — Configuración Inicial + Datos
+  Demo.
+- **Cumplimiento Legal** ("Qué exige la ley") — las 3 tablas de referencia
+  (TSS, ISR, salarios mínimos), solo lectura.
+
+**Nueva categoría "Reglas de Negocio"** — a pedido del usuario ("verifica el
+sistema y agrega a Configuración lo que cada empresa deba poder adaptar"),
+se auditó el código en busca de umbrales de negocio hardcodeados y se
+migraron a `Empresa` (con default idéntico al valor anterior si no se
+personalizan, 100% retrocompatible):
+- `umbralEndeudamientoPct` (default 30) — antes `UMBRAL_CAPACIDAD_PAGO` en
+  `prestamos/page.tsx` y `UMBRAL_DESCUENTO` en la auditoría pre-cierre de
+  `nomina/page.tsx` eran DOS constantes hardcodeadas independientes para el
+  mismo concepto (% de descuentos discrecionales sobre el salario) —
+  unificadas en un solo umbral configurable que alimenta ambos módulos.
+- `umbralVariacionBrutoPct` (default 20) — antes `UMBRAL_VARIACION` hardcodeado
+  en la auditoría pre-cierre de Nómina (alerta cuando el bruto de un
+  empleado varía más de X% vs. el período anterior).
+- `plantillaComprobanteAsunto`/`plantillaComprobanteCuerpo` — la plantilla de
+  correo de comprobantes de pago (`nomina/page.tsx`) NUNCA se persistía: era
+  un `useState` inicializado con `plantillaComprobanteDefault()` que se
+  reiniciaba al texto de fábrica cada vez que se abría la pantalla o se
+  recargaba la página, sin ninguna forma de guardar una personalización.
+  Nuevo helper `plantillaComprobanteDeEmpresa()` en `comprobante-email.ts`
+  que prioriza lo guardado en `Empresa`, con fallback al default de fábrica.
+
+Verificado en navegador: se cambió el umbral de endeudamiento a 25% en
+Configuración → Reglas de Negocio, se guardó, y el panel de Capacidad de
+Pago en Préstamos mostró exactamente "umbral configurable, 25%" — el mismo
+valor, confirmando la propagación end-to-end. `tsc --noEmit` y
+`npm run build` limpios.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

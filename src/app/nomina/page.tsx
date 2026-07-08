@@ -37,7 +37,7 @@ import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { useChecklistAnual } from '@/lib/inicio-de-ano-context'
 import { useAuth } from '@/lib/auth-context'
 import {
-  enviarComprobante, plantillaComprobanteDefault, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
+  enviarComprobante, plantillaComprobanteDeEmpresa, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
 } from '@/lib/comprobante-email'
 import type { PlantillaComprobante } from '@/lib/comprobante-email'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo } from '@/lib/dominican-labor'
@@ -53,6 +53,7 @@ import type {
   AjusteLinea,
   Empresa,
 } from '@/types'
+import { UMBRAL_ENDEUDAMIENTO_DEFAULT, UMBRAL_VARIACION_BRUTO_DEFAULT } from '@/types'
 import { Wallet, TrendingUp, Receipt, BarChart3 } from 'lucide-react'
 
 const MESES = [
@@ -653,7 +654,7 @@ export default function NominaPage() {
   // Envío de comprobantes de pago por correo — se abre justo después de
   // marcar un período como pagado (o manualmente después, vía "Comprobantes")
   const [envioPeriodoId, setEnvioPeriodoId] = useState<string | null>(null)
-  const [plantillaComprobante, setPlantillaComprobante] = useState<PlantillaComprobante>(plantillaComprobanteDefault())
+  const [plantillaComprobante, setPlantillaComprobante] = useState<PlantillaComprobante>(plantillaComprobanteDeEmpresa(empresa))
   const [enviadosComprobante, setEnviadosComprobante] = useState<Set<string>>(new Set())
 
   // Importador de horas trabajadas (Excel/CSV) — solo tiene sentido con el
@@ -1186,7 +1187,7 @@ export default function NominaPage() {
                           <button
                             onClick={() => {
                               setEnvioPeriodoId(p.id)
-                              setPlantillaComprobante(plantillaComprobanteDefault())
+                              setPlantillaComprobante(plantillaComprobanteDeEmpresa(empresa))
                               setEnviadosComprobante(new Set())
                             }}
                             className="flex items-center gap-1 text-[11px] font-medium text-[#1B2980] dark:text-indigo-400 hover:underline"
@@ -1201,7 +1202,7 @@ export default function NominaPage() {
                             if (!confirm(`¿Confirmar que "${labelPeriodo(p)}" ya fue pagado (transferencia ACH enviada) el ${formatDate(hoy)}?`)) return
                             marcarPagada(p.id, hoy)
                             setEnvioPeriodoId(p.id)
-                            setPlantillaComprobante(plantillaComprobanteDefault())
+                            setPlantillaComprobante(plantillaComprobanteDeEmpresa(empresa))
                             setEnviadosComprobante(new Set())
                           }}
                           className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
@@ -2004,8 +2005,8 @@ export default function NominaPage() {
 
       {auditoriaIds && (() => {
         const anterior = periodoAnterior(periodoActual, periodos)
-        const UMBRAL_VARIACION = 20
-        const UMBRAL_DESCUENTO = 30
+        const UMBRAL_VARIACION = empresa.umbralVariacionBrutoPct ?? UMBRAL_VARIACION_BRUTO_DEFAULT
+        const UMBRAL_DESCUENTO = empresa.umbralEndeudamientoPct ?? UMBRAL_ENDEUDAMIENTO_DEFAULT
 
         const filas = empleadosPeriodo
           .filter(e => auditoriaIds.includes(e.id))
