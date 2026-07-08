@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ChevronLeft, ChevronRight, Plus, X, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useEmpresaScopedKey } from '@/lib/empresa-scoped-key'
+import { useUserScopedKey } from '@/lib/user-scoped-key'
 
 interface Evento {
   id: string
@@ -80,8 +80,8 @@ export function AgendaNomina() {
   const [newFecha,  setNewFecha]  = useState('')
   const [newTitulo, setNewTitulo] = useState('')
 
-  const { key: keyCustom, ready } = useEmpresaScopedKey('cielo-agenda-custom')
-  const { key: keyDone }          = useEmpresaScopedKey('cielo-agenda-done')
+  const { key: keyCustom, ready } = useUserScopedKey('cielo-agenda-custom')
+  const { key: keyDone }          = useUserScopedKey('cielo-agenda-done')
 
   useEffect(() => {
     if (!ready) return

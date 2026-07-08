@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { SaldoISRFavor, AplicacionSaldoISR, TipoCreditoISR } from '@/types'
-import { useEmpresaScopedKey } from './empresa-scoped-key'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-saldo-isr'
 
@@ -26,7 +26,7 @@ const Ctx = createContext<SaldoISRCtx>({
 
 export function SaldoISRProvider({ children }: { children: ReactNode }) {
   const [saldos, setSaldos] = useState<SaldoISRFavor[]>([])
-  const { key, ready } = useEmpresaScopedKey(KEY)
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
     if (!ready) return

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { BandaSalarial } from '@/types'
-import { useEmpresaScopedKey } from './empresa-scoped-key'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-bandas-salariales'
 
@@ -31,7 +31,7 @@ const Ctx = createContext<BandasSalarialesCtx>({
 
 export function BandasSalarialesProvider({ children }: { children: ReactNode }) {
   const [bandas, setBandas] = useState<BandaSalarial[]>([])
-  const { key, ready } = useEmpresaScopedKey(KEY)
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
     if (!ready) return

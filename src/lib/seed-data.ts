@@ -1,8 +1,7 @@
 import { calcularNomina } from './dominican-labor'
 import { EMPLEADOS } from './mock-data'
 import { scopedKey } from './utils'
-import { buildEmpresaScopedKey } from './empresa-scoped-bases'
-import type { PeriodoNomina, Prestamo, AjusteLinea, Empresa, EmpresaResumen } from '@/types'
+import type { PeriodoNomina, Prestamo, AjusteLinea, Empresa } from '@/types'
 
 const EMPRESA_KEY   = 'cielo-empresa'
 const EMPLEADOS_KEY = 'cielo-empleados'
@@ -85,16 +84,12 @@ function loanAdj(id: string, prestamoId: string, nota: string, cuota: number): A
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-// `uid` namespaces las keys por cuenta y `empresaId` por empresa activa —
-// pásalos siempre que existan, para no pisar los datos de otra cuenta/empresa
-// en el mismo navegador. `empresaId` es requerido porque la demo se carga
-// SIEMPRE dentro de una empresa ya existente (EmpresasProvider garantiza que
-// toda cuenta tiene al menos una antes de que la UI permita esta acción).
-export function cargarDatosDemo(uid: string | null | undefined, empresaId: string): void {
+// `uid` namespaces las keys por cuenta — pásalo cuando haya un usuario autenticado
+// para no pisar los datos de otra cuenta en el mismo navegador.
+export function cargarDatosDemo(uid?: string | null): void {
 
   // ── 1. Empresa ───────────────────────────────────────────────────────────────
   const empresa: Empresa = {
-    id: empresaId,
     nombre: 'Distribuciones del Caribe, S.R.L.',
     rnc: '101-52847-3',
     direccion: 'Av. Winston Churchill #1099, Piantini',
@@ -207,21 +202,8 @@ export function cargarDatosDemo(uid: string | null | undefined, empresaId: strin
   ]
 
   // ── 5. Persist to localStorage ────────────────────────────────────────────────
-  localStorage.setItem(buildEmpresaScopedKey(EMPRESA_KEY, uid, empresaId),   JSON.stringify(empresa))
-  localStorage.setItem(buildEmpresaScopedKey(EMPLEADOS_KEY, uid, empresaId), JSON.stringify(empleados))
-  localStorage.setItem(buildEmpresaScopedKey(PRESTAMOS_KEY, uid, empresaId), JSON.stringify(prestamos))
-  localStorage.setItem(buildEmpresaScopedKey(PERIODOS_KEY, uid, empresaId),  JSON.stringify(periodos))
-
-  // Sincroniza el nombre en la lista de empresas (Sidebar) — sin esto, el
-  // selector seguiría mostrando la empresa como "sin nombre" hasta que el
-  // usuario abriera Configuración manualmente.
-  try {
-    const empresasKey = scopedKey('cielo-empresas', uid)
-    const raw = localStorage.getItem(empresasKey)
-    const estado = raw ? JSON.parse(raw) as { empresas: EmpresaResumen[]; empresaActivaId: string | null } : null
-    if (estado) {
-      estado.empresas = estado.empresas.map(e => e.id === empresaId ? { ...e, nombre: empresa.nombre } : e)
-      localStorage.setItem(empresasKey, JSON.stringify(estado))
-    }
-  } catch { /* ignore */ }
+  localStorage.setItem(scopedKey(EMPRESA_KEY, uid),   JSON.stringify(empresa))
+  localStorage.setItem(scopedKey(EMPLEADOS_KEY, uid), JSON.stringify(empleados))
+  localStorage.setItem(scopedKey(PRESTAMOS_KEY, uid), JSON.stringify(prestamos))
+  localStorage.setItem(scopedKey(PERIODOS_KEY, uid),  JSON.stringify(periodos))
 }

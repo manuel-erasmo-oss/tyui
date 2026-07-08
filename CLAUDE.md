@@ -1398,6 +1398,98 @@ invitar a otro usuario a colaborar en una empresa. El mecanismo de hoy es
 API/backend (pendiente, tema aparte discutido con el usuario) sería lo que
 habilitaría compartir una empresa entre múltiples cuentas/usuarios.
 
+## Corrección de arquitectura — multiempresa con cuentas reales separadas
+
+El usuario probó el mecanismo anterior ("empresas como perfiles dentro de
+una misma cuenta") y señaló que no era lo que pidió: al agregar una
+empresa, el sistema debía ofrecer **iniciar sesión en una cuenta ya
+creada** o **crear una cuenta nueva con su propio correo y verificación**
+— es decir, cada empresa debía ser una **cuenta de Firebase Auth real e
+independiente**, no un perfil compartiendo el mismo login. Esto es, de
+hecho, la interpretación correcta de la "Opción A" ya discutida antes en
+esta sesión ("cada empresa paga su cuota independiente... con un ID X") —
+el uid real de Firebase de cada cuenta ES ese ID.
+
+Se le presentó al usuario la disyuntiva explícitamente (cuentas reales
+separadas vs. mantener el modelo de perfiles internos) antes de tocar
+código, porque implicaba reconstruir lo recién hecho — confirmó cuentas
+reales.
+
+**Reversión de la capa de scoping por `empresaId`:** dado que ahora cada
+empresa = su propio uid real de Firebase, la composición `base::{uid}::{empresaId}`
+introducida en el intento anterior ya no tenía sentido — `useUserScopedKey`
+(`base::{uid}`) vuelve a ser exactamente correcto, porque el uid YA
+distingue una empresa de otra. Se restauraron desde la rama de respaldo
+`backup/pre-multiempresa-3a6da56` los 10 contextos de negocio,
+`empresa-context.tsx`, `seed-data.ts`, `types/index.ts`, `layout.tsx` y
+`RouteGuard.tsx` a su estado previo a la primera implementación, y se
+eliminaron `empresas-context.tsx`/`empresa-scoped-key.ts`/`empresa-scoped-bases.ts`
+(el concepto de "lista de empresas dentro de una cuenta" ya no aplica).
+
+**Arquitectura real — multicuenta vía Firebase Auth:**
+- **`src/lib/firebase.ts`** — nuevo `getFirebaseAuthNamed(appName)`: cada
+  empresa vinculada en el dispositivo vive en su propia instancia de
+  Firebase App identificada por nombre (mismo proyecto/config). Firebase
+  persiste el estado de sesión por separado para cada nombre de app
+  (confirmado con pruebas reales, no solo documentación) — esto permite
+  tener más de una cuenta autenticada simultáneamente en la misma pestaña,
+  y cambiar entre cuentas YA vinculadas es prácticamente instantáneo
+  (~1s en la prueba real, sin volver a pedir contraseña). `DEFAULT_APP_NAME`
+  mantiene la cuenta "de siempre" funcionando exactamente igual que antes
+  de este cambio, sin ninguna migración — cero riesgo de regresión para
+  cuentas ya existentes.
+- **`src/lib/auth-context.tsx`** — reescrito para gestionar un registro de
+  `CuentaVinculada[]` (appName, uid, email, displayName, photoURL) +
+  `cuentaActivaAppName`, persistido en `cielo-cuentas-vinculadas`
+  (localStorage plano, sin scope de cuenta — es lo que hace posible saber
+  a cuál cambiar). Nuevas acciones: `cambiarCuenta`, `agregarCuentaLogin`,
+  `agregarCuentaRegistro`, `quitarCuenta`. `signIn`/`signUp`/`signInGoogle`/
+  `logout` existentes se mantienen con la MISMA firma (cero cambios en
+  `/login`, `/registro`, `Header.tsx`, `EmailVerificationGate.tsx`) — ahora
+  operan sobre la cuenta activa en vez de siempre la app default.
+- **`src/lib/firebase-errors.ts`** (nuevo) — mensajes de error en español
+  reutilizados entre `/login`, `/registro` y el nuevo selector, combinando
+  los dos mapeos que antes vivían duplicados por separado en cada página.
+- **`CuentaSwitcher` en `Sidebar.tsx`** (reemplaza el `EmpresaSwitcher`
+  anterior) — mismo lugar/tratamiento visual bajo el logo. Lista las
+  cuentas vinculadas (con nombre de empresa resuelto best-effort leyendo
+  `cielo-empresa::{uid}` directo de localStorage — sin necesidad de
+  "cambiar" de verdad solo para mostrar el nombre en la lista), botón
+  "Agregar empresa" → elegir "Iniciar sesión" o "Crear cuenta nueva" →
+  formulario compacto embebido (mismos campos/validaciones que
+  `/login`/`/registro`, sin navegar a otra página) → al completar, la nueva
+  cuenta queda vinculada y activa. "Quitar" una cuenta del dispositivo ya
+  NO requiere confirmación destructiva (a diferencia del intento anterior)
+  porque no borra ningún dato — el dato sigue seguro en la cuenta real de
+  Firebase, solo se cierra sesión localmente y se quita de la lista rápida.
+
+**Lección de infraestructura de esta sesión — proxy de red para pruebas
+con servicios reales:** verificar este cambio requirió que el navegador de
+Playwright alcanzara Firebase real (`identitytoolkit.googleapis.com`), lo
+que reveló que el navegador no puede salir a internet directo en este
+sandbox (`ERR_CONNECTION_RESET`) y que la lista de bypass de proxy de
+Chromium no exceptuaba `localhost` como se esperaba (seguía dando
+`405 Method Not Allowed` en el propio servidor de desarrollo). Solución:
+en vez de proxyar el navegador completo, se interceptó específicamente el
+tráfico hacia `identitytoolkit.googleapis.com`/`securetoken.googleapis.com`
+vía `context.route()` de Playwright y se reenvió desde Node usando su
+propio `fetch` con `NODE_USE_ENV_PROXY=1` (Node ≥22.21, sí respeta
+`HTTPS_PROXY` correctamente) — el resto del tráfico (`localhost:3000`)
+sigue sin proxy, sin conflicto. Este puente (`proxy-bridge.js`, solo en el
+scratchpad de la sesión, nunca en el repo) es la forma correcta de probar
+en este entorno cualquier funcionalidad futura que dependa de un servicio
+externo real desde el navegador.
+
+Verificado en navegador con **cuentas reales de Firebase** (no simuladas):
+registro de Cuenta A vía `/registro` → onboarding → "Empresa A Real SRL";
+desde el selector, "Agregar empresa" → "Crear cuenta nueva" → segunda
+cuenta real vinculada → onboarding → "Empresa B Real EIRL"; el selector
+lista ambas cuentas con su correo real; cambiar de Empresa B de vuelta a
+Empresa A restaura su dashboard exacto (confirmando aislamiento real entre
+dos uids de Firebase distintos) en ~1 segundo, sin pedir contraseña de
+nuevo. Cero errores de consola. `tsc --noEmit` y `npm run build` limpios
+(19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

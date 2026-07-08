@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { Empleado } from '@/types'
-import { useEmpresaScopedKey } from './empresa-scoped-key'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-empleados'
 
@@ -39,7 +39,7 @@ const Ctx = createContext<EmpleadosCtx>({
 
 export function EmpleadosProvider({ children }: { children: ReactNode }) {
   const [empleados, setEmpleados] = useState<Empleado[]>([])
-  const { key, ready } = useEmpresaScopedKey(KEY)
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
     if (!ready) return

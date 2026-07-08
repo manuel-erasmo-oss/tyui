@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { RegistroAumento, EstadoAumento } from '@/types'
-import { useEmpresaScopedKey } from './empresa-scoped-key'
+import { useUserScopedKey } from './user-scoped-key'
 import { useEmpleados } from './empleados-context'
 
 const KEY = 'cielo-aumentos'
@@ -41,7 +41,7 @@ const Ctx = createContext<AumentosCtx>({
 
 export function AumentosProvider({ children }: { children: ReactNode }) {
   const [aumentos, setAumentos] = useState<RegistroAumento[]>([])
-  const { key, ready } = useEmpresaScopedKey(KEY)
+  const { key, ready } = useUserScopedKey(KEY)
   const { update } = useEmpleados()
 
   useEffect(() => {

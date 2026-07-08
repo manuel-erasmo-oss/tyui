@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { Prestamo, CuotaPago } from '@/types'
-import { useEmpresaScopedKey } from './empresa-scoped-key'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-prestamos'
 
@@ -128,7 +128,7 @@ const Ctx = createContext<PrestamosCtx>({
 
 export function PrestamosProvider({ children }: { children: ReactNode }) {
   const [prestamos, setPrestamos] = useState<Prestamo[]>([])
-  const { key, ready } = useEmpresaScopedKey(KEY)
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
     if (!ready) return

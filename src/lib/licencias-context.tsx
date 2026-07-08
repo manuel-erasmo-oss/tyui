@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { Licencia, TipoLicencia, Empleado } from '@/types'
-import { useEmpresaScopedKey } from './empresa-scoped-key'
+import { useUserScopedKey } from './user-scoped-key'
 import { getDivisorSalarioDiario } from './dominican-labor'
 
 const KEY = 'cielo-licencias'
@@ -78,7 +78,7 @@ const Ctx = createContext<LicenciasCtx>({
 
 export function LicenciasProvider({ children }: { children: ReactNode }) {
   const [licencias, setLicencias] = useState<Licencia[]>([])
-  const { key, ready } = useEmpresaScopedKey(KEY)
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
     if (!ready) return

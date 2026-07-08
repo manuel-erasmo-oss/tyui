@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { RegistroLiquidacion } from '@/types'
-import { useEmpresaScopedKey } from './empresa-scoped-key'
+import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-liquidaciones'
 
@@ -20,7 +20,7 @@ const Ctx = createContext<LiquidacionesCtx>({
 
 export function LiquidacionesProvider({ children }: { children: ReactNode }) {
   const [liquidaciones, setLiquidaciones] = useState<RegistroLiquidacion[]>([])
-  const { key, ready } = useEmpresaScopedKey(KEY)
+  const { key, ready } = useUserScopedKey(KEY)
 
   useEffect(() => {
     if (!ready) return

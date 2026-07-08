@@ -4,7 +4,6 @@ import './globals.css'
 import { ThemeProvider } from '@/lib/theme'
 import { EmpleadosProvider } from '@/lib/empleados-context'
 import { PeriodosProvider } from '@/lib/periodos-context'
-import { EmpresasProvider } from '@/lib/empresas-context'
 import { EmpresaProvider } from '@/lib/empresa-context'
 import { PrestamosProvider } from '@/lib/prestamos-context'
 import { AumentosProvider } from '@/lib/aumentos-context'
@@ -43,29 +42,27 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="flex h-screen overflow-hidden bg-zinc-50 dark:bg-[#0d0f1a] font-sans transition-colors duration-200">
         <ThemeProvider>
           <AuthProvider>
-            <EmpresasProvider>
-              <EmpresaProvider>
-                <EmpleadosProvider>
-                  <BandasSalarialesProvider>
-                    <PrestamosProvider>
-                      <AumentosProvider>
-                        <LicenciasProvider>
-                          <LiquidacionesProvider>
-                            <SaldoISRProvider>
-                              <PeriodosProvider>
-                                <FeriadosProvider>
-                                  <RouteGuard>{children}</RouteGuard>
-                                </FeriadosProvider>
-                              </PeriodosProvider>
-                            </SaldoISRProvider>
-                          </LiquidacionesProvider>
-                        </LicenciasProvider>
-                      </AumentosProvider>
-                    </PrestamosProvider>
-                  </BandasSalarialesProvider>
-                </EmpleadosProvider>
-              </EmpresaProvider>
-            </EmpresasProvider>
+            <EmpresaProvider>
+              <EmpleadosProvider>
+                <BandasSalarialesProvider>
+                  <PrestamosProvider>
+                    <AumentosProvider>
+                      <LicenciasProvider>
+                        <LiquidacionesProvider>
+                          <SaldoISRProvider>
+                            <PeriodosProvider>
+                              <FeriadosProvider>
+                                <RouteGuard>{children}</RouteGuard>
+                              </FeriadosProvider>
+                            </PeriodosProvider>
+                          </SaldoISRProvider>
+                        </LiquidacionesProvider>
+                      </LicenciasProvider>
+                    </AumentosProvider>
+                  </PrestamosProvider>
+                </BandasSalarialesProvider>
+              </EmpleadosProvider>
+            </EmpresaProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>
