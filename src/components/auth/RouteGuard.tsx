@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { useEmpresa } from '@/lib/empresa-context'
+import { useEmpresas } from '@/lib/empresas-context'
 import { FIREBASE_ENABLED } from '@/lib/firebase'
 import { cargarDatosDemo } from '@/lib/seed-data'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -44,6 +45,7 @@ function LoadingScreen() {
 export function RouteGuard({ children }: { children: React.ReactNode }) {
   const { user, loading }  = useAuth()
   const { empresa, cargado: empresaCargada } = useEmpresa()
+  const { empresaActivaId } = useEmpresas()
   const router              = useRouter()
   const pathname            = usePathname()
 
@@ -63,10 +65,10 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
 
   // Cuenta admin de uso personal — precarga datos demo y salta el onboarding
   useEffect(() => {
-    if (!FIREBASE_ENABLED || !esAdmin || !needsOnboarding) return
-    cargarDatosDemo(user?.uid)
+    if (!FIREBASE_ENABLED || !esAdmin || !needsOnboarding || !empresaActivaId) return
+    cargarDatosDemo(user?.uid, empresaActivaId)
     window.location.reload()
-  }, [esAdmin, needsOnboarding, user?.uid])
+  }, [esAdmin, needsOnboarding, user?.uid, empresaActivaId])
 
   // Firebase not configured → skip auth, only gate on onboarding
   if (!FIREBASE_ENABLED) {

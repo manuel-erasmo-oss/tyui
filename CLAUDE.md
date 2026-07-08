@@ -1296,6 +1296,108 @@ perder cambios pendientes; el RNC "12345" muestra la advertencia ámbar y
 dispara la barra de cambios sin guardar. `tsc --noEmit` y `npm run build`
 limpios (19 rutas).
 
+## Multiempresa — una cuenta, varias empresas
+
+Pedido del usuario, retomando la conversación sobre "Opción A" de varias
+sesiones atrás (contador que maneja 3 empresas, cada una con su propio ID,
+facturable independientemente del contador — la parte de facturación queda
+para cuando exista backend, pero el mecanismo de "varias empresas por
+cuenta" no depende de tener backend y se construyó ahora, 100% client-side).
+
+**Backup de seguridad antes de empezar** (pedido explícito del usuario dado
+el alcance del cambio): rama `backup/pre-multiempresa-3a6da56` creada y
+pusheada a origin, apuntando exactamente al commit anterior a este trabajo
+— punto de rollback si algo sale mal.
+
+**Arquitectura — antes vs. después:**
+- Antes: una cuenta (uid de Firebase Auth) = una `Empresa`. Cada uno de los
+  10 contextos de negocio (`empleados`, `periodos`, `prestamos`, `aumentos`,
+  `licencias`, `bandas-salariales`, `liquidaciones`, `saldo-isr`,
+  `feriados`, más `cielo-agenda-custom`/`cielo-agenda-done` en
+  `AgendaNomina.tsx`) guardaba su localStorage con la key `base::{uid}` vía
+  `useUserScopedKey`.
+- Ahora: una cuenta puede tener **N empresas**, cada una con su propio `id`
+  (`Empresa.id`, nuevo campo requerido en el tipo). Los mismos 10+1
+  contextos ahora usan `useEmpresaScopedKey` (nuevo hook,
+  `src/lib/empresa-scoped-key.ts`) que compone la key como
+  `base::{uid}::{empresaId}` — cambiar de empresa activa cambia
+  automáticamente TODO lo que el sistema muestra, sin lógica de "reset"
+  manual en ningún contexto: cada uno ya recalculaba su estado en un
+  `useEffect` sobre `[key, ready]`, así que un cambio de `empresaId` que
+  cambia `key` dispara la recarga solo. Migración mecánica de los 9
+  contextos de `src/lib/*-context.tsx` vía `sed` (mismo patrón exacto en
+  los 9 archivos: import + una línea de uso).
+- **Nuevo `src/lib/empresas-context.tsx`** (`EmpresasProvider`/
+  `useEmpresas()`) — la lista de empresas de la cuenta + cuál está activa.
+  Scopeado solo por `uid` (`useUserScopedKey`, el hook original, sin tocar)
+  porque esto ES la lista de empresas, no datos de una empresa en
+  particular. Garantiza que toda cuenta tenga siempre ≥1 empresa (la crea
+  en silencio en el primer login, sin pantalla dedicada — el Asistente de
+  Onboarding ya cumple el rol de "configura tu primera empresa" porque
+  `needsOnboarding` en `RouteGuard` sigue evaluando `!empresa.onboardingCompleto`
+  de la empresa activa, que para una empresa recién creada es `false`).
+  Expone `crearEmpresa`/`cambiarEmpresa`/`eliminarEmpresa`/
+  `actualizarResumen`.
+- **`src/lib/empresa-scoped-bases.ts`** — módulo sin dependencias de React
+  (evita un import circular entre `empresas-context.tsx` y
+  `empresa-scoped-key.ts`, que si dependiera de `useEmpresas()` no podría
+  ser importado de vuelta por `empresas-context.tsx`). Contiene
+  `EMPRESA_SCOPED_BASES` (las 11 bases de localStorage propias de una
+  empresa) y `buildEmpresaScopedKey()` (compositor de key puro, reutilizado
+  tanto por el hook de React como por `seed-data.ts`, que corre fuera de
+  React).
+- **`empresa-context.tsx`** (el perfil de UNA empresa) ahora depende de
+  `useEmpresas()` para saber cuál es la empresa activa — su `guardar()`
+  también sincroniza `nombre`/`logo` de vuelta a `EmpresasCtx` vía
+  `actualizarResumen()`, así el selector del Sidebar siempre refleja el
+  nombre real sin que el usuario lo escriba dos veces.
+- **`eliminarEmpresa()`** limpia las 11 bases de localStorage scopeadas a
+  esa empresa (evita datos huérfanos) y garantiza que la cuenta nunca se
+  quede sin ninguna empresa (crea una vacía si se elimina la última).
+- **`seed-data.ts`** (`cargarDatosDemo`) ahora requiere `empresaId` además
+  de `uid`, usa `buildEmpresaScopedKey()`, estampa `empresa.id`, y
+  sincroniza el nombre resultante en la lista de empresas (sin esto el
+  selector seguiría mostrando "Empresa sin nombre" tras cargar la demo).
+- **`layout.tsx`**: `EmpresasProvider` envuelve TODO lo demás (incluido
+  `EmpresaProvider`), porque todos los demás providers ahora dependen
+  transitivamente de saber cuál es la empresa activa.
+- **`RouteGuard.tsx`**: el efecto que precarga datos demo para la cuenta
+  admin ahora también espera a `empresaActivaId` antes de llamar
+  `cargarDatosDemo`.
+
+**Selector de empresas — `EmpresaSwitcher` en `Sidebar.tsx`:** nuevo
+componente insertado justo debajo del logo/wordmark, con el mismo
+tratamiento visual que el resto de la barra lateral. Botón principal
+muestra logo/inicial + nombre + "N empresas"; despliega un dropdown con la
+lista completa (marca la activa con un check), un ícono de papelera por
+fila (visible solo si hay más de una empresa — nunca se puede eliminar la
+última desde aquí sin dejar la cuenta en cero, ese caso lo cubre
+`eliminarEmpresa` internamente creando una vacía) con confirmación
+destructiva (mismo patrón de modal que "Cargar Datos Demo"), y "+ Nueva
+empresa" al fondo. Colapsa a un ícono compacto cuando el Sidebar está
+colapsado, con `title` para accesibilidad.
+
+**Verificado en navegador (Playwright, flujo completo):** onboarding de
+Empresa Uno → cargar datos demo → crear Empresa Dos desde el switcher (usa
+`OnboardingWizard` sin ningún cambio, porque una empresa nueva vacía
+dispara `needsOnboarding` igual que una cuenta nueva) → confirmado que
+Empresa Dos NO tiene ningún empleado de la demo de Empresa Uno (aislamiento
+real) → cambiar de vuelta a Empresa Uno → confirmado que sus datos siguen
+intactos (María González, empleado demo, reaparece exacto). Eliminar una
+empresa desde el dropdown: diálogo de confirmación nombra la empresa
+correcta dinámicamente, tras confirmar el contador baja a "1 empresa" y la
+empresa eliminada desaparece de la lista. Verificado también en sidebar
+colapsado y modo oscuro — sin errores de consola en ningún caso. `tsc
+--noEmit` y `npm run build` limpios (19 rutas, sin cambios de conteo).
+
+**No implementado en esta sesión** (fuera de alcance, depende de backend
+real — ver conversación previa sobre "Opción A"): facturación por empresa
+individual, roles/permisos multiusuario sobre una misma empresa, e
+invitar a otro usuario a colaborar en una empresa. El mecanismo de hoy es
+100% local (una sola cuenta, varias empresas en su propio navegador) — la
+API/backend (pendiente, tema aparte discutido con el usuario) sería lo que
+habilitaría compartir una empresa entre múltiples cuentas/usuarios.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

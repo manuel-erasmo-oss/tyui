@@ -271,6 +271,9 @@ export type RolUsuario = 'dueño' | 'contador' | 'rrhh' | 'otro'
 export type RangoEmpleados = '1-9' | '10-19' | '20-49' | '50+'
 
 export interface Empresa {
+  id: string  // coincide siempre con el id activo en EmpresasCtx (empresas-context.tsx) —
+              // una cuenta puede tener varias Empresa, cada una con su propio id y su
+              // propio juego de datos (empleados, nómina, préstamos, etc.)
   nombre: string
   rnc: string
   direccion: string
@@ -316,6 +319,21 @@ export interface Empresa {
   // Timestamp ISO de la última vez que se guardó este registro — lo estampa
   // guardar() en empresa-context.tsx automáticamente, no se edita a mano.
   actualizadoEn?: string
+}
+
+// ─── Multiempresa ───────────────────────────────────────────────────────────
+// Una cuenta (login) puede tener varias empresas — el contador que maneja 3
+// clientes, cada uno con su propio ID, es el caso de uso de referencia. Cada
+// empresa tiene su propio universo de datos (empleados, nómina, préstamos,
+// etc.) completamente aislado — cambiar de empresa activa cambia TODO lo que
+// se ve en el sistema. `EmpresaResumen` es deliberadamente liviano (solo lo
+// necesario para listar/identificar en el selector) — el perfil completo
+// vive en `Empresa` (empresa-context.tsx), scopeado por empresa activa.
+export interface EmpresaResumen {
+  id: string
+  nombre: string
+  logo?: string
+  creadaEn: string  // ISO timestamp
 }
 
 // Defaults de referencia para los umbrales de negocio configurables —

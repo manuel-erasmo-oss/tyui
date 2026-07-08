@@ -12,6 +12,7 @@ import {
   Pencil, X, CheckCircle2, CircleAlert, Clock,
 } from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
+import { useEmpresas } from '@/lib/empresas-context'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useAuth } from '@/lib/auth-context'
 import { useFeriados } from '@/lib/feriados-context'
@@ -350,6 +351,7 @@ interface ChecklistItem { label: string; done: boolean; sublabel: string; onClic
 
 export default function ConfiguracionPage() {
   const { empresa, guardar } = useEmpresa()
+  const { empresaActivaId } = useEmpresas()
   const { empleadosActivos } = useEmpleados()
   const { user } = useAuth()
   const { getFeriados, agregarFeriado, eliminarFeriado } = useFeriados()
@@ -386,7 +388,8 @@ export default function ConfiguracionPage() {
   }
 
   function handleCargarDemo() {
-    cargarDatosDemo(user?.uid)
+    if (!empresaActivaId) return
+    cargarDatosDemo(user?.uid, empresaActivaId)
     window.location.reload()
   }
 

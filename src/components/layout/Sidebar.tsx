@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -15,15 +15,22 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  ChevronsUpDown,
   HandCoins,
   Percent,
   FileClock,
   BarChart2,
   Landmark,
   LogOut,
+  Building2,
+  Check,
+  Plus,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
+import { useEmpresas } from '@/lib/empresas-context'
 
 const NAV_ITEMS = [
   { href: '/',                icon: LayoutDashboard, label: 'Dashboard' },
@@ -40,6 +47,136 @@ const NAV_ITEMS = [
   { href: '/bandas-salariales', icon: BarChart2,     label: 'Bandas Salariales' },
   { href: '/reportes',        icon: FileBarChart2,   label: 'Reportería' },
 ]
+
+function ConfirmEliminarEmpresa({ nombre, onCancel, onConfirm }: { nombre: string; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-backdrop-in">
+      <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-2xl animate-modal-in">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">¿Eliminar {nombre || 'esta empresa'}?</p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Se eliminarán permanentemente todos sus datos — empleados, nómina, préstamos, liquidaciones y todo
+              lo demás. Esta acción no se puede deshacer.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex justify-end gap-3">
+          <button
+            onClick={onCancel}
+            className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 transition-colors"
+          >
+            Sí, eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function EmpresaSwitcher({ collapsed }: { collapsed: boolean }) {
+  const { empresas, empresaActivaId, cambiarEmpresa, crearEmpresa, eliminarEmpresa } = useEmpresas()
+  const [open, setOpen] = useState(false)
+  const [confirmEliminarId, setConfirmEliminarId] = useState<string | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const activa = empresas.find(e => e.id === empresaActivaId)
+  const empresaAEliminar = empresas.find(e => e.id === confirmEliminarId)
+
+  return (
+    <div ref={ref} className="relative border-b border-zinc-200 dark:border-[#252840] p-2">
+      <button
+        onClick={() => setOpen(v => !v)}
+        title={collapsed ? (activa?.nombre || 'Empresas') : undefined}
+        className={cn(
+          'flex w-full items-center rounded-lg py-2 transition-colors hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]',
+          collapsed ? 'justify-center px-0' : 'gap-2.5 px-2',
+        )}
+      >
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400">
+          {activa?.logo ? <img src={activa.logo} alt="" className="h-full w-full object-contain" /> : <Building2 className="h-3.5 w-3.5" />}
+        </div>
+        {!collapsed && (
+          <>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">{activa?.nombre || 'Empresa sin nombre'}</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{empresas.length} empresa{empresas.length === 1 ? '' : 's'}</p>
+            </div>
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-zinc-600" />
+          </>
+        )}
+      </button>
+
+      {open && (
+        <div
+          className={cn(
+            'absolute z-50 top-full mt-1 w-64 overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-lg shadow-zinc-200/60 dark:shadow-none',
+            collapsed ? 'left-full ml-2' : 'left-2',
+          )}
+        >
+          <div className="max-h-64 overflow-y-auto py-1">
+            {empresas.map(e => (
+              <div key={e.id} className="group flex items-center gap-1 px-2">
+                <button
+                  onClick={() => { cambiarEmpresa(e.id); setOpen(false) }}
+                  className="flex flex-1 min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-2 text-left hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                >
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-md bg-zinc-100 dark:bg-[#1a1d2e]">
+                    {e.logo ? <img src={e.logo} alt="" className="h-full w-full object-contain" /> : <Building2 className="h-3 w-3 text-zinc-400 dark:text-zinc-600" />}
+                  </div>
+                  <span className="min-w-0 flex-1 truncate text-xs text-zinc-700 dark:text-zinc-300">{e.nombre || 'Empresa sin nombre'}</span>
+                  {e.id === empresaActivaId && <Check className="h-3.5 w-3.5 shrink-0 text-[#1B2980] dark:text-indigo-400" />}
+                </button>
+                {empresas.length > 1 && (
+                  <button
+                    onClick={() => setConfirmEliminarId(e.id)}
+                    title="Eliminar empresa"
+                    className="shrink-0 rounded-lg p-1.5 text-zinc-300 opacity-0 group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-500 dark:text-zinc-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400 transition-all"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="border-t border-zinc-100 dark:border-[#1d2035] p-1">
+            <button
+              onClick={() => { crearEmpresa(''); setOpen(false) }}
+              className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-semibold text-[#1B2980] dark:text-indigo-400 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Nueva empresa
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmEliminarId && (
+        <ConfirmEliminarEmpresa
+          nombre={empresaAEliminar?.nombre ?? ''}
+          onCancel={() => setConfirmEliminarId(null)}
+          onConfirm={() => { eliminarEmpresa(confirmEliminarId); setConfirmEliminarId(null); setOpen(false) }}
+        />
+      )}
+    </div>
+  )
+}
 
 export function Sidebar() {
   const pathname  = usePathname()
@@ -147,6 +284,9 @@ export function Sidebar() {
             : <ChevronLeft  className="h-3.5 w-3.5" />}
         </button>
       </div>
+
+      {/* ── Selector de empresa ──────────────────────────────────── */}
+      <EmpresaSwitcher collapsed={c} />
 
       {/* ── Navigation ───────────────────────────────────────────── */}
       <nav className="flex-1 overflow-y-auto py-1">

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { PeriodoNomina, AjusteLinea, ResultadoNomina } from '@/types'
-import { useUserScopedKey } from './user-scoped-key'
+import { useEmpresaScopedKey } from './empresa-scoped-key'
 
 const KEY = 'cielo-periodos'
 
@@ -57,7 +57,7 @@ const Ctx = createContext<PeriodosCtx>({
 
 export function PeriodosProvider({ children }: { children: ReactNode }) {
   const [periodos, setPeriodos] = useState<PeriodoNomina[]>([])
-  const { key, ready } = useUserScopedKey(KEY)
+  const { key, ready } = useEmpresaScopedKey(KEY)
 
   useEffect(() => {
     if (!ready) return

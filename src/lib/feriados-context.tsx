@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { FeriadosAnio, FeriadoNacional } from '@/types'
-import { useUserScopedKey } from './user-scoped-key'
+import { useEmpresaScopedKey } from './empresa-scoped-key'
 
 const KEY = 'cielo-feriados'
 
@@ -29,7 +29,7 @@ const Ctx = createContext<FeriadosCtx>({
 
 export function FeriadosProvider({ children }: { children: ReactNode }) {
   const [estados, setEstados] = useState<FeriadosPorAnio>({})
-  const { key, ready } = useUserScopedKey(KEY)
+  const { key, ready } = useEmpresaScopedKey(KEY)
 
   useEffect(() => {
     if (!ready) return
