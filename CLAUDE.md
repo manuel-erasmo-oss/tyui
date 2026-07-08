@@ -1005,6 +1005,37 @@ había dejado pendientes, en vez de solo documentarlos:
 
 `tsc --noEmit` y `npm run build` limpios. Todo fusionado a `main`.
 
+### QA Fase 5 — revisión exhaustiva de Reportería (sesión posterior)
+
+Otra sesión de QA revisó los 13 reportes de `reportes/page.tsx` línea por
+línea (más allá del fix puntual de la Fase 5 original arriba) y encontró 4
+bugs adicionales, todos siguiendo el mismo patrón raíz — usar
+`empleados.filter(e => e.activo)` o `Object.entries(ajustesPorEmpleado)`
+como proxy de "quién participó en este período histórico", en vez de la
+membresía real (`resultadosPorEmpleado`):
+
+- **[FIXED]** Desglose "Costo por Departamento" del Resumen Gerencial,
+  el reporte standalone "Costo por Departamento", y **Cumplimiento
+  Fiscal** (conciliación TSS/DGII — el más grave, por ser un reporte de
+  cumplimiento contra la factura oficial CNSS) excluían por completo a
+  cualquier empleado desvinculado después de un período ya cerrado.
+- **[FIXED]** "Proyección Anual" — el costo YTD real usaba las claves de
+  `ajustesPorEmpleado` (solo empleados con AL MENOS un ajuste ese período)
+  en vez de la membresía real, excluyendo a cualquier empleado con nómina
+  plana (sin ajustes, el caso más común) del acumulado ejecutado.
+- **[FIXED]** El footer negro (`bg-zinc-950`) ya corregido en
+  Vacaciones/Regalía aparecía sin corregir en 8 tablas más dentro de
+  Reportería — corregido sistemáticamente en las 8.
+- **[HALLAZGO, limitación inherente sin fix]** Períodos anteriores a la
+  existencia del snapshot histórico no pueden reconstruir con exactitud lo
+  que se pagó si el salario del empleado cambió después — el fallback
+  recalcula con el salario ACTUAL. Verificado en vivo (Junio 2026 muestra
+  el salario post-aumento de María en vez del histórico). No es una falla
+  de diseño corregible, es un límite honesto de cualquier sistema que
+  empieza a trackear historial en un punto del tiempo.
+
+`tsc --noEmit` y `npm run build` limpios.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

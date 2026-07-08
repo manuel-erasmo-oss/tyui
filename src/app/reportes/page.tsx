@@ -168,11 +168,25 @@ function ReporteGerencial({
     )
   }, [periodos, currentYear])
 
-  // Desglose por departamento del último período
+  // Desglose por departamento del último período — usa los empleados
+  // REALMENTE incluidos en ese período (vía el snapshot resultadosPorEmpleado),
+  // no `activos` (empleados activos AHORA). Si alguien fue procesado en ese
+  // período pero luego se desvinculó/desactivó, `activos` lo excluiría por
+  // completo, dejando el desglose por debajo del "Costo Total Empresa" del
+  // KPI de arriba (que sí lee ultimoPeriodo.totales, con todos incluidos) —
+  // dos números que deberían coincidir en la misma pantalla. Solo cae de
+  // vuelta a `activos` para períodos anteriores al snapshot (sin registro
+  // de quién participó).
   const desglose = useMemo(() => {
     if (!ultimoPeriodo) return []
+    const idsDelPeriodo = ultimoPeriodo.resultadosPorEmpleado
+      ? Object.keys(ultimoPeriodo.resultadosPorEmpleado)
+      : null
+    const empleadosDelPeriodo = idsDelPeriodo && idsDelPeriodo.length > 0
+      ? idsDelPeriodo.map(id => empleados.find(e => e.id === id)).filter((e): e is Empleado => !!e)
+      : activos
     const groups: Record<string, { bruto: number; neto: number; costo: number; headcount: number }> = {}
-    for (const emp of activos) {
+    for (const emp of empleadosDelPeriodo) {
       const res = resultadoHistorico(emp, ultimoPeriodo)
       const d = emp.departamento || 'Sin Departamento'
       if (!groups[d]) groups[d] = { bruto: 0, neto: 0, costo: 0, headcount: 0 }
@@ -185,7 +199,7 @@ function ReporteGerencial({
     return Object.entries(groups)
       .map(([depto, g]) => ({ depto, ...g, pct: grandTotal > 0 ? g.costo / grandTotal * 100 : 0 }))
       .sort((a, b) => b.costo - a.costo)
-  }, [ultimoPeriodo, activos])
+  }, [ultimoPeriodo, activos, empleados])
 
   function exportarPDF() {
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
@@ -714,19 +728,19 @@ function ReporteNomina({
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold text-right">
+                <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold text-right">
                   <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
-                  <td className="px-4 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.bruto, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-rose-300 whitespace-nowrap">{formatRD(totales.sfsEmp, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-violet-300 whitespace-nowrap">{formatRD(totales.isr, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-rose-200 whitespace-nowrap">{formatRD(totales.descuentos, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-emerald-300 whitespace-nowrap">{formatRD(totales.neto, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.srlEmpl, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.infotepEmpl, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-indigo-200 whitespace-nowrap">{formatRD(totales.costo, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(totales.bruto, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.sfsEmp, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-300 whitespace-nowrap">{formatRD(totales.isr, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-rose-800 dark:text-rose-200 whitespace-nowrap">{formatRD(totales.descuentos, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-emerald-700 dark:text-emerald-300 whitespace-nowrap">{formatRD(totales.neto, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.srlEmpl, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.infotepEmpl, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(totales.costo, 0)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -1168,9 +1182,18 @@ function ReporteTSS({
 
   const periodo = sorted.find(p => p.id === periodoId)
 
+  // Empleados REALMENTE incluidos en el período (snapshot resultadosPorEmpleado
+  // si existe, o todos los activos como respaldo solo para períodos sin ese
+  // campo) — no `empleados.filter(e => e.activo)` a secas, que excluiría por
+  // completo a cualquiera que haya sido procesado en ese período pero ya esté
+  // inactivo hoy. Es un reporte de conciliación fiscal (factura CNSS/DGII):
+  // subestimar el TSS/ISR de un período ya cerrado es un riesgo de auditoría real.
   const filas = useMemo(() => {
     if (!periodo || !generado) return []
-    return empleados.filter(e => e.activo).map(emp => {
+    const idsDelPeriodo = periodo.resultadosPorEmpleado && Object.keys(periodo.resultadosPorEmpleado).length > 0
+      ? Object.keys(periodo.resultadosPorEmpleado)
+      : empleados.filter(e => e.activo).map(e => e.id)
+    return idsDelPeriodo.map(id => empleados.find(e => e.id === id)).filter((e): e is Empleado => !!e).map(emp => {
       const res = resultadoHistorico(emp, periodo)
       const totalTSS = res.afpEmpleado + res.sfsEmpleado + res.afpEmpleador + res.sfsEmpleador + res.srlEmpleador + res.infotepEmpleador
       return { emp, res, totalTSS }
@@ -1523,7 +1546,7 @@ function ReporteTSS({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold">
+                  <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold">
                     <td className="px-5 py-3 text-xs uppercase tracking-wide whitespace-nowrap">Total TSS a Remitir (CNSS)</td>
                     <td className="px-4 py-3" />
                     <td className="px-4 py-3" />
@@ -1588,17 +1611,17 @@ function ReporteTSS({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold text-right">
+                  <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold text-right">
                     <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
-                    <td className="px-4 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.cotizable, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-rose-300 whitespace-nowrap">{formatRD(totales.sfsEmp, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.srl, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.infotep, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(totales.cotizable, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.sfsEmp, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.srl, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.infotep, 0)}</td>
                     <td className="px-4 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.totalTSS, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-violet-300 whitespace-nowrap">{formatRD(totales.isr, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-300 whitespace-nowrap">{formatRD(totales.isr, 0)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1667,8 +1690,15 @@ function ReporteCostoPorDepto({
 
   const deptos = useMemo(() => {
     if (!periodo || !generado) return []
+    // Empleados REALMENTE incluidos en el período (snapshot si existe, o
+    // todos los activos como respaldo solo para períodos sin snapshot) — ver
+    // nota equivalente en el Reporte TSS más arriba en este mismo archivo.
+    const idsDelPeriodo = periodo.resultadosPorEmpleado && Object.keys(periodo.resultadosPorEmpleado).length > 0
+      ? Object.keys(periodo.resultadosPorEmpleado)
+      : empleados.filter(e => e.activo).map(e => e.id)
+    const empleadosDelPeriodo = idsDelPeriodo.map(id => empleados.find(e => e.id === id)).filter((e): e is Empleado => !!e)
     const groups: Record<string, { headcount: number; bruto: number; neto: number; tss: number; costo: number }> = {}
-    for (const emp of empleados.filter(e => e.activo)) {
+    for (const emp of empleadosDelPeriodo) {
       const res = resultadoHistorico(emp, periodo)
       const d = emp.departamento || 'Sin Departamento'
       if (!groups[d]) groups[d] = { headcount: 0, bruto: 0, neto: 0, tss: 0, costo: 0 }
@@ -1796,13 +1826,13 @@ function ReporteCostoPorDepto({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold text-right">
+                  <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold text-right">
                     <td className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES</td>
                     <td className="px-5 py-3 tabular-nums">{totales.headcount}</td>
                     <td className="px-5 py-3 tabular-nums">{formatRD(totales.bruto, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-emerald-300">{formatRD(totales.neto, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-amber-300">{formatRD(totales.tss, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-indigo-200">{formatRD(totales.costo, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-emerald-700 dark:text-emerald-300">{formatRD(totales.neto, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300">{formatRD(totales.tss, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-indigo-700 dark:text-indigo-300">{formatRD(totales.costo, 0)}</td>
                     <td className="px-5 py-3">100%</td>
                   </tr>
                 </tfoot>
@@ -2107,9 +2137,9 @@ function ReportePlanillaACH({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold">
+                  <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold">
                     <td colSpan={4} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTAL TRANSFERIR ({filasVisible.length} cuentas)</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-emerald-300">{formatRD(totalNeto, 0)}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{formatRD(totalNeto, 0)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -2349,15 +2379,15 @@ function ReporteHorasExtras({
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold">
+                  <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold">
                     <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} registros)</td>
-                    <td className="px-5 py-3 tabular-nums text-center text-amber-300">{resumen.he35.toFixed(1)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-amber-300 whitespace-nowrap">{formatRD(resumen.imp35, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-center text-rose-300">{resumen.he100.toFixed(1)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-rose-300 whitespace-nowrap">{formatRD(resumen.imp100, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-center text-sky-300">{resumen.nocturnas.toFixed(1)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-sky-300 whitespace-nowrap">{formatRD(resumen.impNocturno, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-indigo-200 whitespace-nowrap">{formatRD(resumen.total, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-center text-amber-700 dark:text-amber-300">{resumen.he35.toFixed(1)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(resumen.imp35, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-center text-rose-700 dark:text-rose-300">{resumen.he100.toFixed(1)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(resumen.imp100, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-center text-sky-700 dark:text-sky-300">{resumen.nocturnas.toFixed(1)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-300 whitespace-nowrap">{formatRD(resumen.impNocturno, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(resumen.total, 0)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -2491,10 +2521,20 @@ function ReporteProyeccionAnual({
   const [generado, setGenerado] = useState(false)
   const [searchQ, setSearchQ] = useState('')
 
+  // Recorre los empleados REALMENTE incluidos en cada período (snapshot
+  // resultadosPorEmpleado si existe, o todos los activos como respaldo para
+  // períodos anteriores a ese campo) — NO las claves de ajustesPorEmpleado,
+  // que solo contienen a quien tuvo al menos un ajuste (préstamo, bono, etc.)
+  // ese período. Un empleado con nómina plana (sin ningún ajuste, el caso más
+  // común) no aparece en ajustesPorEmpleado y quedaba excluido por completo
+  // del costo YTD real, subestimando el % Ejecutado de la proyección.
   const ytdCostoPorEmp = useMemo(() => {
     const map: Record<string, number> = {}
     for (const p of periodos.filter(p => p.anio === currentYear && p.estado !== 'en_proceso')) {
-      for (const [empId, ajustes] of Object.entries(p.ajustesPorEmpleado ?? {})) {
+      const idsDelPeriodo = p.resultadosPorEmpleado && Object.keys(p.resultadosPorEmpleado).length > 0
+        ? Object.keys(p.resultadosPorEmpleado)
+        : empleados.filter(e => e.activo).map(e => e.id)
+      for (const empId of idsDelPeriodo) {
         const emp = empleados.find(e => e.id === empId)
         if (!emp) continue
         const res = resultadoHistorico(emp, p)
@@ -2648,13 +2688,13 @@ function ReporteProyeccionAnual({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold text-right">
+                  <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold text-right">
                     <td colSpan={3} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
                     <td className="px-5 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.brutoAnual, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.regalia, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-amber-300 whitespace-nowrap">{formatRD(totales.vacaciones, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-indigo-200 whitespace-nowrap">{formatRD(totales.totalProyectado, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-emerald-300 whitespace-nowrap">{formatRD(totales.ytdReal, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.regalia, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.vacaciones, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(totales.totalProyectado, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-emerald-700 dark:text-emerald-300 whitespace-nowrap">{formatRD(totales.ytdReal, 0)}</td>
                     <td className="px-5 py-3 text-center text-xs">
                       {totales.totalProyectado > 0 ? `${(totales.ytdReal / totales.totalProyectado * 100).toFixed(1)}%` : '—'}
                     </td>
@@ -3728,11 +3768,11 @@ function ReporteLicencias({
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-zinc-200 dark:border-[#252840] bg-zinc-950 dark:bg-[#0a0c14] text-white font-bold">
+                  <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold">
                     <td colSpan={4} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} licencias)</td>
                     <td className="px-5 py-3 tabular-nums text-center">{resumen.dias}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-indigo-200 whitespace-nowrap">{formatRD(resumen.montoPagado, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-sky-300 whitespace-nowrap">{formatRD(resumen.subsidio, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(resumen.montoPagado, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-300 whitespace-nowrap">{formatRD(resumen.subsidio, 0)}</td>
                   </tr>
                 </tfoot>
               </table>
