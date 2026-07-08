@@ -1155,6 +1155,7 @@ ubicación. Sidebar ya no muestra "Inicio de Año" y `/inicio-de-ano` devuelve
 
 | Hash | Descripción |
 |---|---|
+| `08725d8` | retire: eliminar módulo Inicio de Año, reubicar Feriados en Configuración |
 | `4a205a4` | feat: avances de salario — adelanto sin interés reutilizando Préstamos |
 | `6779672` | feat: licencias con subsidio — enfermedad común, accidente laboral, maternidad |
 | `034a541` | feat: suspensión de contrato — nuevo estado distinto de liquidación |
