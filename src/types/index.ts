@@ -488,28 +488,25 @@ export interface RegistroLiquidacion {
   fechaNotificacionRenuncia?: string
 }
 
-// ─── Checklist de Inicio de Año ──────────────────────────────────────────────
-// Estado del checklist anual (feriados, calendario de pago, items marcados)
-// guardado por AÑO CALENDARIO — el checklist se "resetea" automáticamente
-// cada año nuevo simplemente porque el año en curso no tiene un registro
-// previo todavía (no requiere ninguna lógica explícita de reseteo).
+// ─── Feriados Nacionales ──────────────────────────────────────────────────────
+// Vivió antes en un módulo "Inicio de Año" con checklist propio (tramos ISR/
+// salario mínimo de solo lectura duplicados con Configuración → Cumplimiento
+// Legal, un calendario de pago decorativo sin ninguna conexión al resto del
+// sistema, y un recordatorio de IR-13 sin fecha real) — retirado por no tener
+// una razón de ser clara más allá de esto. Lo único con valor real era el
+// calendario de feriados, que sí alimenta un aviso real en Procesar Nómina
+// (clasificar horas extra entre H.E. 35%/100%, Art. 203) — se conserva, ahora
+// como parte de Configuración → Nómina. Guardado por AÑO CALENDARIO (los
+// feriados civiles/móviles cambian de fecha cada año).
 export interface FeriadoNacional {
   id: string
   fecha: string   // ISO date (YYYY-MM-DD)
   nombre: string
 }
 
-export interface PagoPlanificado {
-  mes: number          // 1-12
-  quincena?: 1 | 2     // presente solo si la nómina es quincenal
-  fechaPago: string    // ISO date (YYYY-MM-DD), puede quedar vacío hasta que se planifique
-}
-
-export interface ChecklistAnualEstado {
+export interface FeriadosAnio {
   anio: number
-  itemsCompletados: string[]         // ids de items del checklist marcados como completados este año
-  feriados: FeriadoNacional[]        // calendario de feriados nacionales confirmado para el año
-  calendarioPago: PagoPlanificado[]  // fechas de pago planificadas por mes/quincena
+  feriados: FeriadoNacional[]
 }
 
 // ─── Aumentos salariales (selección por criterio + aprobación) ───────────────

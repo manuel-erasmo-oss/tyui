@@ -19,7 +19,6 @@ import {
   Percent,
   FileClock,
   BarChart2,
-  CalendarCheck,
   Landmark,
   LogOut,
 } from 'lucide-react'
@@ -39,7 +38,6 @@ const NAV_ITEMS = [
   { href: '/liquidacion',     icon: UserMinus,       label: 'Liquidación' },
   { href: '/aumentos',        icon: TrendingUp,      label: 'Aumentos Salariales' },
   { href: '/bandas-salariales', icon: BarChart2,     label: 'Bandas Salariales' },
-  { href: '/inicio-de-ano',   icon: CalendarCheck,   label: 'Inicio de Año' },
   { href: '/reportes',        icon: FileBarChart2,   label: 'Reportería' },
 ]
 

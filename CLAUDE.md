@@ -1107,6 +1107,46 @@ Pago en Préstamos mostró exactamente "umbral configurable, 25%" — el mismo
 valor, confirmando la propagación end-to-end. `tsc --noEmit` y
 `npm run build` limpios.
 
+## Retiro del módulo "Inicio de Año" (post-QA)
+
+El usuario preguntó honestamente cuál era la razón de ser del módulo — no
+lograba entender su función. Auditoría de sus 5 piezas antes de responder:
+
+| Pieza | Veredicto |
+|---|---|
+| Tramos ISR / topes TSS (solo lectura) | Duplicado exacto de Configuración → Cumplimiento Legal |
+| Calendario de pago anual (12/24 filas) | Decorativo — no se leía desde ningún otro módulo |
+| Recordatorio IR-13 | Texto fijo sin fecha (evitaba afirmar un dato legal impreciso), sin ninguna lógica detrás |
+| Feriados nacionales | **Único con valor real** — alimentaba el aviso de H.E. 100% en Procesar Nómina |
+| Salarios mínimos (solo lectura) | Duplicado exacto de Configuración → Cumplimiento Legal |
+
+Con el usuario de acuerdo ("Procede"), se retiró el módulo completo y se
+reubicó únicamente la pieza con valor real:
+
+- Eliminados: `src/app/inicio-de-ano/` (ruta completa), `src/lib/inicio-de-
+  ano-context.tsx`, tipos `PagoPlanificado`/`ChecklistAnualEstado`, entrada
+  del Sidebar.
+- Nuevo `src/lib/feriados-context.tsx` (reemplaza `ChecklistAnualProvider`
+  en `layout.tsx`) — contexto minimalista (`getFeriados`/`agregarFeriado`/
+  `eliminarFeriado`), guardado por año calendario en una clave localStorage
+  nueva (`cielo-feriados`, sin migración — el usuario confirmó que no existe
+  ningún dato real de usuario en el sistema todavía).
+- Card "Feriados Nacionales — {año}" reubicada en Configuración → Nómina
+  (razón de ser: "Cómo pagas" — tiene sentido ahí porque afecta directamente
+  el cálculo de horas extra). `nomina/page.tsx` actualizado para leer de
+  `useFeriados()` en vez de `useChecklistAnual()`.
+
+Verificado en navegador (Playwright, sesión demo con período Julio 2026 en
+proceso): (1) se agregó un feriado de prueba en Configuración → Nómina, se
+confirmó su persistencia en `localStorage['cielo-feriados']` y que sobrevive
+un reload de página; (2) se creó un período mensual Agosto 2026, se abrió el
+formulario de ajuste de un empleado, se seleccionó concepto "H.E. 35%" y el
+aviso "Feriados de Agosto (calendario de Configuración → Nómina): 16 ago de
+2026 (nombre del feriado)... regístralas como H.E. 100% en vez de H.E. 35%"
+apareció correctamente — confirma el wiring end-to-end desde la nueva
+ubicación. Sidebar ya no muestra "Inicio de Año" y `/inicio-de-ano` devuelve
+404. `tsc --noEmit` y `npm run build` limpios (19 rutas, antes 20).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

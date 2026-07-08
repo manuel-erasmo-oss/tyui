@@ -4,13 +4,14 @@ import { useState, useEffect, useRef } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE_AFP, TOPE_COTIZABLE_SFS, TOPE_COTIZABLE_SRL } from '@/lib/dominican-labor'
-import { formatRD } from '@/lib/utils'
+import { formatRD, formatDate } from '@/lib/utils'
 import {
   Save, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2, History,
-  Wallet, ShieldCheck, ArrowLeft, ArrowRight, SlidersHorizontal, Mail,
+  Wallet, ShieldCheck, ArrowLeft, ArrowRight, SlidersHorizontal, Mail, PartyPopper, Plus,
 } from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useAuth } from '@/lib/auth-context'
+import { useFeriados } from '@/lib/feriados-context'
 import { Toast } from '@/components/ui/Toast'
 import { cargarDatosDemo } from '@/lib/seed-data'
 import { ConfiguracionInicialFlow } from '@/components/carga-inicial/ConfiguracionInicialFlow'
@@ -201,7 +202,7 @@ const CATEGORIAS: CategoriaConfig[] = [
     titulo: 'Nómina',
     pregunta: 'Cómo pagas',
     descripcion: 'Configuración operativa de cómo se procesa y se presenta tu nómina.',
-    items: ['Modalidad de pago (mensual/quincenal)', 'Moneda de presentación (RD$/USD)'],
+    items: ['Modalidad de pago (mensual/quincenal)', 'Moneda de presentación (RD$/USD)', 'Calendario de feriados nacionales'],
   },
   {
     id: 'reglas',
@@ -282,12 +283,25 @@ function VolverBtn({ onClick }: { onClick: () => void }) {
 export default function ConfiguracionPage() {
   const { empresa, guardar } = useEmpresa()
   const { user } = useAuth()
+  const { getFeriados, agregarFeriado, eliminarFeriado } = useFeriados()
   const [vista, setVista]       = useState<Vista>('hub')
   const [form, setForm]         = useState<Empresa>(empresa)
   const [showToast, setShowToast] = useState(false)
   const [confirmDemo, setConfirmDemo] = useState(false)
   const [logoError, setLogoError] = useState('')
+  const [nuevaFechaFeriado, setNuevaFechaFeriado] = useState('')
+  const [nuevoNombreFeriado, setNuevoNombreFeriado] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const anioActual = new Date().getFullYear()
+  const feriados = getFeriados(anioActual)
+
+  function handleAgregarFeriado(e: React.FormEvent) {
+    e.preventDefault()
+    if (!nuevaFechaFeriado || !nuevoNombreFeriado.trim()) return
+    agregarFeriado(anioActual, nuevaFechaFeriado, nuevoNombreFeriado.trim())
+    setNuevaFechaFeriado('')
+    setNuevoNombreFeriado('')
+  }
 
   useEffect(() => {
     setForm(empresa)
@@ -640,6 +654,7 @@ export default function ConfiguracionPage() {
 
           {/* ── Nómina ──────────────────────────────────────────────────── */}
           {vista === 'nomina' && (
+            <div className="space-y-5">
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
               <form onSubmit={handleSave} className="space-y-5">
                 {/* Modalidad de Nómina */}
@@ -697,6 +712,75 @@ export default function ConfiguracionPage() {
                   </button>
                 </div>
               </form>
+            </div>
+
+            {/* Calendario de feriados nacionales — se guarda solo, sin pasar por "Guardar cambios" */}
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
+              <div className="flex items-center gap-2">
+                <PartyPopper className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Feriados Nacionales — {anioActual}</h3>
+              </div>
+              <p className="mt-1 mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+                Registra las fechas confirmadas de los feriados nacionales de este año. Se usan como
+                recordatorio automático al cargar horas extra en Procesar Nómina — el sistema avisa si
+                el mes tiene un feriado registrado, para clasificar las horas correctamente entre
+                H.E. 35% y H.E. 100% (Art. 203).
+              </p>
+
+              <form onSubmit={handleAgregarFeriado} className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+                <div className="flex-1">
+                  <label className={LABEL_CLASS}>Fecha</label>
+                  <input
+                    type="date"
+                    value={nuevaFechaFeriado}
+                    onChange={e => setNuevaFechaFeriado(e.target.value)}
+                    className={INPUT_CLASS}
+                  />
+                </div>
+                <div className="flex-[2]">
+                  <label className={LABEL_CLASS}>Nombre del feriado</label>
+                  <input
+                    type="text"
+                    value={nuevoNombreFeriado}
+                    onChange={e => setNuevoNombreFeriado(e.target.value)}
+                    placeholder="Ej. Día de la Independencia"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!nuevaFechaFeriado || !nuevoNombreFeriado.trim()}
+                  className="flex items-center justify-center gap-1.5 rounded-lg bg-[#1B2980] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#151f66] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Agregar
+                </button>
+              </form>
+
+              {feriados.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-zinc-200 dark:border-[#252840] px-3 py-4 text-center text-xs text-zinc-400 dark:text-zinc-500">
+                  Aún no has confirmado ningún feriado para {anioActual}.
+                </p>
+              ) : (
+                <ul className="divide-y divide-zinc-100 dark:divide-[#1d2035] overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                  {feriados.map(f => (
+                    <li key={f.id} className="flex items-center justify-between gap-3 bg-white dark:bg-[#141722] px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{f.nombre}</p>
+                        <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{formatDate(f.fecha)}</p>
+                      </div>
+                      <button
+                        onClick={() => eliminarFeriado(anioActual, f.id)}
+                        className="shrink-0 rounded-lg p-1.5 text-zinc-300 dark:text-zinc-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
+                        title="Eliminar"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             </div>
           )}
 

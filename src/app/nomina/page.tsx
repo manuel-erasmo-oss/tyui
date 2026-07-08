@@ -34,7 +34,7 @@ import { useEmpresa } from '@/lib/empresa-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
-import { useChecklistAnual } from '@/lib/inicio-de-ano-context'
+import { useFeriados } from '@/lib/feriados-context'
 import { useAuth } from '@/lib/auth-context'
 import {
   enviarComprobante, plantillaComprobanteDeEmpresa, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
@@ -586,7 +586,7 @@ export default function NominaPage() {
   const { getPrestamosActivos, registrarPago, registrarOmisionCuota } = usePrestamos()
   const { liquidaciones } = useLiquidaciones()
   const { saldos: saldosISR, getSaldosActivos, getMontoAplicadoEnPeriodo, aplicar: aplicarSaldoISR } = useSaldoISR()
-  const { getEstado: getEstadoAnual } = useChecklistAnual()
+  const { getFeriados } = useFeriados()
   const { user } = useAuth()
 
   // Aplica el saldo ISR a favor sobre un resultado ya calculado. Si el
@@ -1913,11 +1913,11 @@ export default function NominaPage() {
                                 </p>
                               )}
                               {newTipo === 'ingreso' && (newConcepto === 'horas_extras_35' || newConcepto === 'horas_extras_100') && (() => {
-                                const feriadosMes = getEstadoAnual(periodoActual!.anio).feriados.filter(f => new Date(f.fecha + 'T00:00:00').getMonth() + 1 === periodoActual!.mes)
+                                const feriadosMes = getFeriados(periodoActual!.anio).filter(f => new Date(f.fecha + 'T00:00:00').getMonth() + 1 === periodoActual!.mes)
                                 if (feriadosMes.length === 0) return null
                                 return (
                                   <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-400">
-                                    Feriados de {MESES[periodoActual!.mes - 1]} (calendario de "Inicio de Año"):{' '}
+                                    Feriados de {MESES[periodoActual!.mes - 1]} (calendario de Configuración → Nómina):{' '}
                                     {feriadosMes.map(f => `${formatDate(f.fecha)} (${f.nombre})`).join(', ')}.
                                     {newConcepto === 'horas_extras_35'
                                       ? ' Si las horas que vas a cargar corresponden a uno de estos días, regístralas como H.E. 100% en vez de H.E. 35% (Art. 203).'
