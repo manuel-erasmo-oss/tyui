@@ -312,6 +312,10 @@ export interface Empresa {
   // que ya existía como valor inicial no persistido.
   plantillaComprobanteAsunto?: string
   plantillaComprobanteCuerpo?: string
+
+  // Timestamp ISO de la última vez que se guardó este registro — lo estampa
+  // guardar() en empresa-context.tsx automáticamente, no se edita a mano.
+  actualizadoEn?: string
 }
 
 // Defaults de referencia para los umbrales de negocio configurables —

@@ -58,6 +58,20 @@ export function formatPeriodo(year: number, month: number): string {
   })
 }
 
+// Relative time label "hace 3 días" / "hace unos segundos"
+export function formatRelativeTime(isoDate: string): string {
+  const diffMs = Date.now() - new Date(isoDate).getTime()
+  const diffSec = Math.round(diffMs / 1000)
+  if (diffSec < 60) return 'hace unos segundos'
+  const diffMin = Math.round(diffSec / 60)
+  if (diffMin < 60) return `hace ${diffMin} minuto${diffMin === 1 ? '' : 's'}`
+  const diffHr = Math.round(diffMin / 60)
+  if (diffHr < 24) return `hace ${diffHr} hora${diffHr === 1 ? '' : 's'}`
+  const diffDay = Math.round(diffHr / 24)
+  if (diffDay < 30) return `hace ${diffDay} día${diffDay === 1 ? '' : 's'}`
+  return formatDate(isoDate)
+}
+
 // Años de servicio formatted
 export function formatAnosServicio(anos: number): string {
   if (anos < 1 / 12) return 'Menos de 1 mes'

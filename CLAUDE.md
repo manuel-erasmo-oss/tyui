@@ -1216,6 +1216,86 @@ errores de consola en ninguna combinación de viewport/tema. `tsc --noEmit`
 y `npm run build` limpios (19 rutas, sin cambios de conteo — la recreación
 es interna a una sola ruta).
 
+## Segunda pasada de Configuración — feedback directo del usuario
+
+El usuario probó el rediseño anterior y dio dos críticas concretas: *"siento
+que falta algo para que le dé ese toque especial que tienen sistemas como
+QuickBooks o SAP"* y *"en resumen me estás repitiendo la misma información
+que está en la barra lateral"* — el panel "Resumen" mostraba 5 tarjetas con
+el mismo título/descripción que ya aparecían en el rail de navegación, sin
+aportar nada nuevo.
+
+**Fix del Resumen — de directorio duplicado a panel de estado real:**
+- Ya no repite las 5 secciones como tarjetas. En su lugar calcula un
+  **checklist de 4 señales reales** (`ChecklistItem[]`, tipo movido a nivel
+  de módulo — ver nota de SWC abajo): perfil de empresa completo (7 campos),
+  logo subido, feriados del año registrados, y empleados con saldos
+  iniciales sin revisar (`empleadosActivos.filter(e =>
+  e.saldosInicialesRevisado !== true)`, mismo dato real que ya usa
+  `ConfiguracionInicialFlow`, ahora también en `useEmpleados()` aquí).
+- **Anillo de completitud** (`conic-gradient` de 2 capas — track con clases
+  Tailwind `bg-zinc-200 dark:bg-[#252840]` debajo, arco de progreso
+  `#1B2980` con `transparent` para el resto encima, así el track sí es
+  theme-aware en vez de un hex fijo) mostrando el % de items del checklist
+  completados.
+- **Lista de pendientes accionables**: cada item incompleto aparece como fila
+  clickeable (ícono + label + sublabel con el dato real, ej. "6 empleados
+  sin revisar") que navega directo a la sección correspondiente. Si no hay
+  pendientes, un estado positivo verde "Todo en orden" en vez de una lista
+  vacía.
+- **"Última actualización"**: nuevo campo `Empresa.actualizadoEn` (ISO
+  timestamp), estampado automáticamente dentro de `guardar()` en
+  `empresa-context.tsx` — cualquier guardado futuro lo actualiza sin que
+  ninguna pantalla tenga que acordarse de hacerlo. Nuevo helper
+  `formatRelativeTime()` en `utils.ts` ("hace 3 días" / "hace unos
+  segundos", cae a `formatDate()` después de 30 días).
+
+**Fix del "toque especial" — patrones reales de QuickBooks/SAP, no solo
+más color:**
+- **`CollapsibleCard`** — nuevo componente que reemplaza el formulario
+  siempre-abierto por el patrón real de QuickBooks Settings: resumen de
+  solo lectura + botón "Editar" (ícono `Pencil`) que expande el formulario
+  in situ, con "Cerrar" (ícono `X`) para volver a colapsar. El resumen lee
+  de `form` (no de `empresa`), así que un cambio sin guardar sigue visible
+  al colapsar la tarjeta. `isEmpty` fuerza el estado abierto la primera vez
+  (empresa recién creada, nada que resumir todavía). Aplicado a las 4
+  tarjetas que son formularios largos y se benefician de estar colapsadas
+  por defecto: Identidad, Ubicación y Contacto (Empresa), Modalidad y
+  Moneda (Nómina), Plantilla de Correo (Reglas de Negocio). Las tarjetas de
+  selección por botones (Clasificación, Tu Rol) y las de sliders/listas
+  (Umbrales, Feriados) se quedan como `SettingsCard` siempre-abierta, porque
+  ya muestran su estado actual sin necesitar modo edición.
+- **`ToggleSwitch`** — reemplaza el checkbox nativo de "zona franca" por un
+  interruptor animado real (pill + thumb con `translate-x`), el tipo de
+  control que un checkbox de HTML no transmite por sí solo en un ERP.
+- **Validación de formato de RNC en vivo** — `rncEsValido()` (9 dígitos RNC
+  empresa u 11 cédula persona física), badge verde/ámbar bajo el campo,
+  puramente informativo (nunca bloquea guardar, mismo principio que los
+  umbrales de Reglas de Negocio).
+
+**Bug de compilación encontrado y corregido durante la verificación:** una
+`interface ChecklistItem` declarada dentro del cuerpo de la función del
+componente compilaba limpio con `tsc --noEmit` pero rompía el parser TSX de
+SWC (`next dev`) con "Unexpected token `div`. Expected jsx identifier" justo
+en el `return (` siguiente — un choque conocido entre declaraciones de tipo
+locales y JSX en archivos `.tsx` que tsc no detecta pero SWC sí. Fix: mover
+la interfaz a nivel de módulo, junto a `ParamRow`/`Seccion` (mismo patrón ya
+usado para los demás tipos de este archivo). Lección para el futuro: cuando
+`tsc --noEmit` pasa pero `next dev` muestra una pantalla de carga sin
+avanzar, revisar el log del dev server (no solo tsc) — puede ser un error de
+parseo de SWC invisible para TypeScript.
+
+Verificado en navegador (Playwright, escritorio 1440×900, claro y oscuro):
+el Resumen ahora muestra "25% configuración completa" con anillo real y 3
+pendientes con datos reales (incluyendo "6 empleados sin revisar", que
+coincide exactamente con el contador de `ConfiguracionInicialFlow`); las
+tarjetas de Empresa/Nómina/Reglas cargan colapsadas mostrando el resumen
+correcto; "Editar" expande el formulario, "Cerrar" lo colapsa de nuevo sin
+perder cambios pendientes; el RNC "12345" muestra la advertencia ámbar y
+"101528473" el check verde; el toggle de zona franca cambia de estado y
+dispara la barra de cambios sin guardar. `tsc --noEmit` y `npm run build`
+limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

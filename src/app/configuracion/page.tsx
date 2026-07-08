@@ -4,13 +4,15 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE_AFP, TOPE_COTIZABLE_SFS, TOPE_COTIZABLE_SRL } from '@/lib/dominican-labor'
-import { formatRD, formatDate, cn } from '@/lib/utils'
+import { formatRD, formatDate, formatRelativeTime, cn } from '@/lib/utils'
 import {
   Save, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2, History,
   Wallet, ShieldCheck, SlidersHorizontal, Mail, PartyPopper, Plus, Search, ChevronRight,
   MapPin, Phone, UserCircle2, Landmark, Percent, Coins, LayoutGrid, CalendarDays,
+  Pencil, X, CheckCircle2, CircleAlert, Clock,
 } from 'lucide-react'
 import { useEmpresa } from '@/lib/empresa-context'
+import { useEmpleados } from '@/lib/empleados-context'
 import { useAuth } from '@/lib/auth-context'
 import { useFeriados } from '@/lib/feriados-context'
 import { Toast } from '@/components/ui/Toast'
@@ -242,6 +244,67 @@ function SettingsCard({ icon: Icon, title, description, tone = 'default', childr
   )
 }
 
+// Tarjeta colapsable con resumen de solo lectura + botón "Editar" que expande
+// el formulario in situ — el patrón que usan QuickBooks/SAP en vez de dejar
+// formularios largos siempre abiertos. `isEmpty` fuerza el estado abierto la
+// primera vez (empresa recién creada, nada que resumir todavía).
+function CollapsibleCard({ icon: Icon, title, description, summary, isEmpty, children }: {
+  icon?: LucideIcon; title: string; description?: string; summary: React.ReactNode; isEmpty?: boolean; children: React.ReactNode
+}) {
+  const [open, setOpen] = useState(!!isEmpty)
+  return (
+    <div className="rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          {Icon && (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400">
+              <Icon className="h-4 w-4" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{title}</h3>
+            {description && <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{description}</p>}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen(v => !v)}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-2.5 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#252840] transition-colors"
+        >
+          {open ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+          {open ? 'Cerrar' : 'Editar'}
+        </button>
+      </div>
+      {open ? <div className="mt-5">{children}</div> : <div className="mt-4 pl-11">{summary}</div>}
+    </div>
+  )
+}
+
+function ToggleSwitch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <label className="flex w-fit cursor-pointer items-center gap-3 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3.5 py-2.5">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn('relative h-5 w-9 shrink-0 rounded-full transition-colors', checked ? 'bg-[#1B2980]' : 'bg-zinc-300 dark:bg-zinc-700')}
+      >
+        <span className={cn('absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-[18px]' : 'translate-x-0.5')} />
+      </button>
+      <span className="text-sm text-zinc-700 dark:text-zinc-300">{label}</span>
+    </label>
+  )
+}
+
+// El RNC dominicano de empresa tiene 9 dígitos; una cédula (persona física
+// con negocio de único dueño) tiene 11 — aceptamos ambos formatos. Solo
+// informativo, nunca bloquea el guardado.
+function rncEsValido(rnc: string): boolean {
+  const digitos = rnc.replace(/\D/g, '')
+  return digitos.length === 9 || digitos.length === 11
+}
+
 function FieldInput({ icon: Icon, className, ...props }: { icon?: LucideIcon } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div className="relative">
@@ -283,28 +346,11 @@ function ThresholdSlider({ id, label, value, onChange, hint, min = 1, max = 100 
   )
 }
 
-function ResumenCard({ icon: Icon, titulo, stat, onClick }: { icon: LucideIcon; titulo: string; stat: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="group relative overflow-hidden rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-white dark:bg-[#141722] p-5 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-[#1B2980]/30 dark:hover:border-indigo-500/40 hover:shadow-[0_16px_32px_-16px_rgba(27,41,128,0.22)] dark:hover:shadow-[0_16px_32px_-16px_rgba(0,0,0,0.6)]"
-    >
-      <div className="flex items-center gap-3.5">
-        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] text-white shadow-md shadow-[#1B2980]/25">
-          <Icon className="h-4.5 w-4.5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{titulo}</p>
-          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{stat}</p>
-        </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600 transition-transform group-hover:translate-x-0.5" />
-      </div>
-    </button>
-  )
-}
+interface ChecklistItem { label: string; done: boolean; sublabel: string; onClick: () => void; icon: LucideIcon }
 
 export default function ConfiguracionPage() {
   const { empresa, guardar } = useEmpresa()
+  const { empleadosActivos } = useEmpleados()
   const { user } = useAuth()
   const { getFeriados, agregarFeriado, eliminarFeriado } = useFeriados()
   const [vista, setVista]       = useState<Vista>('resumen')
@@ -399,14 +445,47 @@ export default function ConfiguracionPage() {
 
   const seccionActual = SECCIONES.find(s => s.id === vista)
 
-  // ─── Datos calculados para el Resumen ─────────────────────────────────────
+  // ─── Panel de Resumen — completitud real + pendientes accionables ─────────
+  // Nada de esto repite la barra lateral (que solo describe QUÉ hay en cada
+  // sección) — aquí se calcula el ESTADO real de los datos de la empresa.
   const camposEmpresa = [empresa.nombre, empresa.rnc, empresa.ciudad, empresa.direccion, empresa.telefono, empresa.email, empresa.representanteLegal]
   const camposCompletos = camposEmpresa.filter(Boolean).length
-  const statEmpresa = `${camposCompletos}/${camposEmpresa.length} campos completos`
-  const statNomina = `${(empresa.modalidadNomina ?? 'mensual') === 'mensual' ? 'Mensual' : 'Quincenal'} · ${empresa.tasaCambioUSD ? 'RD$/USD' : 'Solo RD$'} · ${feriados.length} feriado${feriados.length === 1 ? '' : 's'}`
-  const statReglas = `Endeudamiento ${empresa.umbralEndeudamientoPct ?? UMBRAL_ENDEUDAMIENTO_DEFAULT}% · Variación ${empresa.umbralVariacionBrutoPct ?? UMBRAL_VARIACION_BRUTO_DEFAULT}%`
-  const statDatos = 'Saldos iniciales y datos de demostración'
-  const statLegal = 'TSS, ISR y salarios mínimos vigentes 2026'
+  const empleadosConSaldoPendiente = empleadosActivos.filter(e => e.saldosInicialesRevisado !== true).length
+
+  const checklist: ChecklistItem[] = [
+    {
+      label: 'Completa el perfil de tu empresa',
+      sublabel: `${camposCompletos}/${camposEmpresa.length} campos completos`,
+      done: camposCompletos === camposEmpresa.length,
+      onClick: () => irA('empresa'),
+      icon: Building2,
+    },
+    {
+      label: 'Sube el logo de tu empresa',
+      sublabel: 'Aparece en PDFs y comprobantes de pago',
+      done: !!empresa.logo,
+      onClick: () => irA('empresa'),
+      icon: ImagePlus,
+    },
+    {
+      label: `Registra los feriados nacionales de ${anioActual}`,
+      sublabel: 'Alimenta el aviso de H.E. 100% en Procesar Nómina',
+      done: feriados.length > 0,
+      onClick: () => irA('nomina'),
+      icon: PartyPopper,
+    },
+    {
+      label: 'Revisa los saldos iniciales de tus empleados',
+      sublabel: empleadosConSaldoPendiente > 0
+        ? `${empleadosConSaldoPendiente} empleado${empleadosConSaldoPendiente === 1 ? '' : 's'} sin revisar`
+        : 'Todos los empleados están al día',
+      done: empleadosConSaldoPendiente === 0,
+      onClick: () => irA('datos'),
+      icon: History,
+    },
+  ]
+  const pendientes = checklist.filter(c => !c.done)
+  const completitudPct = Math.round((checklist.filter(c => c.done).length / checklist.length) * 100)
 
   return (
     <div className="flex flex-col overflow-hidden h-full">
@@ -509,8 +588,9 @@ export default function ConfiguracionPage() {
               {/* ── Resumen ─────────────────────────────────────────────────── */}
               {vista === 'resumen' && (
                 <div className="animate-content-in" key="resumen">
-                  <div className="mb-6 overflow-hidden rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-gradient-to-br from-white to-[#f7f8fd] dark:from-[#141722] dark:to-[#161a2c] p-6">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
+                  {/* Perfil + anillo de completitud */}
+                  <div className="mb-5 overflow-hidden rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-gradient-to-br from-white to-[#f7f8fd] dark:from-[#141722] dark:to-[#161a2c] p-6">
+                    <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
                       <div className="flex items-center gap-4">
                         <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e]">
                           {empresa.logo ? (
@@ -519,7 +599,7 @@ export default function ConfiguracionPage() {
                             <Building2 className="h-7 w-7 text-zinc-300 dark:text-zinc-600" />
                           )}
                         </div>
-                        <div className="min-w-0 flex-1 sm:hidden">
+                        <div className="min-w-0 sm:hidden">
                           <p className="truncate text-lg font-bold text-zinc-900 dark:text-zinc-100">{empresa.nombre || 'Tu empresa'}</p>
                           <p className="text-xs text-zinc-500 dark:text-zinc-400">
                             {empresa.rnc || 'RNC sin registrar'} · {empresa.ciudad || 'Ciudad sin registrar'}
@@ -531,22 +611,72 @@ export default function ConfiguracionPage() {
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
                           {empresa.rnc || 'RNC sin registrar'} · {empresa.ciudad || 'Ciudad sin registrar'}
                         </p>
+                        <p className="mt-1 flex items-center gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                          <Clock className="h-3 w-3" />
+                          {empresa.actualizadoEn ? `Actualizado ${formatRelativeTime(empresa.actualizadoEn)}` : 'Aún sin guardar cambios'}
+                        </p>
                       </div>
-                      <button
-                        onClick={() => irA('empresa')}
-                        className="shrink-0 self-start rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3.5 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#252840] transition-colors sm:self-auto"
-                      >
-                        Editar perfil
-                      </button>
+
+                      {/* Anillo de completitud — conic-gradient, sin librería de charts */}
+                      <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1">
+                        <div className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-zinc-200 dark:bg-[#252840]">
+                          <div
+                            className="absolute inset-0 rounded-full"
+                            style={{ background: `conic-gradient(#1B2980 ${completitudPct * 3.6}deg, transparent 0deg)` }}
+                          />
+                          <div className="relative flex h-[52px] w-[52px] items-center justify-center rounded-full bg-white dark:bg-[#141722]">
+                            <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{completitudPct}%</span>
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 sm:text-right">configuración<br className="hidden sm:block" /> completa</span>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2 sm:hidden">
+                      <Clock className="h-3 w-3 shrink-0 text-zinc-400 dark:text-zinc-500" />
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                        {empresa.actualizadoEn ? `Actualizado ${formatRelativeTime(empresa.actualizadoEn)}` : 'Aún sin guardar cambios'}
+                      </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <ResumenCard icon={Building2} titulo="Empresa" stat={statEmpresa} onClick={() => irA('empresa')} />
-                    <ResumenCard icon={Wallet} titulo="Nómina" stat={statNomina} onClick={() => irA('nomina')} />
-                    <ResumenCard icon={SlidersHorizontal} titulo="Reglas de Negocio" stat={statReglas} onClick={() => irA('reglas')} />
-                    <ResumenCard icon={History} titulo="Datos y Migración" stat={statDatos} onClick={() => irA('datos')} />
-                    <ResumenCard icon={ShieldCheck} titulo="Cumplimiento Legal" stat={statLegal} onClick={() => irA('legal')} />
+                  {/* Pendientes accionables — el contenido real del Resumen, no una copia del rail */}
+                  <div className="rounded-2xl border border-zinc-200/70 dark:border-[#252840] bg-white dark:bg-[#141722] p-6">
+                    <div className="mb-4 flex items-center gap-2">
+                      {pendientes.length === 0 ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      ) : (
+                        <CircleAlert className="h-4 w-4 text-amber-500" />
+                      )}
+                      <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        {pendientes.length === 0 ? 'Todo en orden' : `${pendientes.length} pendiente${pendientes.length === 1 ? '' : 's'} por revisar`}
+                      </h3>
+                    </div>
+
+                    {pendientes.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/50 dark:bg-emerald-950/20 px-4 py-6 text-center text-sm text-emerald-700 dark:text-emerald-300">
+                        Tu configuración está al día — no hay ningún pendiente activo.
+                      </p>
+                    ) : (
+                      <ul className="divide-y divide-zinc-100 dark:divide-[#1d2035] overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                        {pendientes.map(item => (
+                          <li key={item.label}>
+                            <button
+                              onClick={item.onClick}
+                              className="flex w-full items-center gap-3 bg-white dark:bg-[#141722] px-4 py-3 text-left hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                            >
+                              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">
+                                <item.icon className="h-4 w-4" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">{item.label}</span>
+                                <span className="block truncate text-xs text-zinc-400 dark:text-zinc-500">{item.sublabel}</span>
+                              </span>
+                              <ChevronRight className="h-4 w-4 shrink-0 text-zinc-300 dark:text-zinc-600" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               )}
@@ -566,7 +696,27 @@ export default function ConfiguracionPage() {
                     {/* ── Empresa ─────────────────────────────────────────────── */}
                     {vista === 'empresa' && (
                       <>
-                        <SettingsCard icon={Building2} title="Identidad" description="Nombre legal, RNC y logo de tu empresa.">
+                        <CollapsibleCard
+                          icon={Building2}
+                          title="Identidad"
+                          description="Nombre legal, RNC y logo de tu empresa."
+                          isEmpty={!form.nombre && !form.rnc}
+                          summary={
+                            <div className="flex items-center gap-3">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e]">
+                                {form.logo ? (
+                                  <img src={form.logo} alt="Logo" className="h-full w-full object-contain p-1" />
+                                ) : (
+                                  <Building2 className="h-4 w-4 text-zinc-300 dark:text-zinc-600" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-200">{form.nombre || 'Sin nombre registrado'}</p>
+                                <p className="text-xs text-zinc-400 dark:text-zinc-500">{form.rnc || 'RNC sin registrar'}</p>
+                              </div>
+                            </div>
+                          }
+                        >
                           <div className="space-y-4">
                             <div>
                               <label className={LABEL_CLASS}>Logo de la empresa</label>
@@ -644,11 +794,30 @@ export default function ConfiguracionPage() {
                                 placeholder="Ej. 101-12345-6"
                                 className={INPUT_CLASS}
                               />
+                              {form.rnc && (
+                                <p className={cn(
+                                  'mt-1.5 flex items-center gap-1.5 text-[11px]',
+                                  rncEsValido(form.rnc) ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400',
+                                )}>
+                                  {rncEsValido(form.rnc) ? <CheckCircle2 className="h-3 w-3" /> : <CircleAlert className="h-3 w-3" />}
+                                  {rncEsValido(form.rnc) ? 'Formato válido (9 u 11 dígitos)' : 'Verifica el formato — debe tener 9 dígitos (RNC) u 11 (cédula)'}
+                                </p>
+                              )}
                             </div>
                           </div>
-                        </SettingsCard>
+                        </CollapsibleCard>
 
-                        <SettingsCard icon={MapPin} title="Ubicación y Contacto" description="Cómo te encuentran y cómo te contactan.">
+                        <CollapsibleCard
+                          icon={MapPin}
+                          title="Ubicación y Contacto"
+                          description="Cómo te encuentran y cómo te contactan."
+                          isEmpty={!form.ciudad && !form.telefono && !form.email}
+                          summary={
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                              {[form.ciudad, form.telefono, form.email, form.representanteLegal].filter(Boolean).join(' · ') || 'Sin datos de contacto registrados'}
+                            </p>
+                          }
+                        >
                           <div className="space-y-4">
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                               <div>
@@ -675,7 +844,7 @@ export default function ConfiguracionPage() {
                               </div>
                             </div>
                           </div>
-                        </SettingsCard>
+                        </CollapsibleCard>
 
                         <SettingsCard icon={ShieldCheck} title="Clasificación para Nómina" description="Determina el salario mínimo aplicable y la categoría SRL por defecto.">
                           <div className="space-y-5">
@@ -707,15 +876,11 @@ export default function ConfiguracionPage() {
                               </p>
                             </div>
 
-                            <label className="flex w-fit cursor-pointer items-center gap-2.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3.5 py-2.5">
-                              <input
-                                type="checkbox"
-                                checked={form.zonaFranca ?? false}
-                                onChange={e => setForm(prev => ({ ...prev, zonaFranca: e.target.checked }))}
-                                className="h-4 w-4 rounded accent-[#1B2980]"
-                              />
-                              <span className="text-sm text-zinc-700 dark:text-zinc-300">Opera bajo régimen de zona franca</span>
-                            </label>
+                            <ToggleSwitch
+                              checked={form.zonaFranca ?? false}
+                              onChange={v => setForm(prev => ({ ...prev, zonaFranca: v }))}
+                              label="Opera bajo régimen de zona franca"
+                            />
 
                             <div>
                               <label className={LABEL_CLASS}>Sector principal de operación</label>
@@ -771,7 +936,17 @@ export default function ConfiguracionPage() {
                     {/* ── Nómina ──────────────────────────────────────────────── */}
                     {vista === 'nomina' && (
                       <>
-                        <SettingsCard icon={Wallet} title="Modalidad y Moneda" description="Cómo se procesa y se presenta tu nómina.">
+                        <CollapsibleCard
+                          icon={Wallet}
+                          title="Modalidad y Moneda"
+                          description="Cómo se procesa y se presenta tu nómina."
+                          summary={
+                            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                              {(form.modalidadNomina ?? 'mensual') === 'mensual' ? 'Mensual' : 'Quincenal'}
+                              {form.tasaCambioUSD ? ` · RD$${form.tasaCambioUSD} por USD` : ' · Sin tasa USD configurada'}
+                            </p>
+                          }
+                        >
                           <div className="space-y-5">
                             <div>
                               <label className={LABEL_CLASS}>Modalidad de pago de nómina</label>
@@ -818,7 +993,7 @@ export default function ConfiguracionPage() {
                               </p>
                             </div>
                           </div>
-                        </SettingsCard>
+                        </CollapsibleCard>
 
                         <SettingsCard icon={PartyPopper} title={`Feriados Nacionales — ${anioActual}`} description="Alimenta el aviso de clasificación H.E. 100% en Procesar Nómina.">
                           <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
@@ -913,7 +1088,16 @@ export default function ConfiguracionPage() {
                           </div>
                         </SettingsCard>
 
-                        <SettingsCard icon={Mail} title="Plantilla de Correo — Comprobantes de Pago" description="El mensaje que se pre-llena al enviar comprobantes desde Procesar Nómina.">
+                        <CollapsibleCard
+                          icon={Mail}
+                          title="Plantilla de Correo — Comprobantes de Pago"
+                          description="El mensaje que se pre-llena al enviar comprobantes desde Procesar Nómina."
+                          summary={
+                            <p className="truncate text-sm italic text-zinc-600 dark:text-zinc-400">
+                              “{form.plantillaComprobanteAsunto ?? plantillaComprobanteDefault().asunto}”
+                            </p>
+                          }
+                        >
                           <div className="space-y-3">
                             <div>
                               <label htmlFor="plantillaComprobanteAsunto" className={LABEL_CLASS}>Asunto</label>
@@ -940,7 +1124,7 @@ export default function ConfiguracionPage() {
                               {PLACEHOLDERS_COMPROBANTE.map(p => p.token).join(', ')}
                             </p>
                           </div>
-                        </SettingsCard>
+                        </CollapsibleCard>
                       </>
                     )}
 

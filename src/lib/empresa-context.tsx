@@ -40,8 +40,9 @@ export function EmpresaProvider({ children }: { children: ReactNode }) {
   }, [key, ready])
 
   function guardar(data: Empresa) {
-    setEmpresa(data)
-    try { localStorage.setItem(key, JSON.stringify(data)) } catch { /* ignore */ }
+    const conTimestamp = { ...data, actualizadoEn: new Date().toISOString() }
+    setEmpresa(conTimestamp)
+    try { localStorage.setItem(key, JSON.stringify(conTimestamp)) } catch { /* ignore */ }
   }
 
   return <Ctx.Provider value={{ empresa, cargado, guardar }}>{children}</Ctx.Provider>
