@@ -1498,6 +1498,7 @@ nuevo. Cero errores de consola. `tsc --noEmit` y `npm run build` limpios
 
 | Hash | Descripción |
 |---|---|
+| `4f9a905` | fix: multiempresa con cuentas reales de Firebase, no perfiles compartidos |
 | `503b167` | feat: multiempresa — una cuenta puede tener varias empresas |
 | `458a71c` | polish: Resumen deja de repetir el rail, agrega patrones estilo QuickBooks/SAP |
 | `3d85c59` | redesign: recrear Configuración como rail persistente + panel continuo |
