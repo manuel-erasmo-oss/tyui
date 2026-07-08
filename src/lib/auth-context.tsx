@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithRedirect,
+  signInWithPopup,
   getRedirectResult,
   signOut,
   sendPasswordResetEmail,
@@ -72,6 +73,7 @@ interface AuthCtx {
   cambiarCuenta:          (appName: string) => void
   agregarCuentaLogin:     (email: string, password: string) => Promise<void>
   agregarCuentaRegistro:  (email: string, password: string, nombre: string) => Promise<void>
+  agregarCuentaGoogle:    () => Promise<void>
   quitarCuenta:           (appName: string) => Promise<void>
 }
 
@@ -90,6 +92,7 @@ const Ctx = createContext<AuthCtx>({
   cambiarCuenta:          () => {},
   agregarCuentaLogin:     async () => {},
   agregarCuentaRegistro:  async () => {},
+  agregarCuentaGoogle:    async () => {},
   quitarCuenta:           async () => {},
 })
 
@@ -216,6 +219,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     upsertCuenta(appName, cred.user)
   }
 
+  // Popup en vez de redirect (a diferencia de signInGoogle, usado por
+  // /login) — un redirect completo abandonaría el dashboard actual, que es
+  // justo lo que NO queremos al agregar una segunda empresa desde dentro de
+  // la app. El popup es autocontenido y funciona igual de bien con una
+  // instancia de Firebase App con nombre propio.
+  async function agregarCuentaGoogle() {
+    asegurarCuentaActualRegistrada()
+    const appName = genAppName()
+    const cred = await signInWithPopup(getFirebaseAuthNamed(appName), googleProvider)
+    upsertCuenta(appName, cred.user)
+  }
+
   async function quitarCuenta(appName: string) {
     await signOut(getFirebaseAuthNamed(appName))
     setRegistro(prev => {
@@ -231,7 +246,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cuentasVinculadas: registro.cuentas,
       cuentaActivaAppName: activaAppName,
       signIn, signUp, signInGoogle, logout, resetPassword, sendVerification, refreshUser,
-      cambiarCuenta, agregarCuentaLogin, agregarCuentaRegistro, quitarCuenta,
+      cambiarCuenta, agregarCuentaLogin, agregarCuentaRegistro, agregarCuentaGoogle, quitarCuenta,
     }}>
       {children}
     </Ctx.Provider>

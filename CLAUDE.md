@@ -1454,14 +1454,49 @@ eliminaron `empresas-context.tsx`/`empresa-scoped-key.ts`/`empresa-scoped-bases.
   anterior) — mismo lugar/tratamiento visual bajo el logo. Lista las
   cuentas vinculadas (con nombre de empresa resuelto best-effort leyendo
   `cielo-empresa::{uid}` directo de localStorage — sin necesidad de
-  "cambiar" de verdad solo para mostrar el nombre en la lista), botón
-  "Agregar empresa" → elegir "Iniciar sesión" o "Crear cuenta nueva" →
-  formulario compacto embebido (mismos campos/validaciones que
-  `/login`/`/registro`, sin navegar a otra página) → al completar, la nueva
-  cuenta queda vinculada y activa. "Quitar" una cuenta del dispositivo ya
-  NO requiere confirmación destructiva (a diferencia del intento anterior)
-  porque no borra ningún dato — el dato sigue seguro en la cuenta real de
-  Firebase, solo se cierra sesión localmente y se quita de la lista rápida.
+  "cambiar" de verdad solo para mostrar el nombre en la lista) y un botón
+  "Agregar empresa" que abre `AgregarCuentaModal` (ver abajo). "Quitar" una
+  cuenta del dispositivo ya NO requiere confirmación destructiva (a
+  diferencia del intento anterior) porque no borra ningún dato — el dato
+  sigue seguro en la cuenta real de Firebase, solo se cierra sesión
+  localmente y se quita de la lista rápida.
+
+**Corrección — "Agregar empresa" a pantalla completa, no un formulario
+compacto en el dropdown:** la primera versión de "Agregar empresa" abría un
+mini-formulario de login/registro embebido dentro del propio menú
+desplegable del sidebar. El usuario lo rechazó explícitamente ("no estamos
+haciendo una baratija es algo premium") — el resto de la app (`/login`,
+`/registro`, `OnboardingWizard`) usa transiciones a pantalla completa, y
+este flujo, siendo la puerta de entrada a una segunda empresa/cliente
+completa, merecía el mismo tratamiento.
+- **`src/components/auth/AgregarCuentaModal.tsx`** (nuevo) — overlay
+  `fixed inset-0` a pantalla completa (`animate-backdrop-in`) que replica
+  exactamente el layout de dos paneles de `/login`/`/registro`: panel de
+  marca navy con círculos decorativos + 4 bullets ("Cada empresa con su
+  propio correo y datos", "Aislamiento completo entre empresas", "Cambia
+  entre empresas vinculadas en segundos", "Ideal para contadores con varios
+  clientes") a la izquierda, formulario a la derecha con botón de cierre (X).
+  Tres pasos internos (`'elegir' | 'login' | 'registro'`): tarjetas grandes
+  "Ya tengo una cuenta" / "Es una empresa nueva" → formulario de login o de
+  registro completo (con `PasswordStrength`, confirmación de contraseña,
+  estado de éxito con auto-cierre). Reemplaza el formulario compacto que
+  vivía inline en `CuentaSwitcher`.
+- **`src/lib/auth-context.tsx`** — nueva acción `agregarCuentaGoogle()`
+  (`signInWithPopup` sobre una instancia de Firebase App nueva, mismo
+  patrón que `agregarCuentaLogin`/`agregarCuentaRegistro`) para que el botón
+  "Continuar con Google" del modal también pueda vincular una segunda
+  cuenta, no solo correo/contraseña.
+- **`src/components/auth/GoogleIcon.tsx`** (nuevo) — ícono "G" de Google
+  extraído como componente compartido (antes duplicado inline en `/login`
+  y `/registro`), usado también por el nuevo modal.
+
+Verificado en navegador con cuentas reales de Firebase: desde el switcher,
+"Agregar empresa" abre el modal de pantalla completa con el panel de marca;
+"Es una empresa nueva" → formulario de registro completo → cuenta real
+creada → estado de éxito → auto-cierre hacia el `OnboardingWizard` de la
+cuenta nueva, cero errores de consola. Paso "login" y modo oscuro
+verificados visualmente por separado (mismo panel de marca, campos legibles
+en fondo oscuro). `tsc --noEmit` y `npm run build` limpios.
 
 **Lección de infraestructura de esta sesión — proxy de red para pruebas
 con servicios reales:** verificar este cambio requirió que el navegador de
