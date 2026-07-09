@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { HelpCircle, Menu, LogOut, Settings, User } from 'lucide-react'
+import { HelpCircle, Menu, LogOut, Settings, Search } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
 import { useAuth } from '@/lib/auth-context'
+import { useCommandPalette } from '@/lib/command-palette-context'
 
 interface HeaderProps {
   title: string
@@ -84,6 +85,22 @@ function UserMenu() {
   )
 }
 
+function BuscarTrigger() {
+  const { open } = useCommandPalette()
+  return (
+    <button
+      onClick={open}
+      className="hidden md:flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-2.5 py-1.5 text-xs text-zinc-400 dark:text-zinc-500 hover:border-zinc-300 dark:hover:border-[#33395a] hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+    >
+      <Search className="h-3.5 w-3.5" />
+      <span className="w-24 text-left">Buscar…</span>
+      <kbd className="rounded border border-zinc-200 dark:border-[#33395a] bg-white dark:bg-[#141722] px-1.5 py-0.5 text-[10px] font-semibold">
+        ⌘K
+      </kbd>
+    </button>
+  )
+}
+
 export function Header({ title, subtitle, actions }: HeaderProps) {
   return (
     <header className="flex h-14 shrink-0 items-center border-b border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-4">
@@ -102,7 +119,8 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
       </div>
 
       {/* Right */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2">
+        <BuscarTrigger />
         <Link
           href="/configuracion"
           className="hidden sm:flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"

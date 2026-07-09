@@ -1575,6 +1575,56 @@ reales sin copyright si se usaban.
   de alcance de este pedido) — queda como posible extensión futura para
   unificar el lenguaje visual en las 3 superficies de auth.
 
+## Paletazo de comandos (Cmd+K) + skeletons con forma en el Dashboard
+
+Segunda ronda de pulido visual (post-login), tras pregunta directa del
+usuario sobre cuánto margen quedaba para seguir mejorando visualmente —
+se auditó el resto de la app (agente de solo lectura) y se identificaron,
+con evidencia concreta, cinco brechas frente al nuevo estándar del login:
+loading states solo con spinner (cero skeletons en toda la app), estados
+vacíos genéricos, sin paletazo de comandos, PDF de comprobante plano, y
+micro-interacciones mínimas fuera de auth. Se priorizaron las dos de
+mayor impacto por esfuerzo: Cmd+K y skeletons con forma real.
+
+- **`src/lib/nav-items.ts`** (nuevo) — lista canónica `NAV_ITEMS` +
+  `CONFIGURACION_ITEM` (href/icon/label/keywords), única fuente de verdad
+  para la navegación. `Sidebar.tsx` se refactorizó para importarla en vez
+  de declarar su propio array local (cero cambio visual/funcional en el
+  sidebar, solo elimina duplicación).
+- **`src/components/command-palette/CommandPalette.tsx`** + **`src/lib/command-palette-context.tsx`**
+  (nuevos) — paletazo estilo Linear/Raycast: overlay centrado arriba
+  (`pt-[12vh]`) con backdrop blur, campo de búsqueda con normalización de
+  acentos (`normalize('NFD')`), navegación con flechas/Enter/Escape,
+  agrupado en dos secciones — **Navegación** (los mismos `NAV_ITEMS`) y
+  **Acciones** (cambiar tema claro/oscuro vía `useTheme`, cerrar sesión
+  vía `useAuth`). `CommandPaletteProvider` registra el atajo global
+  `Cmd+K`/`Ctrl+K` (ambos, sin detectar plataforma) y monta el modal una
+  sola vez; se envolvió en ambas ramas de `RouteGuard.tsx` (con y sin
+  Firebase habilitado) alrededor de `Sidebar`/`BottomNav`/`children`, así
+  que solo está disponible para páginas ya autenticadas, nunca en
+  `/login`/`/registro`. Botón visible "Buscar… ⌘K" agregado a `Header.tsx`
+  (aparece en todas las páginas, ese componente ya es compartido).
+- **`src/components/charts/ChartSkeleton.tsx`** (nuevo) — placeholders con
+  la FORMA real de cada tipo de gráfico (barras de alturas variables,
+  anillo SVG para el donut, curva SVG para la línea de tendencia) en vez
+  del rectángulo gris plano (`animate-pulse rounded bg-zinc-50`) que
+  compartían las 3 gráficas del Dashboard. Reemplazado en los 3 lugares
+  donde vivía ese placeholder: el `loading` de cada `dynamic()` en
+  `src/app/page.tsx` Y el fallback interno `if (!mounted)` de
+  `PayrollBarChart`/`CostDonutChart`/`TrendLineChart` (evita el flash de
+  hidratación de Recharts). Nota de alcance: esta app no tiene backend
+  (`output: 'export'`, todo el estado sale de localStorage de forma
+  síncrona) — el único "loading" real es la carga del chunk JS
+  code-splitteado, así que el efecto es sutil/transitorio a propósito, no
+  se justificaba construir un sistema de skeletons más grande sin latencia
+  real que ocultar.
+- Verificado en navegador con cuenta real: Cmd+K abre y cierra con teclado
+  y con el botón del header, filtra en vivo ("presta" → solo "Préstamos"),
+  Enter navega y cierra el modal, la acción "Cambiar a modo oscuro" alterna
+  el tema real de la app al ejecutarse desde la paleta, y todo se ve
+  correcto en dark mode (blur, colores, texto). `tsc --noEmit` y
+  `npm run build` limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

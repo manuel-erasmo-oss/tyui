@@ -5,6 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { useIsDark } from '@/lib/theme'
+import { ChartSkeleton } from './ChartSkeleton'
 
 interface Props {
   data: { mes: string; nomina: number; tss: number }[]
@@ -17,7 +18,7 @@ export function PayrollBarChart({ data }: Props) {
   const isDark = useIsDark()
   useEffect(() => setMounted(true), [])
 
-  if (!mounted) return <div className="h-[120px] animate-pulse rounded bg-zinc-50 dark:bg-[#1a1d2e]" />
+  if (!mounted) return <ChartSkeleton variant="bars" height={120} />
 
   const gridColor   = isDark ? '#252840' : '#f4f4f5'
   const tickColor   = isDark ? '#515868' : '#a1a1aa'

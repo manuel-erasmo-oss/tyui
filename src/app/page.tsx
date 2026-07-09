@@ -10,18 +10,19 @@ import { fullName, formatRD } from '@/lib/utils'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { AgendaNomina } from '@/components/dashboard/AgendaNomina'
+import { ChartSkeleton } from '@/components/charts/ChartSkeleton'
 
 const PayrollBarChart = dynamic(
   () => import('@/components/charts/PayrollBarChart').then(m => m.PayrollBarChart),
-  { ssr: false, loading: () => <div className="h-[120px] animate-pulse rounded bg-zinc-50 dark:bg-[#1a1d2e]" /> }
+  { ssr: false, loading: () => <ChartSkeleton variant="bars" height={120} /> }
 )
 const CostDonutChart = dynamic(
   () => import('@/components/charts/CostDonutChart').then(m => m.CostDonutChart),
-  { ssr: false, loading: () => <div className="h-[110px] animate-pulse rounded bg-zinc-50 dark:bg-[#1a1d2e]" /> }
+  { ssr: false, loading: () => <ChartSkeleton variant="donut" height={110} /> }
 )
 const TrendLineChart = dynamic(
   () => import('@/components/charts/TrendLineChart').then(m => m.TrendLineChart),
-  { ssr: false, loading: () => <div className="h-[120px] animate-pulse rounded bg-zinc-50 dark:bg-[#1a1d2e]" /> }
+  { ssr: false, loading: () => <ChartSkeleton variant="line" height={120} /> }
 )
 
 const hoy = new Date()

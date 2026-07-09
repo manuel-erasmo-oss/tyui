@@ -4,23 +4,9 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
-  LayoutDashboard,
-  UserMinus,
-  TrendingUp,
-  Users,
-  Calculator,
-  Gift,
-  CalendarDays,
-  FileBarChart2,
-  Settings,
   ChevronLeft,
   ChevronRight,
   ChevronsUpDown,
-  HandCoins,
-  Percent,
-  FileClock,
-  BarChart2,
-  Landmark,
   LogOut,
   Check,
   Plus,
@@ -29,22 +15,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useAuth, type CuentaVinculada } from '@/lib/auth-context'
 import { AgregarCuentaModal } from '@/components/auth/AgregarCuentaModal'
-
-const NAV_ITEMS = [
-  { href: '/',                icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/empleados',       icon: Users,           label: 'Empleados' },
-  { href: '/nomina',          icon: Calculator,      label: 'Procesar Nómina' },
-  { href: '/regalia-pascual', icon: Gift,            label: 'Regalía Pascual' },
-  { href: '/vacaciones',      icon: CalendarDays,    label: 'Vacaciones' },
-  { href: '/prestamos',       icon: HandCoins,       label: 'Préstamos' },
-  { href: '/licencias',       icon: FileClock,       label: 'Licencias' },
-  { href: '/bonificacion',    icon: Percent,         label: 'Bonificación Utilidades' },
-  { href: '/retribuciones-complementarias', icon: Landmark, label: 'Retribuciones Complementarias' },
-  { href: '/liquidacion',     icon: UserMinus,       label: 'Liquidación' },
-  { href: '/aumentos',        icon: TrendingUp,      label: 'Aumentos Salariales' },
-  { href: '/bandas-salariales', icon: BarChart2,     label: 'Bandas Salariales' },
-  { href: '/reportes',        icon: FileBarChart2,   label: 'Reportería' },
-]
+import { NAV_ITEMS, CONFIGURACION_ITEM } from '@/lib/nav-items'
 
 // Lee el nombre de empresa guardado para OTRA cuenta vinculada, directo de
 // localStorage — sin pasar por React ni "cambiar" de cuenta de verdad, solo
@@ -319,20 +290,20 @@ export function Sidebar() {
       {/* ── Footer ───────────────────────────────────────────────── */}
       <div className="border-t border-zinc-200 dark:border-[#252840] py-1">
         <Link
-          href="/configuracion"
-          title={c ? 'Configuración' : undefined}
+          href={CONFIGURACION_ITEM.href}
+          title={c ? CONFIGURACION_ITEM.label : undefined}
           className={cn(
             'flex items-center py-2.5 text-sm transition-colors border-l-[3px]',
             c ? 'justify-center px-0' : 'gap-3 px-4',
-            isActive('/configuracion')
+            isActive(CONFIGURACION_ITEM.href)
               ? 'bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400 font-semibold border-[#1B2980] dark:border-indigo-500'
               : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:text-zinc-900 dark:hover:text-zinc-100 border-transparent',
           )}
         >
-          <Settings
+          <CONFIGURACION_ITEM.icon
             className={cn(
               'h-4 w-4 shrink-0',
-              isActive('/configuracion')
+              isActive(CONFIGURACION_ITEM.href)
                 ? 'text-[#1B2980] dark:text-indigo-400'
                 : 'text-zinc-400 dark:text-zinc-600',
             )}

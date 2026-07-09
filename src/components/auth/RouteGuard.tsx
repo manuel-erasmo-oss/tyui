@@ -11,6 +11,7 @@ import { BottomNav } from '@/components/layout/BottomNav'
 import { OnboardingWizard } from '@/components/onboarding/OnboardingWizard'
 import { PromptConfiguracionInicial } from '@/components/onboarding/PromptConfiguracionInicial'
 import { EmailVerificationGate } from '@/components/auth/EmailVerificationGate'
+import { CommandPaletteProvider } from '@/lib/command-palette-context'
 
 const PUBLIC_PATHS = ['/login', '/registro']
 
@@ -75,11 +76,11 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
     if (needsOnboarding) return <OnboardingWizard />
     if (needsConfiguracionInicial) return <PromptConfiguracionInicial />
     return (
-      <>
+      <CommandPaletteProvider>
         <Sidebar />
         <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
         <BottomNav />
-      </>
+      </CommandPaletteProvider>
     )
   }
 
@@ -105,10 +106,10 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
 
   // Protected pages — fully set up, show app chrome
   return (
-    <>
+    <CommandPaletteProvider>
       <Sidebar />
       <main className="flex flex-1 flex-col overflow-hidden pb-16 md:pb-0">{children}</main>
       <BottomNav />
-    </>
+    </CommandPaletteProvider>
   )
 }

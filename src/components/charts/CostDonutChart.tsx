@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { useIsDark } from '@/lib/theme'
+import { ChartSkeleton } from './ChartSkeleton'
 
 interface Slice { name: string; value: number; color: string }
 interface Props { data: Slice[] }
@@ -14,7 +15,7 @@ export function CostDonutChart({ data }: Props) {
   const isDark = useIsDark()
   useEffect(() => setMounted(true), [])
 
-  if (!mounted) return <div className="h-[120px] animate-pulse rounded bg-zinc-50 dark:bg-[#1a1d2e]" />
+  if (!mounted) return <ChartSkeleton variant="donut" height={120} />
 
   const tooltipStyle = {
     fontSize: 11,
