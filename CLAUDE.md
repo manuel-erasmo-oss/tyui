@@ -1525,6 +1525,56 @@ dos uids de Firebase distintos) en ~1 segundo, sin pedir contraseña de
 nuevo. Cero errores de consola. `tsc --noEmit` y `npm run build` limpios
 (19 rutas).
 
+## Rediseño premium de Login y Registro
+
+Pedido explícito del usuario: "la mejor pantalla de login y sign in que
+visualmente hayas visto para un ERP" — moderna, premium, y con imágenes
+reales sin copyright si se usaban.
+
+- **Fotografía real** — fachada de vidrio de un edificio de oficinas al
+  atardecer, descargada de Unsplash (`unsplash.com/photos/em1BsVhLIGQ` no
+  usado por 404; imagen final: `photo-1745015446589-7ee6f702d8c1`, Unsplash
+  License — libre de uso comercial, sin atribución requerida) y optimizada
+  con Pillow a 1400px de ancho / ~550KB (`public/images/auth/glass-facade.jpg`).
+  Se descartaron candidatos con logos de bancos reales visibles (Union
+  Bank) o ubicación no verificable (no se afirma que sea Santo Domingo,
+  para no inventar un dato). El sitio de Unsplash bloquea scraping directo
+  (Anubis) pero el endpoint `unsplash.com/photos/<id>/download` sí
+  redirige (302) a la URL real de `images.unsplash.com` sin bloqueo —
+  patrón reutilizable para descargar fotos reales curadas por búsqueda en
+  este entorno.
+- **`src/components/auth/AuthBrandPanel.tsx`** (nuevo, compartido entre
+  `/login` y `/registro`) — la fotografía con animación Ken Burns lenta
+  (`animate-ken-burns`, 26s), velo de gradiente navy para legibilidad,
+  grano SVG sutil (`mix-blend-overlay`), y dos tarjetas flotantes de
+  vidrio (`animate-float-slow`/`animate-float-slower`) que muestran el
+  producto real en vez de cifras de clientes inventadas (la app está
+  pre-lanzamiento, sin usuarios reales que reportar): un mini-comprobante
+  "Nómina de julio — RD$284,750.00 — 24 empleados" y un badge "TSS, ISR y
+  Ley 16-92 al día".
+- **Panel derecho** — tarjeta blanca/oscura elevada (`shadow-xl`, borde
+  sutil) con entrada animada (`animate-auth-card-in`, nuevo keyframe en
+  `globals.css` — renombrado desde un `content-in` que hubiera chocado con
+  el ya existente de Configuración), fondo con gradiente radial muy sutil
+  en vez de plano. Campos con ícono líder (`Mail`/`Lock`/`User` de
+  lucide-react) y botón primario con gradiente de marca
+  (`from-[#1B2980] to-[#2f3fa8]`) + elevación al hover, mismo lenguaje
+  visual que `AgregarCuentaModal`.
+- Ambas páginas reutilizan `firebaseAuthMsg` y `GoogleIcon` ya compartidos
+  (eliminando la última duplicación de esas funciones que quedaba en
+  `/login` y `/registro`).
+- **Video de transición** — el usuario preguntó si convenía usar video
+  corto. Se optó por NO usarlo: en un sitio estático sin backend
+  (`output: 'export'`, GitHub Pages) un video añade peso y riesgo de
+  licencia sin aportar más que la animación CSS (Ken Burns + tarjetas
+  flotantes), que ya logra la sensación de "vivo" sin el costo de carga.
+- Verificado en navegador (dev con Firebase real): light y dark mode,
+  vista móvil (420px), build de producción limpio y el bundle JS contiene
+  la ruta `/tyui/images/auth/glass-facade.jpg` con el `basePath` correcto.
+  `AgregarCuentaModal` se dejó con su panel de marca plano original (fuera
+  de alcance de este pedido) — queda como posible extensión futura para
+  unificar el lenguaje visual en las 3 superficies de auth.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -1533,6 +1583,7 @@ nuevo. Cero errores de consola. `tsc --noEmit` y `npm run build` limpios
 
 | Hash | Descripción |
 |---|---|
+| `fc96104` | redesign: pantallas de login y registro con estética cinematográfica premium |
 | `4f9a905` | fix: multiempresa con cuentas reales de Firebase, no perfiles compartidos |
 | `503b167` | feat: multiempresa — una cuenta puede tener varias empresas |
 | `458a71c` | polish: Resumen deja de repetir el rail, agrega patrones estilo QuickBooks/SAP |
