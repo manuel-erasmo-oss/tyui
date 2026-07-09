@@ -80,6 +80,35 @@ table {
   100% { transform: translateX(150%); }
 }
 
+/* Auth screens — cinematic brand panel */
+@keyframes ken-burns {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to   { transform: scale(1.1) translate3d(-1.5%, -1.5%, 0); }
+}
+.animate-ken-burns {
+  animation: ken-burns 26s ease-in-out infinite alternate;
+}
+
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+.animate-float-slow {
+  animation: float-y 6.5s ease-in-out infinite;
+}
+.animate-float-slower {
+  animation: float-y 8s ease-in-out infinite;
+  animation-delay: 0.8s;
+}
+
+@keyframes auth-card-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-auth-card-in {
+  animation: auth-card-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 /* Scrollbar minimal */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
