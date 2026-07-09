@@ -1225,7 +1225,8 @@ export default function PrestamosPage() {
                       return (
                         <tr
                           key={prestamo.id}
-                          className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                          onClick={() => handleVerDetalle(prestamo)}
+                          className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
                         >
                           {/* Empleado */}
                           <td className="px-4 py-3">
@@ -1318,7 +1319,7 @@ export default function PrestamosPage() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               <button
-                                onClick={() => handleVerDetalle(prestamo)}
+                                onClick={(e) => { e.stopPropagation(); handleVerDetalle(prestamo) }}
                                 className="flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-[#252840] px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors whitespace-nowrap"
                               >
                                 Ver detalle
@@ -1326,7 +1327,7 @@ export default function PrestamosPage() {
                               </button>
                               {prestamo.estado === 'activo' && (
                                 <button
-                                  onClick={() => setConfirmId(prestamo.id)}
+                                  onClick={(e) => { e.stopPropagation(); setConfirmId(prestamo.id) }}
                                   className="rounded-lg border border-rose-200 dark:border-rose-800/50 px-2.5 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors whitespace-nowrap"
                                 >
                                   Cancelar

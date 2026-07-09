@@ -1729,7 +1729,8 @@ export default function NominaPage() {
                     <>
                       <tr
                         key={empleado.id}
-                        className={`border-b border-zinc-50 dark:border-[#1d2035] transition-colors ${
+                        onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
+                        className={`cursor-pointer border-b border-zinc-50 dark:border-[#1d2035] transition-colors ${
                           isProcesado
                             ? 'bg-emerald-50/40 dark:bg-emerald-950/10'
                             : 'hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20'
@@ -1742,7 +1743,7 @@ export default function NominaPage() {
                               <CheckCircle2 className="h-4 w-4 text-emerald-500 dark:text-emerald-400" />
                             ) : (
                               <button
-                                onClick={() => toggleSeleccionEmp(empleado.id)}
+                                onClick={(e) => { e.stopPropagation(); toggleSeleccionEmp(empleado.id) }}
                                 className="text-zinc-400 hover:text-[#1B2980] dark:hover:text-indigo-400 transition-colors"
                               >
                                 {isSelected
@@ -1785,7 +1786,7 @@ export default function NominaPage() {
                                 {isHorasConcepto(a.concepto) ? `${a.valor}h` : fmt(a.valor, 0)}
                                 {esEnProceso && (
                                   <button
-                                    onClick={() => handleRemoveAjuste(empleado.id, a.id)}
+                                    onClick={(e) => { e.stopPropagation(); handleRemoveAjuste(empleado.id, a.id) }}
                                     className="ml-0.5 rounded-full hover:opacity-70 transition-opacity"
                                     title="Eliminar ajuste"
                                   >
@@ -1796,7 +1797,7 @@ export default function NominaPage() {
                             ))}
                             {esEnProceso && (
                               <button
-                                onClick={() => isExpanded ? setExpandedEmpId(null) : openAjusteForm(empleado.id)}
+                                onClick={(e) => { e.stopPropagation(); isExpanded ? setExpandedEmpId(null) : openAjusteForm(empleado.id) }}
                                 className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-zinc-100 dark:bg-[#252840] text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-[#2d3152] transition-colors"
                                 title="Agregar ajuste"
                               >
@@ -1832,7 +1833,7 @@ export default function NominaPage() {
                           <div className="flex items-center gap-1.5">
                             {esEnProceso && !isProcesado && (
                               <button
-                                onClick={() => handleProcesarEmpleado(empleado.id)}
+                                onClick={(e) => { e.stopPropagation(); handleProcesarEmpleado(empleado.id) }}
                                 className="rounded-md border border-emerald-300 dark:border-emerald-700/50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
                                 title="Procesar este empleado"
                               >
@@ -1840,7 +1841,7 @@ export default function NominaPage() {
                               </button>
                             )}
                             <button
-                              onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
+                              onClick={(e) => { e.stopPropagation(); setDetalleModal({ emp: empleado, nom: resultado }) }}
                               className="rounded-lg p-1 text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] transition-colors"
                               title="Ver comprobante"
                             >

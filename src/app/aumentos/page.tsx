@@ -612,7 +612,7 @@ export default function AumentosPage() {
                 ) : pendientes.map(p => {
                   const emp = empleadoDe(p.empleadoId)
                   return (
-                    <tr key={p.id}>
+                    <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-4 py-3">
                         <p className="font-medium text-[#1B2980] dark:text-indigo-400">{emp ? fullName(emp) : 'Empleado eliminado'}</p>
                       </td>
@@ -675,7 +675,7 @@ export default function AumentosPage() {
                   {aprobadosPorAplicar.map(a => {
                     const emp = empleadoDe(a.empleadoId)
                     return (
-                      <tr key={a.id}>
+                      <tr key={a.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                         <td className="px-4 py-3">
                           <p className="font-medium text-[#1B2980] dark:text-indigo-400">{emp ? fullName(emp) : 'Empleado eliminado'}</p>
                         </td>
@@ -745,7 +745,7 @@ export default function AumentosPage() {
                 ) : historialFiltrado.map(r => {
                   const emp = empleadoDe(r.empleadoId)
                   return (
-                    <tr key={r.id}>
+                    <tr key={r.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-4 py-3">
                         <p className="font-medium text-[#1B2980] dark:text-indigo-400">{emp ? fullName(emp) : 'Empleado eliminado'}</p>
                         {r.origen === 'importacion_excel' && <p className="text-[10px] text-zinc-400">Importado (Excel)</p>}

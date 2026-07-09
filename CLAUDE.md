@@ -1679,6 +1679,46 @@ pidió explícitamente continuar hasta terminar las 3 restantes.
   (cuenta con datos demo, período cerrado) y leyendo el PDF resultante.
 - Verificado: `tsc --noEmit` y `npm run build` limpios (19 rutas).
 
+## Cuarta ronda — filas de tabla clickeables (affordance de hover)
+
+Última de las micro-interacciones pedidas explícitamente por el usuario
+("dale con las micro interacciones"). Se auditó el hover de filas en las
+~12 tablas principales de la app antes de tocar código — el hallazgo real
+no era "falta hover", era un desajuste de affordance: varias filas ya
+tenían hover navy/indigo (sugiriendo "esto es clickeable") pero el único
+click real vivía en un botón chico anidado al final de la fila.
+
+- **`nomina/page.tsx`** (tabla principal de Detalle por Empleado) y
+  **`prestamos/page.tsx`** (tabla de préstamos) — se movió el `onClick`
+  al `<tr>` completo (abre el mismo modal/detalle que ya abría el botón
+  "Ver comprobante"/"Ver detalle"), con `cursor-pointer` agregado. Los
+  controles anidados de esas filas (checkbox de selección, quitar ajuste,
+  agregar ajuste, botón "Procesar", botón "Cancelar" en préstamos) ahora
+  llaman `e.stopPropagation()` para no disparar también la apertura del
+  modal al hacer click en ellos — la fila de nómina tiene 5 controles
+  anidados distintos, así que se revisó cada uno individualmente en vez
+  de asumir que un solo `stopPropagation` genérico bastaba.
+- **`aumentos/page.tsx`** — las 3 tablas que no tenían NINGÚN hover
+  (pendientes de aprobación, aprobados por aplicar, historial/rechazados)
+  ahora usan el mismo `hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]
+  transition-colors` que ya comparten 40+ filas en `reportes/page.tsx` —
+  aquí es intencionalmente solo un scanning aid (sin `cursor-pointer`, sin
+  onClick en el `<tr>`) porque cada fila tiene múltiples acciones
+  independientes (aprobar/rechazar/aplicar), no una sola acción "ver más".
+- **Alcance deliberado — lo que NO se tocó**: las tablas de solo lectura
+  (`licencias`, `bandas-salariales`, `liquidacion`, `vacaciones`,
+  `regalia-pascual`, y las 14+ tablas de `reportes/page.tsx`) ya tenían
+  hover sin `cursor-pointer` ni onClick — se confirmó que es el patrón
+  correcto para filas genuinamente no-interactivas (scanning aid, no falsa
+  promesa de click) y se dejaron intactas. Tampoco se unificaron los dos
+  colores de hover que coexisten en la app (zinc neutral vs. navy/indigo
+  tintado) — ambos son válidos, cambiarlo sería una decisión de estilo sin
+  evidencia de que esté roto, no una corrección de affordance.
+- Verificado en navegador con datos demo reales: click en una celda
+  intermedia de la fila (no en el botón) abre el modal de comprobante en
+  Nómina y el detalle en Préstamos; `tsc --noEmit` y `npm run build`
+  limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
