@@ -9,7 +9,7 @@ import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica, calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario, getDiasPreavisoRequeridos } from '@/lib/dominican-labor'
-import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
+import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY } from '@/lib/utils'
 import type { MotivoLiquidacion } from '@/types'
 import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History, Info, CheckCircle2, XCircle } from 'lucide-react'
 
@@ -744,7 +744,7 @@ export default function LiquidacionPage() {
               </button>
               <button
                 onClick={() => setConfirmFinalizar(true)}
-                className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
+                className={BTN_PRIMARY}
               >
                 <Download className="h-4 w-4" />
                 Finalizar y Exportar

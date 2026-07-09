@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
@@ -16,7 +17,7 @@ import {
   calcularAmortizacionFrancesa, calcularAmortizacionSimple,
 } from '@/lib/prestamos-context'
 import type { FilaAmortizacion } from '@/lib/prestamos-context'
-import { formatRD, fullName, formatDate } from '@/lib/utils'
+import { formatRD, fullName, formatDate, BTN_PRIMARY } from '@/lib/utils'
 import type { Prestamo, EstadoPrestamo } from '@/types'
 // Default de referencia para la alerta de Capacidad de Pago — ver
 // PanelCapacidadPago. Configurable por empresa (Configuración → Reglas de
@@ -539,7 +540,7 @@ function VistaDetalle({
                 <button
                   type="submit"
                   disabled={!pagoMonto || montoPagoNum <= 0 || excedeSaldo}
-                  className="rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   Registrar Pago
                 </button>
@@ -810,7 +811,7 @@ export default function PrestamosPage() {
               </button>
               <button
                 onClick={() => { setModoNuevo('prestamo'); setFTasa('0'); setFModoInteres('francés'); setFCuotas('12'); setShowForm(true) }}
-                className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
+                className={BTN_PRIMARY}
               >
                 <Plus className="h-4 w-4" />
                 Nuevo Préstamo
@@ -1135,7 +1136,7 @@ export default function PrestamosPage() {
                 <button
                   type="submit"
                   disabled={!fEmpleado || previewMonto <= 0 || (modoNuevo === 'prestamo' && previewCuotas <= 0)}
-                  className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={BTN_PRIMARY}
                 >
                   <Plus className="h-4 w-4" />
                   {modoNuevo === 'avance' ? 'Otorgar Avance' : 'Otorgar Préstamo'}
@@ -1189,25 +1190,15 @@ export default function PrestamosPage() {
         {/* Loan table */}
         <div className="px-6 pb-6">
           {prestamosFiltrados.length === 0 ? (
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-              <div className="flex flex-col items-center justify-center py-20 text-center">
-                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 2C8.686 2 6 4.686 6 8s2.686 6 6 6 6-2.686 6-6-2.686-6-6-6z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 14v8M9 19h6" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 8h5M9.5 10.5h3" />
-                  </svg>
-                </div>
-                <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
-                  {busqueda ? 'Sin coincidencias' : 'Sin préstamos en esta categoría'}
-                </p>
-                <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-                  {filtroEstado === 'activo' && !busqueda
-                    ? 'Registra un nuevo préstamo usando el botón superior.'
-                    : 'Ajusta el filtro o la búsqueda para ver resultados.'}
-                </p>
-              </div>
-            </div>
+            <EmptyState
+              icon={Wallet}
+              title={busqueda ? 'Sin coincidencias' : 'Sin préstamos en esta categoría'}
+              message={
+                filtroEstado === 'activo' && !busqueda
+                  ? 'Registra un nuevo préstamo usando el botón superior.'
+                  : 'Ajusta el filtro o la búsqueda para ver resultados.'
+              }
+            />
           ) : (
             <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
               <div className="overflow-x-auto">

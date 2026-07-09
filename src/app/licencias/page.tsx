@@ -8,7 +8,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import {
   useLicencias, DIAS_LICENCIA, DIAS_SUGERIDOS_SUBSIDIO, labelLicencia, esLicenciaConSubsidio,
 } from '@/lib/licencias-context'
-import { formatRD, formatDate, fullName } from '@/lib/utils'
+import { formatRD, formatDate, fullName, BTN_PRIMARY } from '@/lib/utils'
 import type { TipoLicencia } from '@/types'
 import {
   FileClock, CalendarPlus, Banknote, Trash2, Plus, Info, Heart, HeartCrack, Baby,
@@ -234,7 +234,7 @@ export default function LicenciasPage() {
               <button
                 onClick={handleRegistrar}
                 disabled={!empleadoId}
-                className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={BTN_PRIMARY}
               >
                 <Plus className="h-4 w-4" />
                 Registrar

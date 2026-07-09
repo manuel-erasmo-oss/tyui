@@ -8,6 +8,7 @@ import {
 import { Header } from '@/components/layout/Header'
 import { Toast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useAumentos } from '@/lib/aumentos-context'
 import { useAuth } from '@/lib/auth-context'
@@ -600,8 +601,12 @@ export default function AumentosPage() {
               <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
                 {pendientes.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-xs text-zinc-400">
-                      No hay solicitudes pendientes de aprobación.
+                    <td colSpan={7}>
+                      <EmptyState
+                        icon={CheckCircle2}
+                        message="No hay solicitudes pendientes de aprobación."
+                        className="border-none py-10"
+                      />
                     </td>
                   </tr>
                 ) : pendientes.map(p => {

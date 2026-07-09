@@ -4,6 +4,14 @@ export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
 }
 
+// Botón primario compartido — CTA principal de cada página (crear/procesar).
+// Mismo tratamiento de elevación que ya usan las pantallas de auth
+// (gradiente de marca + lift al hover), ahora disponible para el resto de
+// la app. No se aplica a botones compactos dentro de tablas (mínimo color
+// en tablas es un principio de diseño ya establecido).
+export const BTN_PRIMARY =
+  'flex items-center gap-2 rounded-lg bg-gradient-to-r from-[#1B2980] to-[#2f3fa8] px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:shadow-lg hover:shadow-[#1B2980]/25 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-sm'
+
 // Namespacea una key de localStorage por usuario (UID de Firebase), para que
 // cada cuenta tenga sus propios datos y nunca comparta estado con otra cuenta
 // en el mismo navegador.

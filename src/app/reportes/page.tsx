@@ -12,6 +12,7 @@ import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Toast } from '@/components/ui/Toast'
 import { Badge } from '@/components/ui/Badge'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useEmpleados } from '@/lib/empleados-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { usePrestamos } from '@/lib/prestamos-context'
@@ -21,7 +22,7 @@ import { useLicencias, labelLicencia, esLicenciaConSubsidio } from '@/lib/licenc
 import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo, getDiasPreavisoRequeridos, getAnosServicio, TASAS_TSS } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatCedula, fullName,
-  formatAnosServicio, contratoLabel, contratoBadgeClass,
+  formatAnosServicio, contratoLabel, contratoBadgeClass, BTN_PRIMARY,
 } from '@/lib/utils'
 import { exportarExcel } from '@/lib/excel-export'
 import type { AjusteLinea, PeriodoNomina, Empresa, RegistroLiquidacion, CategoriaRiesgoSRL, Licencia, TipoLicencia, Empleado, ResultadoNomina } from '@/types'
@@ -3819,7 +3820,7 @@ function ReporteLicencias({
 
 // ─── Shared UI components ─────────────────────────────────────────────────────
 const selectCls = 'rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-1.5 text-sm text-zinc-800 dark:text-zinc-200 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none'
-const primaryBtn = 'flex items-center gap-1.5 rounded-lg bg-[#1B2980] hover:bg-[#151f66] disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 text-sm font-medium text-white transition-colors'
+const primaryBtn = BTN_PRIMARY
 
 function FilterBar({ children }: { children: React.ReactNode }) {
   return (
@@ -3880,15 +3881,6 @@ function ReportHeader({
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 dark:border-[#252840] bg-white dark:bg-[#141722] py-16 gap-3">
-      <AlertCircle className="h-8 w-8 text-zinc-300 dark:text-zinc-600" />
-      <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-xs">{message}</p>
     </div>
   )
 }

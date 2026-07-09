@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Toast } from '@/components/ui/Toast'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useBandasSalariales, normalizarPosicion } from '@/lib/bandas-salariales-context'
-import { formatRD, fullName, cn } from '@/lib/utils'
+import { formatRD, fullName, cn, BTN_PRIMARY } from '@/lib/utils'
 import type { BandaSalarial, Empleado } from '@/types'
 import {
   BarChart2, Plus, Pencil, Trash2, X, AlertTriangle, ArrowDown, ArrowUp,
@@ -251,7 +252,7 @@ export default function BandasSalarialesPage() {
 
               <button
                 onClick={handleGuardar}
-                className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
+                className={BTN_PRIMARY}
               >
                 <Plus className="h-4 w-4" />
                 {editandoId ? 'Guardar Cambios' : 'Crear Banda'}
@@ -403,7 +404,7 @@ export default function BandasSalarialesPage() {
             Distribución Salarial — Empleados Activos
           </p>
           {distribucion.length === 0 ? (
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay empleados activos para graficar.</p>
+            <EmptyState icon={BarChart2} message="No hay empleados activos para graficar." className="border-none py-10" />
           ) : (
             <div className="flex items-end gap-3 h-40">
               {distribucion.map(bucket => (

@@ -3,17 +3,18 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   Search, Plus, ChevronRight, Building2, Mail, Phone, X, Pencil,
-  User, Calendar, CreditCard, Download, FileText,
+  User, Calendar, CreditCard, Download, FileText, SearchX,
   Minimize2, Maximize2, Globe, UserPlus, Users, Clock, Trash2, Info,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getDivisorSalarioDiario, aplicarSaldoISRFavor } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
-  fullName, contratoBadgeClass, contratoLabel,
+  fullName, contratoBadgeClass, contratoLabel, BTN_PRIMARY,
 } from '@/lib/utils'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
@@ -1085,7 +1086,7 @@ export default function EmpleadosPage() {
         actions={
           <button
             onClick={() => setMostrarNuevo(true)}
-            className="flex items-center gap-2 rounded-lg bg-[#1B2980] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors"
+            className={BTN_PRIMARY}
           >
             <Plus className="h-4 w-4" />
             Nuevo Empleado
@@ -1186,18 +1187,12 @@ export default function EmpleadosPage() {
                 {filtrados.length === 0 && (
                   <tr>
                     <td colSpan={9}>
-                      <div className="flex flex-col items-center justify-center py-16 text-center">
-                        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <circle cx="12" cy="8" r="4" strokeLinecap="round" strokeLinejoin="round" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                          </svg>
-                        </div>
-                        <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">Sin resultados</p>
-                        <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-                          No se encontraron empleados con los filtros aplicados. Intenta ajustar la búsqueda.
-                        </p>
-                      </div>
+                      <EmptyState
+                        icon={SearchX}
+                        title="Sin resultados"
+                        message="No se encontraron empleados con los filtros aplicados. Intenta ajustar la búsqueda."
+                        className="border-none py-12"
+                      />
                     </td>
                   </tr>
                 )}

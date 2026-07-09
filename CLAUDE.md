@@ -1625,6 +1625,60 @@ mayor impacto por esfuerzo: Cmd+K y skeletons con forma real.
   correcto en dark mode (blur, colores, texto). `tsc --noEmit` y
   `npm run build` limpios (19 rutas).
 
+## Tercera ronda de pulido visual — estados vacíos, PDF y botones primarios
+
+Cierre de las 5 brechas identificadas en la auditoría post-login (las 2
+primeras — Cmd+K y skeletons — quedaron en la ronda anterior). El usuario
+pidió explícitamente continuar hasta terminar las 3 restantes.
+
+- **`src/components/ui/EmptyState.tsx`** (nuevo) — estado vacío compartido:
+  badge de ícono `h-14 w-14 rounded-2xl bg-[#eef0fb]` con halo `blur-lg`
+  detrás (mismo lenguaje que las tarjetas flotantes del login), título
+  opcional, mensaje, y acción opcional. Reemplaza 5 implementaciones
+  distintas que habían divergido con el tiempo: el `EmptyState` local de
+  `reportes/page.tsx` (icono gris genérico + caja punteada, usado en 15+
+  reportes — ahora importa el compartido sin tocar los call sites, porque
+  la prop `message` se mantuvo compatible), el ícono SVG a mano de
+  `empleados/page.tsx` ("sin resultados" filtrados), el de
+  `prestamos/page.tsx` ("sin préstamos en esta categoría"), el texto plano
+  sin ícono de `bandas-salariales/page.tsx` (distribución salarial vacía),
+  y una fila de tabla sin ícono en `aumentos/page.tsx` ("sin solicitudes
+  pendientes" — la auditoría inicial había atribuido este caso por error a
+  `prestamos/page.tsx`; se verificó el archivo real antes de tocar código).
+- **`BTN_PRIMARY`** (nuevo, `src/lib/utils.ts`) — clase compartida para el
+  CTA principal de cada página (gradiente `from-[#1B2980] to-[#2f3fa8]` +
+  `hover:-translate-y-0.5` + `hover:shadow-lg shadow-[#1B2980]/25`, el
+  mismo tratamiento que ya tenían las pantallas de auth). La auditoría
+  encontró el mismo string de clase literal duplicado en `empleados/page.tsx`
+  y `prestamos/page.tsx` ("Nuevo Empleado"/"Nuevo Préstamo") — ahora es una
+  sola fuente de verdad, aplicada a los CTAs principales de: Empleados,
+  Préstamos (crear + formularios de otorgar/registrar pago), Bandas
+  Salariales, Licencias, Liquidación, Nómina (crear período, descargar PDF,
+  confirmar auditoría pre-cierre, cerrar modal de envío) y Reportería
+  (constante `primaryBtn` local reasignada a `BTN_PRIMARY`, actualiza los
+  botones de exportar Excel/PDF de los 15+ reportes de una sola vez).
+  **Alcance deliberado**: NO se aplicó a botones compactos dentro de tablas
+  (chips de acción por fila) — serían ruido visual frente al principio ya
+  establecido de "mínimo color en tablas". Tampoco se tocó `StatCard`
+  (su falta de hover-shadow es una decisión de diseño ya documentada y
+  deliberada, no un descuido).
+- **PDF del comprobante de nómina** (`descargarComprobantePDF` en
+  `nomina/page.tsx`) — mismo jsPDF/Helvetica de siempre (sin fuentes
+  custom, por confiabilidad), pero con tratamiento visual real: header con
+  filo navy más claro para dar profundidad, bloque de datos del empleado
+  envuelto en una tarjeta gris muy tenue en vez de texto suelto, chips de
+  color (cuadro navy chico) antes de "DEVENGOS"/"DESCUENTOS" en vez de solo
+  texto, sombreado alterno por fila (zebra striping) para legibilidad, la
+  caja navy de "SALARIO NETO A PAGAR" con un filo superior más claro, el
+  bloque "APORTES EMPRESA (TSS)" ahora envuelto en su propia tarjeta con
+  fondo tintado, y un pie de página FIJO al fondo real de la página
+  (`doc.internal.pageSize.getHeight()`, no donde termine el contenido
+  dinámico) con "Cielo Cloud · Nómina" + fecha de generación — como en un
+  membrete real, consistente sin importar cuánto contenido tenga el
+  comprobante. Verificado descargando un PDF real desde el navegador
+  (cuenta con datos demo, período cerrado) y leyendo el PDF resultante.
+- Verificado: `tsc --noEmit` y `npm run build` limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
