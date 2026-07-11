@@ -1821,6 +1821,41 @@ colapsarse — patrón "hover-to-peek" (VS Code, Notion).
   ítem de navegación durante el flyout navega correctamente (confirmado
   con `waitForURL`). `tsc --noEmit` y `npm run build` limpios (19 rutas).
 
+## Fix — jank al pasar el mouse por la sidebar
+
+Reporte directo del usuario: "al mover el mouse hasta la sidebar y luego
+sacarlo se glitchea, hay un laggeo, el movimiento no se ve natural". Dos
+causas distintas encontradas y corregidas, verificadas por separado contra
+el build de producción real (`next build` con export estático):
+
+1. **Prefetch de `next/link` disparando descargas masivas al pasar el
+   mouse.** Cada uno de los ~14 links de la sidebar (más los 5 de
+   `BottomNav`) prefetchea por defecto — tanto al montar (viewport) como al
+   hacer hover — el JS + RSC payload completo de esa ruta. Con páginas
+   pesadas (`/nomina` 435 kB, `/reportes` 451 kB), barrer el mouse por la
+   sidebar disparaba una ráfaga de ~20 descargas/compilaciones JS
+   concurrentes. Instrumentando la red contra el build real: antes del fix,
+   el barrido disparaba ~10 pares `index.txt` + bundle JS; después, cero
+   requests durante todo el barrido. Fix: `prefetch={false}` en todos los
+   `<Link>` de `Sidebar.tsx` y `BottomNav.tsx` — no hay beneficio real de
+   precarga en una app 100% client-side con `output: 'export'`.
+2. **La causa real del "salto":** el flyout (ver sección anterior) cambiaba
+   `position` de `relative` a `fixed` en el mismo render que el cambio de
+   ancho (`w-[68px]` → `w-60`), tanto al entrar como al salir con el mouse.
+   Un cambio de `position` no es animable — rompe la interpolación continua
+   de `transition-[width]`, así que en vez de crecer/encogerse suavemente
+   el riel "saltaba" de golpe entre los dos anchos. Fix: el `<aside>` se
+   mantiene `fixed` todo el tiempo que está colapsado (`c`), sin importar
+   si `hovering` es true o false — solo el ancho (`w-60` ↔ `w-[68px]`)
+   cambia con el hover, nunca `position`. El div espaciador de 68px sigue
+   el mismo criterio (montado mientras `c` es true, no solo durante el
+   flyout) para que el contenido de la página nunca se desplace. Verificado
+   midiendo `getBoundingClientRect().width` cada ~15ms durante la
+   transición: antes hubiera saltado directo entre 68 y 240; después
+   interpola de forma continua (68→71→146→179→216→...→240 al entrar,
+   240→237→226→200→...→68 al salir) con `position: fixed` constante en
+   todo momento.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

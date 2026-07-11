@@ -198,8 +198,12 @@ export function Sidebar() {
     <>
       {/* Espaciador — conserva el ancho colapsado en el layout mientras el
           riel real "flota" encima como flyout, para que el contenido de la
-          página no se desplace al pasar el mouse. */}
-      {flyout && <div className="hidden md:block h-screen w-[68px] shrink-0" />}
+          página no se desplace al pasar el mouse. Se mantiene montado todo
+          el tiempo que está colapsado (no solo durante el flyout) para que
+          el riel real pueda quedarse siempre `fixed` — cambiar `position`
+          a la vez que el ancho es lo que rompía la transición (saltaba en
+          vez de animarse suavemente al entrar/salir con el mouse). */}
+      {c && <div className="hidden md:block h-screen w-[68px] shrink-0" />}
 
       <aside
         onMouseEnter={handleMouseEnter}
@@ -208,10 +212,9 @@ export function Sidebar() {
           'hidden md:flex h-screen flex-col bg-white dark:bg-[#141722]',
           'border-r border-zinc-200 dark:border-[#252840]',
           'transition-[width] duration-200 ease-in-out overflow-hidden',
-          flyout
-            ? 'fixed left-0 top-0 z-40 w-60 shadow-2xl shadow-zinc-900/10 dark:shadow-black/50'
-            : 'relative shrink-0',
-          !flyout && (c ? 'w-[68px]' : 'w-60'),
+          c ? 'fixed left-0 top-0 z-40' : 'relative shrink-0',
+          c ? (flyout ? 'w-60' : 'w-[68px]') : 'w-60',
+          flyout && 'shadow-2xl shadow-zinc-900/10 dark:shadow-black/50',
         )}
       >
         {/* ── Logo / Brand ─────────────────────────────────────────── */}
@@ -293,6 +296,7 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 title={wide ? undefined : item.label}
                 className={cn(
                   'flex items-center py-2.5 text-sm transition-colors border-l-[3px]',
@@ -325,6 +329,7 @@ export function Sidebar() {
         <div className="border-t border-zinc-200 dark:border-[#252840] py-1">
           <Link
             href={CONFIGURACION_ITEM.href}
+            prefetch={false}
             title={wide ? undefined : CONFIGURACION_ITEM.label}
             className={cn(
               'flex items-center py-2.5 text-sm transition-colors border-l-[3px]',
