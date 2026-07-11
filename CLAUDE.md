@@ -1856,6 +1856,34 @@ el build de producción real (`next build` con export estático):
    240→237→226→200→...→68 al salir) con `position: fixed` constante en
    todo momento.
 
+**Ronda 2 — residual reportado por el usuario tras el fix anterior**: "salta
+un poco, casi no se nota porque es un salto rápido" al acercar el mouse.
+Causa: aunque el ANCHO del riel ya no saltaba, el LAYOUT interno sí —
+`wide` (que decide si el logo se muestra en fila u apilado, si los ítems de
+nav tienen `justify-center` o `gap-3 px-4`, etc.) cambiaba en el mismo
+render que empezaba `flyout`, y `justify-content`/`flex-direction` no son
+animables por CSS, así que el ícono del logo y los íconos de nav saltaban a
+su posición final de un solo golpe. Primer intento (retrasar `wide` con un
+`setTimeout` para que el cambio de layout ocurriera con el riel ya más
+ancho) resultó CONTRAPRODUCENTE — medido con `boundingBox()` cuadro a
+cuadro: cuanto más ancho está el riel cuando el ícono pasa de "centrado" a
+"alineado a la izquierda", más lejos tiene que saltar (el centrado se aleja
+del borde a medida que crece el contenedor) — con 150ms de retraso el salto
+del ícono de un ítem de nav medía ~103px; sin retraso, ~26px. Fix real: se
+revirtió el retraso (`wide` vuelve a seguir a `flyout` de inmediato, salto
+temprano y pequeño) y en su lugar se agregó `transition-[padding,gap]` /
+`transition-[width,height]` / `transition-all` a cada elemento cuyo layout
+depende de `wide` (contenedor del logo, ícono SVG del logo, botón de
+colapsar, `CuentaSwitcher`, ítems de nav, link de Configuración, bloque de
+usuario del footer) — antes NINGUNO de ellos tenía una clase `transition-*`
+declarada, así que su padding/gap/tamaño (propiedades sí animables)
+saltaban en seco por pura omisión, no por limitación de CSS. Con la
+transición agregada, tras el salto inicial (pequeño, con el riel recién
+empezando a crecer) el resto de la posición del ícono interpola suave hasta
+su lugar final. Verificado midiendo la posición del ícono "Empleados"
+cuadro a cuadro: sin saltos grandes, solo un pequeño desplazamiento inicial
+seguido de una interpolación continua (x: 3→3→4→4→7→10→13→...→19).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`

@@ -66,7 +66,7 @@ function CuentaSwitcher({ collapsed }: { collapsed: boolean }) {
         onClick={() => setOpen(v => !v)}
         title={collapsed ? nombreActivo : undefined}
         className={cn(
-          'flex w-full items-center rounded-lg py-2 transition-colors hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]',
+          'flex w-full items-center rounded-lg py-2 transition-all duration-200 ease-in-out hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]',
           collapsed ? 'justify-center px-0' : 'gap-2.5 px-2',
         )}
       >
@@ -182,7 +182,18 @@ export function Sidebar() {
   // página) — al sacar el mouse vuelve a colapsarse, con un pequeño margen
   // para evitar parpadeo si el cursor sale y entra de nuevo muy rápido.
   const flyout = c && hovering
-  const wide   = !c || flyout
+  // `wide` sigue a `flyout` de inmediato — se probó retrasarlo (para que el
+  // cambio de layout, que usa `justify-content`/`flex-direction` y por eso
+  // no se puede animar con CSS, ocurriera con el riel ya ensanchado) pero
+  // eso empeoraba el salto: cuanto más ancho está el riel cuando el ícono
+  // pasa de "centrado" a "alineado a la izquierda", MÁS lejos tiene que
+  // saltar (el centrado se aleja del borde a medida que crece el
+  // contenedor). Es preferible que el cambio de layout ocurra apenas
+  // empieza a crecer el riel (salto pequeño, casi imperceptible) en vez de
+  // tarde (salto grande). Lo que sí ayuda de verdad es que padding/gap/
+  // tamaño de ícono tengan su propia transición CSS (ver className de cada
+  // elemento) — eso es animable y sí se anima suave junto con el ancho.
+  const wide = !c || flyout
 
   function handleMouseEnter() {
     if (!c) return
@@ -221,6 +232,7 @@ export function Sidebar() {
         <div
           className={cn(
             'flex h-[80px] shrink-0 items-center border-b border-zinc-200 dark:border-[#252840]',
+            'transition-[padding,gap] duration-200 ease-in-out',
             wide ? 'px-5 gap-4' : 'flex-col justify-center gap-2.5 px-0',
           )}
         >
@@ -229,7 +241,7 @@ export function Sidebar() {
             viewBox="0 0 32 32"
             fill="none"
             aria-label="Cielo Cloud"
-            className={cn('shrink-0', wide ? 'h-10 w-10' : 'h-[46px] w-[46px]')}
+            className={cn('shrink-0 transition-[width,height] duration-200 ease-in-out', wide ? 'h-10 w-10' : 'h-[46px] w-[46px]')}
           >
             {/*
               Arco grueso: círculo r=9, strokeWidth=5.5
@@ -273,7 +285,7 @@ export function Sidebar() {
             onClick={toggle}
             title={c ? 'Expandir' : 'Colapsar'}
             className={cn(
-              'flex items-center justify-center rounded-lg transition-colors shrink-0',
+              'flex items-center justify-center rounded-lg transition-all duration-200 ease-in-out shrink-0',
               'text-zinc-300 hover:text-[#1B2980] hover:bg-[#eef0fb]',
               'dark:text-zinc-600 dark:hover:text-indigo-400 dark:hover:bg-indigo-950/30',
               wide ? 'h-6 w-6' : 'h-5 w-5',
@@ -299,7 +311,7 @@ export function Sidebar() {
                 prefetch={false}
                 title={wide ? undefined : item.label}
                 className={cn(
-                  'flex items-center py-2.5 text-sm transition-colors border-l-[3px]',
+                  'flex items-center py-2.5 text-sm transition-all duration-200 ease-in-out border-l-[3px]',
                   wide ? 'gap-3 px-4' : 'justify-center px-0',
                   active
                     ? 'bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400 font-semibold border-[#1B2980] dark:border-indigo-500'
@@ -332,7 +344,7 @@ export function Sidebar() {
             prefetch={false}
             title={wide ? undefined : CONFIGURACION_ITEM.label}
             className={cn(
-              'flex items-center py-2.5 text-sm transition-colors border-l-[3px]',
+              'flex items-center py-2.5 text-sm transition-all duration-200 ease-in-out border-l-[3px]',
               wide ? 'gap-3 px-4' : 'justify-center px-0',
               isActive(CONFIGURACION_ITEM.href)
                 ? 'bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400 font-semibold border-[#1B2980] dark:border-indigo-500'
@@ -358,7 +370,7 @@ export function Sidebar() {
           {/* User profile + logout */}
           <div
             className={cn(
-              'flex items-center py-2.5',
+              'flex items-center py-2.5 transition-[padding,gap] duration-200 ease-in-out',
               wide ? 'gap-2.5 px-4' : 'flex-col gap-1.5 px-0',
             )}
           >
