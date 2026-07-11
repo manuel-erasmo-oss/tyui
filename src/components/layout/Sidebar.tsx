@@ -77,7 +77,7 @@ function CuentaSwitcher({ collapsed }: { collapsed: boolean }) {
           <>
             <div className="min-w-0 flex-1 text-left">
               <p className="truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">{nombreActivo}</p>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
+              <p className="truncate text-[10px] text-zinc-400 dark:text-zinc-500">
                 {filas.length > 1 ? `${filas.length} empresas` : 'Cambiar de empresa'}
               </p>
             </div>
@@ -225,7 +225,13 @@ export function Sidebar() {
           'transition-[width] duration-200 ease-in-out overflow-hidden',
           c ? 'fixed left-0 top-0 z-40' : 'relative shrink-0',
           c ? (flyout ? 'w-60' : 'w-[68px]') : 'w-60',
-          flyout && 'shadow-2xl shadow-zinc-900/10 dark:shadow-black/50',
+          // La sombra vive con `c` (no con `flyout`) — el riel ya está
+          // `fixed`/flotando sobre el contenido en AMBOS estados mientras
+          // está colapsado, así que tenerla solo durante el flyout hacía
+          // que apareciera de golpe (box-shadow sin transición) justo al
+          // empezar el hover. Con `c` está presente desde el reposo, sin
+          // aparición súbita.
+          c && 'shadow-2xl shadow-zinc-900/10 dark:shadow-black/50',
         )}
       >
         {/* ── Logo / Brand ─────────────────────────────────────────── */}
@@ -328,7 +334,7 @@ export function Sidebar() {
                 />
                 {wide && (
                   <>
-                    <span className="flex-1 leading-none">{item.label}</span>
+                    <span className="min-w-0 flex-1 truncate leading-none">{item.label}</span>
                     <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-[#2e3355]" />
                   </>
                 )}
@@ -361,7 +367,7 @@ export function Sidebar() {
             />
             {wide && (
               <>
-                <span className="flex-1">Configuración</span>
+                <span className="min-w-0 flex-1 truncate">Configuración</span>
                 <ChevronRight className="h-3.5 w-3.5 text-zinc-300 dark:text-[#2e3355]" />
               </>
             )}

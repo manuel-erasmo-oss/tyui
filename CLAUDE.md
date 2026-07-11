@@ -1884,6 +1884,35 @@ su lugar final. Verificado midiendo la posición del ícono "Empleados"
 cuadro a cuadro: sin saltos grandes, solo un pequeño desplazamiento inicial
 seguido de una interpolación continua (x: 3→3→4→4→7→10→13→...→19).
 
+**Ronda 3 — el usuario seguía viendo el salto tras la ronda 2.** Las
+mediciones numéricas (`getBoundingClientRect()`) de la ronda 2 no mentían,
+pero no capturaban el problema real: se grabó un video real de la
+interacción (cursor sintético inyectado + `page.mouse.move` lento,
+extraído cuadro a cuadro a 25fps nativos, NO resampleado — un resampleo a
+15fps escondía por completo la transición real) y ahí se vio con claridad
+el verdadero bug: los labels de los ítems de nav (`item.label`,
+"Configuración", el subtítulo del `CuentaSwitcher` — "Cambiar de empresa" /
+"X empresas") no tenían `truncate`/`whitespace-nowrap`. Mientras el riel
+crecía por los anchos intermedios (ej. ~85px), textos largos como
+"Retribuciones Complementarias" o "Bonificación Utilidades" se ENVOLVÍAN a
+2 líneas porque todavía no cabían en una — eso engordaba esas filas de
+alto temporalmente y empujaba todo lo de abajo, un reflow feo y visible
+durante los ~150-200ms de la transición (visualmente mucho peor que
+cualquier salto de posición de ícono). Fix: `truncate` (+ `min-w-0` en el
+`<span className="flex-1">` padre, requerido para que `truncate` funcione
+dentro de un flex item) en los 3 labels afectados — ahora, mientras el
+riel todavía es angosto, el texto se corta con "…" en una sola línea en
+vez de envolverse, igual que ya hacía el nombre de la cuenta activa (que sí
+tenía `truncate` desde el principio). De paso se corrigió que la sombra
+(`shadow-2xl`) solo aparecía durante el flyout (`flyout &&`) — apareciendo
+de golpe sin transición justo al empezar el hover — ahora vive con `c`
+(colapsado, sin importar si hay hover) ya que el riel está `fixed`/
+flotando sobre el contenido en ambos casos, así que la sombra está
+presente desde el reposo sin aparición súbita. Verificado con el mismo
+método de video cuadro a cuadro: ya no hay envoltura de texto ni reflow
+visible en ningún punto de la transición, en ninguna de las dos
+direcciones (entrada y salida).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
