@@ -1,4 +1,4 @@
-import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, Empleado, Empresa, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa, TipoPeriodo } from '@/types'
+import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, ConceptoAjuste, Empleado, Empresa, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa, TipoPeriodo } from '@/types'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -133,6 +133,9 @@ export function calcularNomina(
     sfsDependientes   = 0,
     otrosDescuentos   = 0,
     categoriaRiesgo   = empleado.categoriaRiesgo ?? 'I',
+    ingresosPersonalizadosTotal        = 0,
+    ingresosPersonalizadosGravablesISR = 0,
+    ingresosPersonalizadosCotizablesTSS = 0,
   } = params
 
   // Salario proporcional a días trabajados
@@ -149,12 +152,21 @@ export function calcularNomina(
   // hora regular (el salario base ya cubre la hora regular trabajada)
   const importeNocturno = horasNocturnas * salarioHora * 0.15
 
-  const totalBruto = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones
+  // Base "legado" — todo lo que ya era gravable ISR y cotizable TSS por igual
+  // antes del catálogo configurable (sin cambios para nóminas que no lo usan).
+  const totalBrutoLegado = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones
+  const ingresosPersonalizados = ingresosPersonalizadosTotal
+  const totalBruto = totalBrutoLegado + ingresosPersonalizados
 
   // ─── TSS (cada aporte capea sobre su propia base — topes distintos) ───────
-  const baseCotizableAFP = Math.min(totalBruto, TOPE_COTIZABLE_AFP)
-  const baseCotizableSFS = Math.min(totalBruto, TOPE_COTIZABLE_SFS)
-  const baseCotizableSRL = Math.min(totalBruto, TOPE_COTIZABLE_SRL)
+  // La base cotizable suma el legado (siempre cotizable) + solo la porción de
+  // ingresos personalizados cuyo concepto tiene "afecta TSS" activo — un
+  // ingreso personalizado exento de TSS NO debe inflar esta base solo por
+  // formar parte de totalBruto.
+  const baseTSSPreTope = totalBrutoLegado + ingresosPersonalizadosCotizablesTSS
+  const baseCotizableAFP = Math.min(baseTSSPreTope, TOPE_COTIZABLE_AFP)
+  const baseCotizableSFS = Math.min(baseTSSPreTope, TOPE_COTIZABLE_SFS)
+  const baseCotizableSRL = Math.min(baseTSSPreTope, TOPE_COTIZABLE_SRL)
 
   // Salario cotizable mostrado en UI = base AFP (la más alta de las tres, más representativa)
   const salarioCotizable = baseCotizableAFP
@@ -177,10 +189,13 @@ export function calcularNomina(
   const infotepEmpleador = baseCotizableAFP * TASAS_TSS.infotepEmpleador
 
   // ─── ISR Retención (DGII, Ley 11-92 art. 309) ─────────────────────────────
-  // Base gravable = total bruto - AFP empleado - SFS empleado (deducibles).
-  // El aporte VOLUNTARIO a AFP se excluye a propósito de esta base — a
-  // diferencia del aporte obligatorio, no reduce el ISR (carta DGII 2022).
-  const baseGravableMensual  = totalBruto - afpEmpleado - sfsEmpleado
+  // Base gravable = legado (siempre gravable) + solo la porción de ingresos
+  // personalizados marcada "afecta ISR" - AFP empleado - SFS empleado
+  // (deducibles). El aporte VOLUNTARIO a AFP se excluye a propósito de esta
+  // base — a diferencia del aporte obligatorio, no reduce el ISR (carta DGII
+  // 2022). Un ingreso personalizado exento de ISR nunca entra aquí, aunque sí
+  // forme parte de totalBruto.
+  const baseGravableMensual  = totalBrutoLegado + ingresosPersonalizadosGravablesISR - afpEmpleado - sfsEmpleado
   const baseGravableAnual    = baseGravableMensual * 12
 
   // ─── Retención consolidada de ISR (ingreso de otro empleador) ─────────────
@@ -240,6 +255,7 @@ export function calcularNomina(
     importeNocturno,
     bonificaciones,
     comisiones,
+    ingresosPersonalizados,
     totalBruto,
     salarioCotizable,
     afpEmpleado,
@@ -297,6 +313,7 @@ export function calcularNominaQuincenal(
     importeNocturno:          m.importeNocturno / 2,
     bonificaciones:           m.bonificaciones / 2,
     comisiones:               m.comisiones / 2,
+    ingresosPersonalizados:   m.ingresosPersonalizados / 2,
     totalBruto:               bruto,
     salarioCotizable:         m.salarioCotizable / 2,
     afpEmpleado:              afpEmp,
@@ -425,6 +442,7 @@ export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio
 export function ajustesToParams(ajustes: AjusteLinea[]): ParametrosNomina {
   let horasExtras35 = 0, horasExtras100 = 0, horasNocturnas = 0, bonificaciones = 0
   let comisiones = 0, sfsDependientes = 0, otrosDescuentos = 0
+  let ingresosPersonalizadosTotal = 0, ingresosPersonalizadosGravablesISR = 0, ingresosPersonalizadosCotizablesTSS = 0
 
   for (const a of ajustes) {
     if (a.concepto === 'horas_extras_35')                             horasExtras35   += a.valor
@@ -434,10 +452,50 @@ export function ajustesToParams(ajustes: AjusteLinea[]): ParametrosNomina {
     if (a.concepto === 'comision')                                    comisiones      += a.valor
     if (a.concepto === 'dependiente_sfs')                             sfsDependientes += a.valor
     if (a.concepto === 'prestamo' || a.concepto === 'otro_descuento') otrosDescuentos += a.valor
+    // Concepto del catálogo configurable (Configuración → Ingresos y
+    // Deducciones). Los ingresos personalizados siempre suman a totalBruto;
+    // solo la porción con el flag correspondiente activo entra a la base de
+    // ISR y/o TSS (ver calcularNomina). Las deducciones personalizadas SIEMPRE
+    // se tratan como "Otro Descuento" — nunca reducen ISR ni TSS.
+    if (a.concepto === 'personalizado' && a.tipo === 'ingreso') {
+      ingresosPersonalizadosTotal += a.valor
+      if (a.afectaISR) ingresosPersonalizadosGravablesISR += a.valor
+      if (a.afectaTSS) ingresosPersonalizadosCotizablesTSS += a.valor
+    }
+    if (a.concepto === 'personalizado' && a.tipo === 'deduccion') otrosDescuentos += a.valor
   }
 
-  return { horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
+  return {
+    horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos,
+    ingresosPersonalizadosTotal, ingresosPersonalizadosGravablesISR, ingresosPersonalizadosCotizablesTSS,
+  }
 }
+
+// ─── Catálogo de referencia — conceptos de ley (no editables) ────────────────
+// Muestra el tratamiento REAL de ISR/TSS de cada ConceptoAjuste fijo, tal
+// como ya lo implementa calcularNomina/ajustesToParams — es documentación
+// generada a partir del motor, no una fuente independiente que pueda
+// desincronizarse. Se usa en Configuración → Ingresos y Deducciones.
+export interface ConceptoLeyInfo {
+  concepto: ConceptoAjuste
+  nombre: string
+  tipo: 'ingreso' | 'deduccion'
+  afectaISR: boolean
+  afectaTSS: boolean
+  nota: string
+}
+
+export const CONCEPTOS_LEY: ConceptoLeyInfo[] = [
+  { concepto: 'horas_extras_35',  nombre: 'H.E. 35%',            tipo: 'ingreso',   afectaISR: true,  afectaTSS: true,  nota: 'Art. 203 Código de Trabajo' },
+  { concepto: 'horas_extras_100', nombre: 'H.E. 100%',           tipo: 'ingreso',   afectaISR: true,  afectaTSS: true,  nota: 'Art. 203 Código de Trabajo (feriados)' },
+  { concepto: 'recargo_nocturno', nombre: 'Recargo Nocturno',    tipo: 'ingreso',   afectaISR: true,  afectaTSS: true,  nota: 'Práctica estándar TSS (15% sobre tarifa hora)' },
+  { concepto: 'comision',         nombre: 'Comisión',            tipo: 'ingreso',   afectaISR: true,  afectaTSS: true,  nota: 'Salario ordinario' },
+  { concepto: 'bono',             nombre: 'Bono',                tipo: 'ingreso',   afectaISR: true,  afectaTSS: true,  nota: 'Salario ordinario' },
+  { concepto: 'otro_ingreso',     nombre: 'Otro Ingreso',        tipo: 'ingreso',   afectaISR: true,  afectaTSS: true,  nota: 'Salario ordinario' },
+  { concepto: 'dependiente_sfs',  nombre: 'Dep. SFS Adicionales', tipo: 'deduccion', afectaISR: false, afectaTSS: false, nota: 'Resolución 624-02 CNSS — cuota fija, no modifica bases' },
+  { concepto: 'prestamo',         nombre: 'Préstamo',            tipo: 'deduccion', afectaISR: false, afectaTSS: false, nota: 'Descuento post-impuesto, no reduce ISR ni TSS' },
+  { concepto: 'otro_descuento',   nombre: 'Otro Descuento',      tipo: 'deduccion', afectaISR: false, afectaTSS: false, nota: 'Descuento post-impuesto, no reduce ISR ni TSS' },
+]
 
 export function calcularConPeriodo(emp: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
   const params = ajustesToParams(ajustes)

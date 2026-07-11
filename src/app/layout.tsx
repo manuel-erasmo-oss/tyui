@@ -9,6 +9,7 @@ import { PrestamosProvider } from '@/lib/prestamos-context'
 import { AumentosProvider } from '@/lib/aumentos-context'
 import { LicenciasProvider } from '@/lib/licencias-context'
 import { BandasSalarialesProvider } from '@/lib/bandas-salariales-context'
+import { ConceptosPersonalizadosProvider } from '@/lib/conceptos-personalizados-context'
 import { LiquidacionesProvider } from '@/lib/liquidaciones-context'
 import { SaldoISRProvider } from '@/lib/saldo-isr-context'
 import { FeriadosProvider } from '@/lib/feriados-context'
@@ -45,21 +46,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <EmpresaProvider>
               <EmpleadosProvider>
                 <BandasSalarialesProvider>
-                  <PrestamosProvider>
-                    <AumentosProvider>
-                      <LicenciasProvider>
-                        <LiquidacionesProvider>
-                          <SaldoISRProvider>
-                            <PeriodosProvider>
-                              <FeriadosProvider>
-                                <RouteGuard>{children}</RouteGuard>
-                              </FeriadosProvider>
-                            </PeriodosProvider>
-                          </SaldoISRProvider>
-                        </LiquidacionesProvider>
-                      </LicenciasProvider>
-                    </AumentosProvider>
-                  </PrestamosProvider>
+                  <ConceptosPersonalizadosProvider>
+                    <PrestamosProvider>
+                      <AumentosProvider>
+                        <LicenciasProvider>
+                          <LiquidacionesProvider>
+                            <SaldoISRProvider>
+                              <PeriodosProvider>
+                                <FeriadosProvider>
+                                  <RouteGuard>{children}</RouteGuard>
+                                </FeriadosProvider>
+                              </PeriodosProvider>
+                            </SaldoISRProvider>
+                          </LiquidacionesProvider>
+                        </LicenciasProvider>
+                      </AumentosProvider>
+                    </PrestamosProvider>
+                  </ConceptosPersonalizadosProvider>
                 </BandasSalarialesProvider>
               </EmpleadosProvider>
             </EmpresaProvider>

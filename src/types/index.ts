@@ -29,6 +29,7 @@ export type ConceptoAjuste =
   | 'dependiente_sfs'
   | 'otro_ingreso'
   | 'otro_descuento'
+  | 'personalizado'  // ver ConceptoPersonalizado — catálogo configurable en Configuración
 
 export interface AjusteLinea {
   id: string
@@ -37,6 +38,33 @@ export interface AjusteLinea {
   descripcion: string
   valor: number
   prestamoId?: string
+  // ─── Solo presentes cuando concepto === 'personalizado' ────────────────────
+  // Snapshot del concepto del catálogo AL MOMENTO de agregar el ajuste (no una
+  // referencia viva) — así, editar o desactivar el concepto después nunca
+  // altera nóminas ya registradas con este ajuste. Para deducciones,
+  // afectaISR/afectaTSS siempre son false (una deducción personalizada nunca
+  // reduce la base de ISR ni de TSS — solo el neto, igual que "Otro Desc.").
+  conceptoPersonalizadoId?: string
+  conceptoPersonalizadoNombre?: string
+  afectaISR?: boolean
+  afectaTSS?: boolean
+}
+
+// ─── Catálogo configurable de ingresos y deducciones ─────────────────────────
+// Los 9 conceptos de ConceptoAjuste (horas extra, comisión, bono, préstamo,
+// etc.) son de ley — su tratamiento de ISR/TSS ya está implementado
+// correctamente en dominican-labor.ts y NO es editable por el usuario. Este
+// catálogo permite agregar conceptos ADICIONALES propios de cada empresa
+// (ej. "Bono de transporte", "Descuento de comedor"), indicando si afectan
+// ISR y/o TSS (solo aplica a ingresos — ver nota arriba sobre deducciones).
+export interface ConceptoPersonalizado {
+  id: string
+  nombre: string
+  tipo: 'ingreso' | 'deduccion'
+  afectaISR: boolean  // solo relevante si tipo === 'ingreso'
+  afectaTSS: boolean  // solo relevante si tipo === 'ingreso'
+  activo: boolean      // desactivar en vez de borrar — no rompe ajustes históricos
+  creadoEn: string     // ISO date
 }
 
 export type ParentescoDependiente =
@@ -144,6 +172,7 @@ export interface ResultadoNomina {
   importeNocturno: number
   bonificaciones: number
   comisiones: number
+  ingresosPersonalizados: number  // suma de ajustes con concepto personalizado (catálogo configurable)
   totalBruto: number
 
   // TSS base
@@ -199,6 +228,14 @@ export interface ParametrosNomina {
   sfsDependientes?: number
   otrosDescuentos?: number
   categoriaRiesgo?: CategoriaRiesgoSRL
+  // ─── Ingresos personalizados (catálogo configurable) ───────────────────────
+  // `Total` va siempre a totalBruto (dinero que el empleado efectivamente
+  // recibe). `GravablesISR`/`CotizablesTSS` son subconjuntos de ese mismo
+  // total — solo la porción cuyo concepto tiene el flag correspondiente
+  // activo se suma a la base de ISR y/o TSS respectivamente.
+  ingresosPersonalizadosTotal?: number
+  ingresosPersonalizadosGravablesISR?: number
+  ingresosPersonalizadosCotizablesTSS?: number
 }
 
 // Registro de auditoría cada vez que se reabre (desposteo) un período que ya

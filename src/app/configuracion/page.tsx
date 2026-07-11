@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
-import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE_AFP, TOPE_COTIZABLE_SFS, TOPE_COTIZABLE_SRL } from '@/lib/dominican-labor'
+import { SALARIO_MINIMO, TASAS_TSS, TOPE_COTIZABLE_AFP, TOPE_COTIZABLE_SFS, TOPE_COTIZABLE_SRL, CONCEPTOS_LEY } from '@/lib/dominican-labor'
 import { formatRD, formatDate, formatRelativeTime, cn } from '@/lib/utils'
 import {
   Save, Info, Building2, FlaskConical, AlertTriangle, ImagePlus, Trash2, History,
@@ -15,13 +15,14 @@ import { useEmpresa } from '@/lib/empresa-context'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useAuth } from '@/lib/auth-context'
 import { useFeriados } from '@/lib/feriados-context'
+import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
 import { Toast } from '@/components/ui/Toast'
 import { cargarDatosDemo } from '@/lib/seed-data'
 import { ConfiguracionInicialFlow } from '@/components/carga-inicial/ConfiguracionInicialFlow'
 import { PLACEHOLDERS_COMPROBANTE, plantillaComprobanteDefault } from '@/lib/comprobante-email'
 import {
   UMBRAL_ENDEUDAMIENTO_DEFAULT, UMBRAL_VARIACION_BRUTO_DEFAULT,
-  type Empresa, type CategoriaEmpresa, type SectorEmpresa, type RolUsuario,
+  type Empresa, type CategoriaEmpresa, type SectorEmpresa, type RolUsuario, type ConceptoPersonalizado,
 } from '@/types'
 
 // ─── Parámetros legales de referencia (solo lectura) ───────────────────────
@@ -90,6 +91,62 @@ function ParamTable({ rows }: { rows: ParamRow[] }) {
   )
 }
 
+// Sí/No compacto para las columnas de afecta ISR/TSS — verde cuando suma a
+// la base, gris cuando no la toca.
+function SiNoBadge({ value }: { value: boolean }) {
+  return (
+    <span className={cn(
+      'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold',
+      value
+        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400'
+        : 'bg-zinc-100 text-zinc-500 dark:bg-[#1a1d2e] dark:text-zinc-500',
+    )}>
+      {value ? 'Sí' : 'No'}
+    </span>
+  )
+}
+
+// Tabla de referencia — el tratamiento REAL de ISR/TSS de cada concepto de
+// ley, tal como ya lo calcula el motor (CONCEPTOS_LEY se genera a partir de
+// dominican-labor.ts, no es una fuente independiente que pueda desincronizarse).
+function ConceptosLeyTable() {
+  return (
+    <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840]">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+            <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Concepto</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tipo</th>
+            <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Afecta ISR</th>
+            <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Afecta TSS</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Base legal</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035] bg-white dark:bg-[#141722]">
+          {CONCEPTOS_LEY.map(c => (
+            <tr key={c.concepto} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]">
+              <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{c.nombre}</td>
+              <td className="px-4 py-3">
+                <span className={cn(
+                  'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+                  c.tipo === 'ingreso'
+                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800/50'
+                    : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:ring-rose-800/50',
+                )}>
+                  {c.tipo === 'ingreso' ? 'Ingreso' : 'Deducción'}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-center"><SiNoBadge value={c.afectaISR} /></td>
+              <td className="px-4 py-3 text-center"><SiNoBadge value={c.afectaTSS} /></td>
+              <td className="px-4 py-3 text-zinc-400 dark:text-zinc-500 text-xs">{c.nota}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 const INPUT_CLASS =
   'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 transition-colors focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-[#1B2980]/10 dark:focus:ring-indigo-500/10'
 
@@ -121,7 +178,7 @@ const ROLES_USUARIO: { value: RolUsuario; label: string }[] = [
 // patrón de "hub" con navegación de página completa se reemplaza por una
 // experiencia continua de una sola pantalla (Stripe/Vercel/Linear), con un
 // solo punto de guardado (barra flotante) en vez de un botón por sección.
-type Vista = 'resumen' | 'empresa' | 'nomina' | 'reglas' | 'datos' | 'legal'
+type Vista = 'resumen' | 'empresa' | 'nomina' | 'conceptos' | 'reglas' | 'datos' | 'legal'
 
 interface Seccion {
   id: Exclude<Vista, 'resumen'>
@@ -148,6 +205,14 @@ const SECCIONES: Seccion[] = [
     descripcion: 'Modalidad de pago, moneda y feriados',
     grupo: 'negocio',
     keywords: ['mensual', 'quincenal', 'usd', 'dolares', 'feriados', 'tasa de cambio', 'horas extra'],
+  },
+  {
+    id: 'conceptos',
+    icon: Coins,
+    titulo: 'Ingresos y Deducciones',
+    descripcion: 'Catálogo de conceptos que afectan ISR y TSS',
+    grupo: 'negocio',
+    keywords: ['ingreso', 'deduccion', 'descuento', 'concepto', 'isr', 'tss', 'catalogo', 'personalizado', 'bono', 'comision'],
   },
   {
     id: 'reglas',
@@ -353,6 +418,7 @@ export default function ConfiguracionPage() {
   const { empleadosActivos } = useEmpleados()
   const { user } = useAuth()
   const { getFeriados, agregarFeriado, eliminarFeriado } = useFeriados()
+  const { conceptosActivos: conceptosPersonalizados, crear: crearConcepto, actualizar: actualizarConcepto, eliminar: eliminarConcepto } = useConceptosPersonalizados()
   const [vista, setVista]       = useState<Vista>('resumen')
   const [query, setQuery]       = useState('')
   const [form, setForm]         = useState<Empresa>(empresa)
@@ -361,6 +427,14 @@ export default function ConfiguracionPage() {
   const [logoError, setLogoError] = useState('')
   const [nuevaFechaFeriado, setNuevaFechaFeriado] = useState('')
   const [nuevoNombreFeriado, setNuevoNombreFeriado] = useState('')
+  // ── Catálogo de Ingresos y Deducciones ──────────────────────────────────────
+  const [toastConceptos, setToastConceptos] = useState<string | null>(null)
+  const [mostrarFormConcepto, setMostrarFormConcepto] = useState(false)
+  const [editandoConceptoId, setEditandoConceptoId] = useState<string | null>(null)
+  const [conceptoNombre, setConceptoNombre] = useState('')
+  const [conceptoTipo, setConceptoTipo] = useState<'ingreso' | 'deduccion'>('ingreso')
+  const [conceptoISR, setConceptoISR] = useState(true)
+  const [conceptoTSS, setConceptoTSS] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const anioActual = new Date().getFullYear()
   const feriados = getFeriados(anioActual)
@@ -388,6 +462,49 @@ export default function ConfiguracionPage() {
   function handleCargarDemo() {
     cargarDatosDemo(user?.uid)
     window.location.reload()
+  }
+
+  // ── Catálogo de Ingresos y Deducciones ──────────────────────────────────────
+  function resetFormConcepto() {
+    setMostrarFormConcepto(false)
+    setEditandoConceptoId(null)
+    setConceptoNombre('')
+    setConceptoTipo('ingreso')
+    setConceptoISR(true)
+    setConceptoTSS(true)
+  }
+
+  function abrirNuevoConcepto() {
+    resetFormConcepto()
+    setMostrarFormConcepto(true)
+  }
+
+  function abrirEditarConcepto(c: ConceptoPersonalizado) {
+    setEditandoConceptoId(c.id)
+    setConceptoNombre(c.nombre)
+    setConceptoTipo(c.tipo)
+    setConceptoISR(c.afectaISR)
+    setConceptoTSS(c.afectaTSS)
+    setMostrarFormConcepto(true)
+  }
+
+  function handleGuardarConcepto() {
+    const nombre = conceptoNombre.trim()
+    if (!nombre) { setToastConceptos('Indique un nombre para el concepto'); return }
+    if (editandoConceptoId) {
+      actualizarConcepto(editandoConceptoId, { nombre, tipo: conceptoTipo, afectaISR: conceptoISR, afectaTSS: conceptoTSS })
+      setToastConceptos(`Concepto "${nombre}" actualizado`)
+    } else {
+      crearConcepto({ nombre, tipo: conceptoTipo, afectaISR: conceptoISR, afectaTSS: conceptoTSS })
+      setToastConceptos(`Concepto "${nombre}" creado`)
+    }
+    resetFormConcepto()
+  }
+
+  function handleEliminarConcepto(c: ConceptoPersonalizado) {
+    eliminarConcepto(c.id)
+    setToastConceptos(`Concepto "${c.nombre}" eliminado del catálogo`)
+    if (editandoConceptoId === c.id) resetFormConcepto()
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -1060,6 +1177,171 @@ export default function ConfiguracionPage() {
                       </>
                     )}
 
+                    {/* ── Ingresos y Deducciones ──────────────────────────────── */}
+                    {vista === 'conceptos' && (
+                      <>
+                        <div className="flex items-center gap-3 rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5">
+                          <Info className="h-4 w-4 shrink-0 text-[#1B2980] dark:text-indigo-300" />
+                          <p className="text-xs text-[#151f66] dark:text-indigo-200">
+                            Los conceptos de ley ya calculan correctamente ISR y TSS según la
+                            legislación dominicana vigente y no son editables. El catálogo de la
+                            empresa le permite agregar ingresos o deducciones propios — al
+                            usarlos en Nómina, afectan de verdad el cálculo de ISR y/o TSS según
+                            lo que indique aquí.
+                          </p>
+                        </div>
+
+                        <SettingsCard icon={ShieldCheck} title="Conceptos de Ley" description="Horas extra, comisiones, préstamos, etc. — solo lectura.">
+                          <ConceptosLeyTable />
+                        </SettingsCard>
+
+                        <SettingsCard icon={Coins} title="Catálogo de la Empresa" description="Ingresos y deducciones adicionales que usted define.">
+                          {conceptosPersonalizados.length === 0 && !mostrarFormConcepto && (
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-4">
+                              Todavía no ha agregado ningún concepto propio. Use el botón de abajo
+                              para crear el primero — por ejemplo, "Bono de Transporte" o
+                              "Descuento de Comedor".
+                            </p>
+                          )}
+
+                          {conceptosPersonalizados.length > 0 && (
+                            <div className="mb-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840]">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Concepto</th>
+                                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tipo</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Afecta ISR</th>
+                                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Afecta TSS</th>
+                                    <th className="px-4 py-3" />
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035] bg-white dark:bg-[#141722]">
+                                  {conceptosPersonalizados.map(c => (
+                                    <tr key={c.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]">
+                                      <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{c.nombre}</td>
+                                      <td className="px-4 py-3">
+                                        <span className={cn(
+                                          'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset',
+                                          c.tipo === 'ingreso'
+                                            ? 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:ring-emerald-800/50'
+                                            : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:ring-rose-800/50',
+                                        )}>
+                                          {c.tipo === 'ingreso' ? 'Ingreso' : 'Deducción'}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center"><SiNoBadge value={c.tipo === 'ingreso' && c.afectaISR} /></td>
+                                      <td className="px-4 py-3 text-center"><SiNoBadge value={c.tipo === 'ingreso' && c.afectaTSS} /></td>
+                                      <td className="px-4 py-3">
+                                        <div className="flex items-center justify-end gap-1">
+                                          <button
+                                            onClick={() => abrirEditarConcepto(c)}
+                                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-500 dark:hover:bg-[#1a1d2e] dark:hover:text-zinc-200 transition-colors"
+                                            title="Editar"
+                                          >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleEliminarConcepto(c)}
+                                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:text-zinc-500 dark:hover:bg-rose-950/30 dark:hover:text-rose-400 transition-colors"
+                                            title="Quitar del catálogo"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          {mostrarFormConcepto ? (
+                            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-3">
+                                {editandoConceptoId ? 'Editar concepto' : 'Nuevo concepto'}
+                              </p>
+                              <div className="flex flex-wrap items-end gap-3">
+                                <div className="flex flex-col gap-1.5">
+                                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Tipo</label>
+                                  <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                                    <button
+                                      onClick={() => setConceptoTipo('ingreso')}
+                                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${conceptoTipo === 'ingreso' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'}`}
+                                    >
+                                      Ingreso
+                                    </button>
+                                    <button
+                                      onClick={() => setConceptoTipo('deduccion')}
+                                      className={`px-3 py-1.5 text-xs font-medium transition-colors ${conceptoTipo === 'deduccion' ? 'bg-rose-600 text-white' : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'}`}
+                                    >
+                                      Deducción
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-1.5 flex-1 min-w-[200px]">
+                                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Nombre</label>
+                                  <input
+                                    type="text"
+                                    value={conceptoNombre}
+                                    onChange={e => setConceptoNombre(e.target.value)}
+                                    placeholder={conceptoTipo === 'ingreso' ? 'Ej. Bono de Transporte' : 'Ej. Descuento de Comedor'}
+                                    className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                                  />
+                                </div>
+
+                                {conceptoTipo === 'ingreso' ? (
+                                  <div className="flex flex-col gap-1.5">
+                                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Afecta</label>
+                                    <div className="flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-1.5">
+                                      <label className="flex items-center gap-1.5 text-xs text-zinc-700 dark:text-zinc-300">
+                                        <input type="checkbox" checked={conceptoISR} onChange={e => setConceptoISR(e.target.checked)} className="accent-[#1B2980]" />
+                                        ISR
+                                      </label>
+                                      <label className="flex items-center gap-1.5 text-xs text-zinc-700 dark:text-zinc-300">
+                                        <input type="checkbox" checked={conceptoTSS} onChange={e => setConceptoTSS(e.target.checked)} className="accent-[#1B2980]" />
+                                        TSS
+                                      </label>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-[220px]">
+                                    Las deducciones siempre se descuentan del neto, después de calcular ISR y TSS — nunca reducen esas bases.
+                                  </p>
+                                )}
+
+                                <div className="flex gap-2 self-end">
+                                  <button
+                                    onClick={handleGuardarConcepto}
+                                    disabled={!conceptoNombre.trim()}
+                                    className="rounded-lg bg-[#1B2980] px-4 py-1.5 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {editandoConceptoId ? 'Guardar' : 'Agregar'}
+                                  </button>
+                                  <button
+                                    onClick={resetFormConcepto}
+                                    className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-1.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={abrirNuevoConcepto}
+                              className="flex items-center gap-2 rounded-lg border border-dashed border-zinc-300 dark:border-[#33395a] px-4 py-2.5 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:border-[#1B2980] hover:text-[#1B2980] dark:hover:border-indigo-500 dark:hover:text-indigo-400 transition-colors"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Nuevo concepto
+                            </button>
+                          )}
+                        </SettingsCard>
+                      </>
+                    )}
+
                     {/* ── Reglas de Negocio ───────────────────────────────────── */}
                     {vista === 'reglas' && (
                       <>
@@ -1259,6 +1541,13 @@ export default function ConfiguracionPage() {
           message="Datos guardados"
           type="success"
           onClose={() => setShowToast(false)}
+        />
+      )}
+      {toastConceptos && (
+        <Toast
+          message={toastConceptos}
+          type="success"
+          onClose={() => setToastConceptos(null)}
         />
       )}
     </div>

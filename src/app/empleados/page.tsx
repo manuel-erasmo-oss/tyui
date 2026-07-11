@@ -11,7 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getDivisorSalarioDiario, aplicarSaldoISRFavor } from '@/lib/dominican-labor'
+import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getDivisorSalarioDiario, aplicarSaldoISRFavor, ajustesToParams } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
   fullName, contratoBadgeClass, contratoLabel, BTN_PRIMARY,
@@ -199,19 +199,18 @@ function labelPeriodoHist(p: PeriodoNomina): string {
   return `${mes} ${p.anio}`
 }
 
+// Reusa ajustesToParams (dominican-labor.ts) en vez de repetir el bucketing
+// de conceptos inline — antes esta copia ni siquiera incluía recargo_nocturno
+// ni el catálogo de conceptos personalizados; ahora es la misma fuente de
+// verdad que usa Nómina, así el Historial de un empleado calcula exactamente
+// lo mismo que se vio al procesar cada período.
 function calcNominaConAjustes(
   empleado: Empleado,
   ajustes: AjusteLinea[],
   tipo: TipoPeriodo,
   quincena: 1 | 2,
 ): ResultadoNomina {
-  const horasExtras35   = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
-  const horasExtras100  = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
-  const bonificaciones  = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
-  const comisiones      = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
-  const sfsDependientes = ajustes.filter(a => a.concepto === 'dependiente_sfs').reduce((s, a) => s + a.valor, 0)
-  const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
-  const params = { horasExtras35, horasExtras100, bonificaciones, comisiones, sfsDependientes, otrosDescuentos }
+  const params = ajustesToParams(ajustes)
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
     : calcularNomina(empleado, params)

@@ -40,7 +40,8 @@ import {
   enviarComprobante, plantillaComprobanteDeEmpresa, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
 } from '@/lib/comprobante-email'
 import type { PlantillaComprobante } from '@/lib/comprobante-email'
-import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams } from '@/lib/dominican-labor'
+import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
 import { formatRD, fullName, formatCedula, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
 import jsPDF from 'jspdf'
 import type {
@@ -117,8 +118,16 @@ function labelConcepto(concepto: ConceptoAjuste): string {
     dependiente_sfs:  'Dep. SFS',
     otro_ingreso:     'Otro Ingreso',
     otro_descuento:   'Otro Desc.',
+    personalizado:    'Personalizado',
   }
   return map[concepto]
+}
+
+// Label real de un ajuste — para 'personalizado' usa el nombre del concepto
+// tal como quedó al momento de agregarlo (snapshot), no el genérico de arriba.
+function labelAjuste(a: AjusteLinea): string {
+  if (a.concepto === 'personalizado') return a.conceptoPersonalizadoNombre || 'Personalizado'
+  return labelConcepto(a.concepto)
 }
 
 function isHorasConcepto(concepto: ConceptoAjuste): boolean {
@@ -129,7 +138,10 @@ function isHorasConcepto(concepto: ConceptoAjuste): boolean {
 // `diasOverride` prorratea el salario base cuando el empleado no trabajó el
 // período completo (ver diasSuspensionEnPeriodo) — ambos valores son días
 // calendario en la MISMA unidad, así que la razón diasTrabajados/diasLaborablesMes
-// es válida tanto para un período mensual como para media quincena.
+// es válida tanto para un período mensual como para media quincena. Reusa
+// ajustesToParams (dominican-labor.ts) en vez de repetir el bucketing de
+// conceptos inline — así el catálogo de conceptos personalizados (y
+// cualquier concepto nuevo a futuro) solo necesita mantenerse en un lugar.
 function calcularConAjustes(
   empleado: Empleado,
   ajustes: AjusteLinea[],
@@ -137,15 +149,8 @@ function calcularConAjustes(
   quincena: 1 | 2,
   diasOverride?: { diasTrabajados: number; diasLaborablesMes: number } | null,
 ): ResultadoNomina {
-  const horasExtras35   = ajustes.filter(a => a.concepto === 'horas_extras_35').reduce((s, a) => s + a.valor, 0)
-  const horasExtras100  = ajustes.filter(a => a.concepto === 'horas_extras_100').reduce((s, a) => s + a.valor, 0)
-  const horasNocturnas  = ajustes.filter(a => a.concepto === 'recargo_nocturno').reduce((s, a) => s + a.valor, 0)
-  const bonificaciones  = ajustes.filter(a => a.concepto === 'bono' || a.concepto === 'otro_ingreso').reduce((s, a) => s + a.valor, 0)
-  const comisiones      = ajustes.filter(a => a.concepto === 'comision').reduce((s, a) => s + a.valor, 0)
-  const sfsDependientes = ajustes.filter(a => a.concepto === 'dependiente_sfs').reduce((s, a) => s + a.valor, 0)
-  const otrosDescuentos = ajustes.filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento').reduce((s, a) => s + a.valor, 0)
   const params: ParametrosNomina = {
-    horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos,
+    ...ajustesToParams(ajustes),
     ...(diasOverride ? { diasTrabajados: diasOverride.diasTrabajados, diasLaborablesMes: diasOverride.diasLaborablesMes } : {}),
   }
   return tipo === 'quincenal'
@@ -302,6 +307,7 @@ function descargarComprobantePDF(
     ...(nomina.importeNocturno > 0 ? [{ label: 'Recargo Nocturno (15%)', v: nomina.importeNocturno }] : []),
     ...(nomina.bonificaciones > 0 ? [{ label: 'Bonificaciones',    v: nomina.bonificaciones }] : []),
     ...(nomina.comisiones     > 0 ? [{ label: 'Comisiones',        v: nomina.comisiones }]     : []),
+    ...(nomina.ingresosPersonalizados > 0 ? [{ label: 'Otros Ingresos', v: nomina.ingresosPersonalizados }] : []),
   ]
   const descuentos = [
     { label: 'AFP Empleado (2.87%)', v: nomina.afpEmpleado },
@@ -501,6 +507,7 @@ function DetalleNomina({
                 { label: 'Recargo Nocturno (15%)', value: nomina.importeNocturno, hide: nomina.importeNocturno === 0 },
                 { label: 'Bonificaciones',       value: nomina.bonificaciones, hide: nomina.bonificaciones === 0 },
                 { label: 'Comisiones',           value: nomina.comisiones,     hide: nomina.comisiones === 0 },
+                { label: 'Otros Ingresos',       value: nomina.ingresosPersonalizados, hide: nomina.ingresosPersonalizados === 0 },
               ].filter(r => !r.hide).map(row => (
                 <div key={row.label} className="flex justify-between text-sm">
                   <span className="text-zinc-600 dark:text-zinc-400">{row.label}</span>
@@ -629,6 +636,7 @@ export default function NominaPage() {
   const { saldos: saldosISR, getSaldosActivos, getMontoAplicadoEnPeriodo, aplicar: aplicarSaldoISR } = useSaldoISR()
   const { getFeriados } = useFeriados()
   const { user } = useAuth()
+  const { conceptosActivos: conceptosPersonalizados, getConcepto: getConceptoPersonalizado } = useConceptosPersonalizados()
 
   // Aplica el saldo ISR a favor sobre un resultado ya calculado. Si el
   // empleado ya fue procesado en este período, usa el monto histórico
@@ -674,6 +682,7 @@ export default function NominaPage() {
   const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null)
   const [newTipo, setNewTipo]             = useState<'ingreso' | 'deduccion'>('ingreso')
   const [newConcepto, setNewConcepto]     = useState<ConceptoAjuste>('bono')
+  const [newConceptoPersId, setNewConceptoPersId] = useState<string | null>(null)
   const [newValor, setNewValor]           = useState('')
   const [newDesc, setNewDesc]             = useState('')
 
@@ -903,6 +912,18 @@ export default function NominaPage() {
       descripcion: newDesc,
       valor,
     }
+    // Concepto del catálogo configurable — se guarda un snapshot del nombre y
+    // los flags de ISR/TSS al momento de agregarlo, no una referencia viva
+    // (ver AjusteLinea en types/index.ts).
+    if (newConcepto === 'personalizado' && newConceptoPersId) {
+      const cp = getConceptoPersonalizado(newConceptoPersId)
+      if (cp) {
+        ajuste.conceptoPersonalizadoId = cp.id
+        ajuste.conceptoPersonalizadoNombre = cp.nombre
+        ajuste.afectaISR = cp.tipo === 'ingreso' ? cp.afectaISR : false
+        ajuste.afectaTSS = cp.tipo === 'ingreso' ? cp.afectaTSS : false
+      }
+    }
     actualizarAjustes(periodoActual.id, empleadoId, [...getAjustes(empleadoId), ajuste])
     setNewValor('')
     setNewDesc('')
@@ -913,6 +934,7 @@ export default function NominaPage() {
     setExpandedEmpId(empId)
     setNewTipo('ingreso')
     setNewConcepto('bono')
+    setNewConceptoPersId(null)
     setNewValor('')
     setNewDesc('')
   }
@@ -1782,7 +1804,7 @@ export default function NominaPage() {
                                     : 'bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:ring-rose-800/50'
                                 }`}
                               >
-                                {labelConcepto(a.concepto)}{' '}
+                                {labelAjuste(a)}{' '}
                                 {isHorasConcepto(a.concepto) ? `${a.valor}h` : fmt(a.valor, 0)}
                                 {esEnProceso && (
                                   <button
@@ -1868,13 +1890,13 @@ export default function NominaPage() {
                                   <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Tipo</label>
                                   <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
                                     <button
-                                      onClick={() => { setNewTipo('ingreso'); setNewConcepto('bono') }}
+                                      onClick={() => { setNewTipo('ingreso'); setNewConcepto('bono'); setNewConceptoPersId(null) }}
                                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${newTipo === 'ingreso' ? 'bg-emerald-600 text-white' : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'}`}
                                     >
                                       Ingreso
                                     </button>
                                     <button
-                                      onClick={() => { setNewTipo('deduccion'); setNewConcepto('prestamo') }}
+                                      onClick={() => { setNewTipo('deduccion'); setNewConcepto('prestamo'); setNewConceptoPersId(null) }}
                                       className={`px-3 py-1.5 text-xs font-medium transition-colors ${newTipo === 'deduccion' ? 'bg-rose-600 text-white' : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'}`}
                                     >
                                       Deducción
@@ -1885,13 +1907,29 @@ export default function NominaPage() {
                                 <div className="flex flex-col gap-1.5">
                                   <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Concepto</label>
                                   <select
-                                    value={newConcepto}
-                                    onChange={e => setNewConcepto(e.target.value as ConceptoAjuste)}
+                                    value={newConcepto === 'personalizado' ? `custom:${newConceptoPersId}` : newConcepto}
+                                    onChange={e => {
+                                      const v = e.target.value
+                                      if (v.startsWith('custom:')) {
+                                        setNewConcepto('personalizado')
+                                        setNewConceptoPersId(v.slice(7))
+                                      } else {
+                                        setNewConcepto(v as ConceptoAjuste)
+                                        setNewConceptoPersId(null)
+                                      }
+                                    }}
                                     className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
                                   >
                                     {(newTipo === 'ingreso' ? conceptosIngreso : conceptosDeduccion).map(c => (
                                       <option key={c} value={c}>{labelConcepto(c)}</option>
                                     ))}
+                                    {conceptosPersonalizados.filter(cp => cp.tipo === newTipo).length > 0 && (
+                                      <optgroup label="Catálogo de la empresa">
+                                        {conceptosPersonalizados.filter(cp => cp.tipo === newTipo).map(cp => (
+                                          <option key={cp.id} value={`custom:${cp.id}`}>{cp.nombre}</option>
+                                        ))}
+                                      </optgroup>
+                                    )}
                                   </select>
                                 </div>
 

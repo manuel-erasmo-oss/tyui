@@ -634,19 +634,81 @@ SPN Software, ver sección de arriba). Quedan pendientes las secciones
 
 ### 🟡 Media prioridad
 
-- Catálogo configurable de tipos de ingreso/descuento (flags de qué computa
-  para prestaciones/ISR/TSS) en vez de lógica hardcodeada. **Deliberadamente
-  no implementado esta sesión**: a diferencia de los demás items de este
+- ~~Catálogo configurable de tipos de ingreso/descuento~~ — **implementado**,
+  a petición explícita del usuario (revocando la decisión previa de diferirlo
+  documentada abajo). Nueva sección **"Ingresos y Deducciones"** en
+  Configuración (`src/app/configuracion/page.tsx`, vista `'conceptos'`) con
+  dos tablas: (1) `CONCEPTOS_LEY` — catálogo de los 9 conceptos legales
+  existentes (horas extra, comisión, bono, dependiente SFS, préstamo, etc.),
+  de solo lectura, mostrando si cada uno afecta ISR/TSS y su base legal; (2)
+  catálogo editable de `ConceptoPersonalizado` (nuevo tipo en `types/index.ts`)
+  — el usuario crea ingresos o deducciones nuevos con nombre propio, y para
+  ingresos, dos checkboxes independientes "Afecta ISR" / "Afecta TSS".
+  Contexto nuevo `conceptos-personalizados-context.tsx` (mismo patrón que
+  `prestamos-context.tsx`), con **soft-delete** (`activo: false`, nunca se
+  borra el registro) para que ajustes históricos que ya referencian un
+  concepto sigan siendo válidos aunque se "elimine" del catálogo después.
+  Sin restricción de quién puede editarlo (confirmado explícitamente por el
+  usuario — no hay roles reales en la app, mismo caso ya documentado para
+  desposteo/aumentos).
+  **Diseño de la salvaguarda legal** (la razón original para diferir esto):
+  - **Las deducciones personalizadas NUNCA afectan ISR ni TSS** — decisión
+    explícita del usuario ("Las deducciones no deben afectar los pasivos de
+    TSS e Infotep ni el ISR"), forzada a nivel de datos (no solo de UI): el
+    contexto pone `afectaISR`/`afectaTSS` en `false` automáticamente para
+    `tipo === 'deduccion'` tanto al crear como al editar, así que ni un bug
+    de UI futuro podría violar esta regla. Todas las deducciones (de ley o
+    personalizadas) siguen cayendo en el mismo bucket `otrosDescuentos`,
+    post-impuesto.
+  - **Snapshot en el momento de uso, nunca referencia viva**: cuando se
+    agrega un ajuste personalizado a un empleado en Nómina, `AjusteLinea`
+    graba `conceptoPersonalizadoNombre`/`afectaISR`/`afectaTSS` en ese
+    instante (mismo patrón ya usado para congelar créditos de ISR) — editar
+    o desactivar el concepto en el catálogo después nunca altera
+    retroactivamente nóminas ya calculadas o cerradas.
+  - **Aislamiento de la base TSS**: para que un ingreso personalizado exento
+    de TSS no infle igual los topes de AFP/SFS/SRL, el motor
+    (`dominican-labor.ts`) separa `totalBrutoLegado` (todo lo de ley, siempre
+    grava/cotiza) de `totalBruto` (legado + TODO ingreso personalizado, para
+    display/prestaciones) — las bases topadas de TSS/ISR se calculan sumando
+    a `totalBrutoLegado` solo el subconjunto de ingresos personalizados cuyo
+    flag realmente aplica (`ingresosPersonalizadosCotizablesTSS`/
+    `ingresosPersonalizadosGravablesISR`), nunca el total sin filtrar.
+  - Nueva función compartida `ajustesToParams()` en `dominican-labor.ts` —
+    única fuente de verdad para convertir `AjusteLinea[]` en
+    `ParametrosNomina`, usada ahora por `nomina/page.tsx` y
+    `empleados/page.tsx` (antes cada uno tenía su propia lógica duplicada de
+    bucketing; el duplicado de `empleados/page.tsx` tenía un bug preexistente
+    — no manejaba `recargo_nocturno` — corregido como efecto colateral de la
+    unificación). `reportes/page.tsx` ya importaba `ajustesToParams`
+    directamente, así que no necesitó cambios.
+  Verificado en navegador con matemática exacta: concepto "Bono Especial"
+  (ingreso, afectaISR=true, afectaTSS=false) de RD$10,000 aplicado a María
+  González Pérez (salarioBase RD$55,000) → AFP Empleado y SFS Empleado
+  **sin cambio** (RD$1,578.50 / RD$1,672.00, confirmando la exención de
+  TSS), ISR Retención sube exacto a RD$4,545.75 (cruza al tramo 20%), Salario
+  Neto RD$57,204 — coincide centavo por centavo con el cálculo manual de
+  verificación, incluyendo los aportes patronales (AFP/SFS Empleador
+  calculados sobre RD$55,000, no RD$65,000, confirmando que la base TSS
+  patronal tampoco se infla). Concepto "Descuento de Comedor" (deducción) de
+  RD$2,000 aplicado a José Hernández Cruz → AFP/SFS/ISR **sin ningún cambio**,
+  Salario Neto baja exacto en RD$2,000 (RD$39,593 → RD$37,593), confirmando
+  que las deducciones personalizadas son 100% post-impuesto como exige la
+  regla de negocio.
+
+  (Contexto histórico — decisión original de diferir esto, ya superada por
+  la implementación de arriba a petición explícita del usuario:) *Catálogo
+  configurable de tipos de ingreso/descuento (flags de qué computa para
+  prestaciones/ISR/TSS) en vez de lógica hardcodeada. Deliberadamente no
+  implementado en su momento: a diferencia de los demás items de este
   backlog, este le da al usuario control directo sobre QUÉ tributa cada
-  concepto — un error de configuración (ej. marcar mal si un concepto reduce
-  la base del ISR) llevaría a una retención incorrecta y un problema real de
-  cumplimiento legal, no solo un bug de UI. El sistema hardcodeado actual ya
-  implementa correctamente el tratamiento legal dominicano de cada concepto
-  (horas extra, comisión, dependiente SFS, etc.); generalizarlo a un catálogo
-  editable por el usuario requiere diseño cuidadoso (¿quién audita los flags?
-  ¿se versiona el catálogo por período para no alterar retroactivamente
-  nóminas ya procesadas?) que amerita su propia sesión con más contexto, no
-  una implementación apurada al final de un backlog largo.
+  concepto — un error de configuración llevaría a una retención incorrecta y
+  un problema real de cumplimiento legal, no solo un bug de UI. Generalizarlo
+  requería diseño cuidadoso (¿quién audita los flags? ¿se versiona el
+  catálogo por período para no alterar retroactivamente nóminas ya
+  procesadas?) — ambas preguntas quedaron resueltas arriba (sin restricción
+  de acceso confirmado por el usuario; snapshot-at-creation-time resuelve el
+  versionado retroactivo).*
 - ~~Reglas de manejo de insuficiencia de fondos~~ — **implementado.** Nueva
   función `manejarInsuficienciaFondos(empId)` en `nomina/page.tsx`, invocada
   justo antes de marcar procesado a un empleado (en los 3 puntos de entrada:
