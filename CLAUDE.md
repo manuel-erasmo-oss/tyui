@@ -1719,6 +1719,46 @@ click real vivía en un botón chico anidado al final de la fila.
   Nómina y el detalle en Préstamos; `tsc --noEmit` y `npm run build`
   limpios (19 rutas).
 
+## Sidebar colapsado con flyout al hover
+
+Pedido explícito del usuario: el botón de colapsar debe seguir existiendo
+tal cual, pero además, estando colapsado, posicionar el mouse sobre el
+riel debe expandirlo temporalmente, y al sacar el mouse debe volver a
+colapsarse — patrón "hover-to-peek" (VS Code, Notion).
+
+- **`src/components/layout/Sidebar.tsx`** — nuevo estado `hovering` +
+  `flyout = c && hovering` (`c` = colapsado real y montado) +
+  `wide = !c || flyout`. `wide` reemplazó todos los `!c` que controlaban
+  qué se renderiza (wordmark, labels de nav, texto de usuario, etc.); `c`
+  se conservó tal cual solo donde de verdad debe reflejar el estado
+  persistido (ícono/título del botón de colapsar, atajo de teclado
+  irrelevante aquí, `localStorage`).
+- **Sin desplazar el contenido de la página**: en vez de simplemente
+  ensanchar el `<aside>` en flujo normal (lo que empujaría `<main>` cada
+  vez que el mouse pasa por encima — reflow indeseado), el flyout cambia
+  el propio `<aside>` a `fixed left-0 top-0 z-40 w-60 shadow-2xl` y se
+  agrega un `<div>` espaciador de `w-[68px]` en su lugar dentro del flujo
+  flex, para que `<main>` nunca note la diferencia. El resultado es que el
+  riel expandido *flota* encima del contenido con sombra, como una capa,
+  no como un cambio de layout.
+- Los controles internos que ya recibían `collapsed` como prop
+  (`CuentaSwitcher`) ahora reciben `collapsed={!wide}` — su dropdown se
+  posiciona correctamente dentro del riel ancho durante el flyout en vez
+  de intentar salir fuera del `overflow-hidden` del `<aside>`.
+- Pequeño margen anti-parpadeo: `onMouseLeave` no colapsa de inmediato,
+  espera 150ms (cancelable si el mouse vuelve a entrar) antes de disparar
+  `setHovering(false)` — evita que un roce accidental del cursor cierre el
+  flyout de golpe.
+- El botón de colapsar/expandir persistente (`localStorage cielo-sidebar`)
+  sigue funcionando exactamente igual que antes — el flyout es puramente
+  una capa visual temporal encima del estado colapsado, nunca lo modifica.
+- Verificado en navegador con cuenta real: colapsado = 68px estático;
+  posicionar el mouse sobre el riel lo expande a 240px SIN mover
+  `<main>` (medido con `boundingBox()`, `main.x` idéntico antes/durante el
+  hover); sacar el mouse lo vuelve a colapsar a 68px; hacer click en un
+  ítem de navegación durante el flyout navega correctamente (confirmado
+  con `waitForURL`). `tsc --noEmit` y `npm run build` limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
