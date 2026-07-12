@@ -315,6 +315,7 @@ function ReporteGerencial({
             return [periodoLabel(p), p.totalEmpleados, p.totales.bruto, p.totales.descuentos, p.totales.neto, delta !== null ? `${delta.toFixed(1)}%` : '—', p.totales.costoTotal]
           }),
           anchos: [30, 14, 18, 18, 18, 12, 18],
+          columnasEnteras: [1],
         },
         ...(desglose.length > 0 ? [{
           nombre: 'Por Departamento',
@@ -322,6 +323,7 @@ function ReporteGerencial({
           encabezados: ['Departamento', 'Empleados', 'Sal. Bruto', 'Sal. Neto', 'Costo Total', '% del Total'],
           filas: desglose.map(d => [d.depto, d.headcount, d.bruto, d.neto, d.costo, `${d.pct.toFixed(1)}%`]),
           anchos: [28, 14, 18, 18, 18, 14],
+          columnasEnteras: [1],
         }] : []),
       ],
     })
@@ -1757,6 +1759,7 @@ function ReporteCostoPorDepto({
         filas: deptos.map(d => [d.depto, d.headcount, d.bruto, d.neto, d.tss, d.costo, `${d.pct.toFixed(1)}%`]),
         totales: ['TOTALES', totales.headcount, totales.bruto, totales.neto, totales.tss, totales.costo, '100%'],
         anchos: [28, 14, 18, 18, 18, 18, 14],
+        columnasEnteras: [1],
       }],
     })
   }
@@ -2814,6 +2817,7 @@ function ReportePreaviso({
           cumplio ? 'Cumplió' : 'Incumplió',
         ]),
         anchos: [30, 16, 18, 18, 14, 14, 12, 12],
+        columnasEnteras: [4, 5, 6],
       }],
     })
   }
@@ -3076,6 +3080,7 @@ function ReporteAntiguedad({
           encabezados: ['Rango de Antigüedad', 'Empleados', '% del Total'],
           filas: porRango.map(r => [r.label, r.count, `${r.pct.toFixed(1)}%`]),
           anchos: [22, 14, 14],
+          columnasEnteras: [1],
         },
         {
           nombre: 'Por Posición',
@@ -3084,6 +3089,7 @@ function ReporteAntiguedad({
           encabezados: ['Posición / Cargo', 'Empleados', 'Antigüedad Promedio (años)'],
           filas: porPosicion.map(p => [p.cargo, p.count, Number(p.avgAnos.toFixed(2))]),
           anchos: [26, 14, 22],
+          columnasEnteras: [1],
         },
         {
           nombre: 'Detalle',
@@ -3665,6 +3671,7 @@ function ReporteLicencias({
         ]),
         totales: ['TOTALES', '', '', '', resumen.dias, resumen.montoPagado, resumen.subsidio],
         anchos: [32, 16, 24, 16, 10, 16, 20],
+        columnasEnteras: [4],
       }],
     })
   }

@@ -4,17 +4,21 @@ import { useMemo, useState } from 'react'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
+import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import { getAnosServicio } from '@/lib/dominican-labor'
 import { formatRD, formatAnosServicio, fullName } from '@/lib/utils'
-import { Percent, Users, Banknote, Info } from 'lucide-react'
+import { Percent, Users, Banknote, Info, Download } from 'lucide-react'
 
 // Tarifa diaria estándar del sistema (salario mensual / 23.83 días)
 const DIAS_MES = 23.83
 
 export default function BonificacionPage() {
   const { empleadosActivos } = useEmpleados()
+  const { empresa } = useEmpresa()
   const [utilidadNeta, setUtilidadNeta] = useState<string>('')
+  const [toast, setToast] = useState<string | null>(null)
 
   const utilidad = parseFloat(utilidadNeta) || 0
   const distribuible = utilidad * 0.10
@@ -43,11 +47,56 @@ export default function BonificacionPage() {
   const totalRepartido = filas.reduce((s, f) => s + f.montoFinal, 0)
   const empleadosConTope = filas.filter(f => f.topeAplicado).length
 
+  // Exporta el cálculo de bonificación tal como está en pantalla — mismas
+  // filas ya calculadas (proporcional al salario, con el tope de 45/60 días
+  // ya aplicado), no un recálculo aparte.
+  async function handleExportarExcel() {
+    if (filas.length === 0) return
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filasExcel = filas.map(({ empleado, anos, diasTope, proporcional, montoFinal }) => [
+      fullName(empleado),
+      formatAnosServicio(anos),
+      empleado.salarioBase,
+      diasTope,
+      proporcional,
+      montoFinal,
+    ])
+    await exportarExcel({
+      nombreArchivo: `bonificacion-utilidades-${new Date().toISOString().slice(0, 10)}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Bonificación',
+        titulo: 'Bonificación por Participación en Utilidades',
+        subtitulo: `Art. 223 · Utilidad Neta: ${formatRD(utilidad)} · 10% Distribuible: ${formatRD(distribuible)}`,
+        encabezados: ['Empleado', 'Antigüedad', 'Salario Base', 'Tope (días)', 'Proporcional', 'Monto a Pagar'],
+        filas: filasExcel,
+        totales: [
+          `TOTAL — ${filas.length} empleado(s)`, '', '',
+          '', filas.reduce((s, f) => s + f.proporcional, 0), totalRepartido,
+        ],
+        anchos: [26, 16, 16, 14, 16, 18],
+        columnasEnteras: [3],
+      }],
+    })
+    setToast('Bonificación por utilidades exportada a Excel')
+  }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Bonificación por Utilidades"
         subtitle="Art. 223 · Código de Trabajo · Ley 16-92"
+        actions={
+          <button
+            onClick={handleExportarExcel}
+            disabled={filas.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Excel
+          </button>
+        }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
@@ -212,6 +261,10 @@ export default function BonificacionPage() {
         </div>
 
       </div>
+
+      {toast && (
+        <Toast message={toast} type="success" onClose={() => setToast(null)} />
+      )}
     </div>
   )
 }

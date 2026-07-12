@@ -3,9 +3,11 @@
 import { useMemo, useState } from 'react'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
+import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import { formatRD, fullName } from '@/lib/utils'
-import { Landmark, Percent, CalendarClock, Plus, Trash2, Info } from 'lucide-react'
+import { Landmark, Percent, CalendarClock, Plus, Trash2, Info, Download } from 'lucide-react'
 
 // Impuesto Sustitutivo sobre Retribuciones Complementarias — guía oficial DGII
 const TASA_IMPUESTO_SUSTITUTIVO = 0.27
@@ -29,11 +31,13 @@ const INPUT_CLASS =
 
 export default function RetribucionesComplementariasPage() {
   const { empleadosActivos } = useEmpleados()
+  const { empresa } = useEmpresa()
 
   const [empleadoId, setEmpleadoId] = useState<string>('')
   const [lineas, setLineas] = useState<LineaRetribucion[]>([])
   const [concepto, setConcepto] = useState<string>(CATEGORIAS_RETRIBUCION[0])
   const [valorMensual, setValorMensual] = useState<string>('')
+  const [toast, setToast] = useState<string | null>(null)
 
   const empleado = useMemo(
     () => empleadosActivos.find(e => e.id === empleadoId),
@@ -59,11 +63,62 @@ export default function RetribucionesComplementariasPage() {
   const impuestoMensual = totalMensual * TASA_IMPUESTO_SUSTITUTIVO
   const impuestoAnualizado = impuestoMensual * 12
 
+  // Exporta las líneas ingresadas (valores ya calculados en pantalla) más un
+  // resumen del Impuesto Sustitutivo — mensual y anualizado de referencia —
+  // en una segunda hoja, ya que "totales" solo admite una fila.
+  async function handleExportarExcel() {
+    if (lineas.length === 0) return
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filas = lineas.map(l => [l.concepto, l.valorMensual, l.valorMensual * TASA_IMPUESTO_SUSTITUTIVO])
+    const subtitulo = empleado
+      ? `Beneficiario de referencia: ${fullName(empleado)}`
+      : 'Sin beneficiario asignado — cálculo general'
+    await exportarExcel({
+      nombreArchivo: `retribuciones-complementarias-${new Date().toISOString().slice(0, 10)}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [
+        {
+          nombre: 'Detalle',
+          titulo: 'Retribuciones Complementarias',
+          subtitulo,
+          encabezados: ['Concepto', 'Valor Mensual (RD$)', 'Impuesto Sustitutivo 27%'],
+          filas,
+          totales: [`TOTAL — ${lineas.length} concepto(s)`, totalMensual, impuestoMensual],
+          anchos: [30, 20, 22],
+        },
+        {
+          nombre: 'Resumen',
+          titulo: 'Resumen del Impuesto Sustitutivo',
+          subtitulo: 'Impuesto Sustitutivo sobre Retribuciones Complementarias — DGII',
+          encabezados: ['Concepto', 'Monto (RD$)'],
+          filas: [
+            ['Suma Total Mensual', totalMensual],
+            ['Impuesto Sustitutivo 27% Mensual', impuestoMensual],
+            ['Impuesto Anualizado (referencia)', impuestoAnualizado],
+          ],
+          anchos: [34, 20],
+        },
+      ],
+    })
+    setToast('Retribuciones complementarias exportadas a Excel')
+  }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Retribuciones Complementarias"
         subtitle="Impuesto Sustitutivo 27% · Guía DGII"
+        actions={
+          <button
+            onClick={handleExportarExcel}
+            disabled={lineas.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Excel
+          </button>
+        }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
@@ -258,6 +313,10 @@ export default function RetribucionesComplementariasPage() {
         </div>
 
       </div>
+
+      {toast && (
+        <Toast message={toast} type="success" onClose={() => setToast(null)} />
+      )}
     </div>
   )
 }

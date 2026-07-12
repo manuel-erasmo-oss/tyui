@@ -3,15 +3,17 @@
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { useEmpleados } from '@/lib/empleados-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import { getMesesServicio } from '@/lib/dominican-labor'
 import { formatRD, formatDate, fullName } from '@/lib/utils'
-import { Gift, Calendar, AlertTriangle } from 'lucide-react'
+import { Gift, Calendar, AlertTriangle, Download } from 'lucide-react'
 
 const hoy = new Date()
 const mesActual = hoy.getMonth() + 1  // 1-based
 
 export default function RegaliaPage() {
   const { empleadosEnNomina } = useEmpleados()
+  const { empresa } = useEmpresa()
   const filas = empleadosEnNomina.map(e => {
     const mesesServicio      = Math.min(getMesesServicio(e.fechaIngreso), mesActual)
     // Math.max(0, …): protege contra fechaIngreso en el futuro (error de
@@ -31,11 +33,50 @@ export default function RegaliaPage() {
     (new Date(hoy.getFullYear(), 11, 20).getTime() - hoy.getTime()) / (1000 * 3600 * 24)
   ))
 
+  // Exporta exactamente las mismas filas ya calculadas para la tabla en
+  // pantalla (mismo desglose, mismo total). Carga la librería bajo demanda.
+  async function handleExportar() {
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filasExcel = filas.map(({ empleado, mesesAcumulados, acumulado, proyeccionAnual, porcentaje }) => [
+      fullName(empleado),
+      empleado.cedula,
+      empleado.salarioBase,
+      mesesAcumulados,
+      Number(acumulado.toFixed(2)),
+      proyeccionAnual,
+      Math.round(porcentaje),
+    ])
+    await exportarExcel({
+      nombreArchivo: `regalia-pascual-${new Date().toISOString().slice(0, 10)}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Regalía Pascual',
+        titulo: `Provisión por Empleado — Año ${hoy.getFullYear()}`,
+        subtitulo: 'Art. 219 · Código de Trabajo · Ley 16-92',
+        encabezados: ['Empleado', 'Cédula', 'Salario Mensual', 'Meses Acumulados', 'Acumulado', 'Proyección Anual', 'Progreso %'],
+        filas: filasExcel,
+        totales: ['TOTAL', '', '', '', Number(totalAcumulado.toFixed(2)), Number(totalProyectado.toFixed(2)), ''],
+        anchos: [26, 16, 16, 16, 16, 16, 12],
+        columnasEnteras: [3, 6],
+      }],
+    })
+  }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Regalía Pascual"
         subtitle="Art. 219 · Código de Trabajo · Ley 16-92"
+        actions={
+          <button
+            onClick={handleExportar}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Excel
+          </button>
+        }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 

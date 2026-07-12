@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Header } from '@/components/layout/Header'
 import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import { usePrestamos } from '@/lib/prestamos-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
@@ -14,20 +15,6 @@ import type { MotivoLiquidacion } from '@/types'
 import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History, Info, CheckCircle2, XCircle, Clock } from 'lucide-react'
 
 type Motivo = MotivoLiquidacion
-
-// ── CSV export ────────────────────────────────────────────────────────────────
-function exportarCSV(filename: string, headers: string[], rows: (string | number)[][]) {
-  const bom = '﻿'
-  const csv = [headers, ...rows]
-    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
-    .join('\r\n')
-  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url; a.download = filename
-  document.body.appendChild(a); a.click()
-  document.body.removeChild(a); URL.revokeObjectURL(url)
-}
 
 const MOTIVO_LABELS: Record<Motivo, string> = {
   renuncia: 'Renuncia Voluntaria',
@@ -65,6 +52,7 @@ const INPUT_CLASS =
 
 export default function LiquidacionPage() {
   const { empleadosActivos, empleados, update } = useEmpleados()
+  const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago } = usePrestamos()
   const { periodos } = usePeriodos()
   const { liquidaciones, registrar } = useLiquidaciones()
@@ -238,46 +226,117 @@ export default function LiquidacionPage() {
     ? calcularDiasTrabajadosPendientes(emp, periodos, new Date(fechaTerminacion))
     : null
 
-  function handleExportCSV() {
+  // Exporta el desglose completo de la liquidación individual seleccionada
+  // (mismos conceptos que se ven en pantalla) a un Excel con estilo, en vez
+  // del CSV plano anterior. La librería (exceljs) se carga bajo demanda.
+  async function handleExportExcel() {
     if (!emp || !resultado || !motivo) return
+    const { exportarExcel } = await import('@/lib/excel-export')
     const { cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, saldoISR, total } = resultado
-    const rows: (string | number)[][] = [
-      ['Cesantía', cesantia > 0 ? 'Sí' : 'No', cesantia.toFixed(2)],
-      ['Preaviso', preaviso > 0 ? 'Sí' : 'No', preaviso.toFixed(2)],
-      ['Asistencia Económica', asistenciaEconomica > 0 ? 'Sí' : 'No', asistenciaEconomica.toFixed(2)],
-      ['Vacaciones No Gozadas', 'Sí', vacaciones.toFixed(2)],
-      ['Regalía Proporcional', 'Sí', regalia.toFixed(2)],
+    const filas: (string | number)[][] = [
+      ['Cesantía', cesantia > 0 ? 'Sí' : 'No', cesantia],
+      ['Preaviso', preaviso > 0 ? 'Sí' : 'No', preaviso],
+      ['Asistencia Económica', asistenciaEconomica > 0 ? 'Sí' : 'No', asistenciaEconomica],
+      ['Vacaciones No Gozadas', 'Sí', vacaciones],
+      ['Regalía Proporcional', 'Sí', regalia],
     ]
     if (resultado.diasTrabajadosPendientes > 0) {
-      rows.push(
-        [`Días Trabajados Pendientes (${resultado.diasTrabajadosPendientes} días, bruto)`, 'Sí', resultado.salarioDiasTrabajadosBruto.toFixed(2)],
-        ['  AFP Empleado', '', (-resultado.afpDiasTrabajados).toFixed(2)],
-        ['  SFS Empleado', '', (-resultado.sfsDiasTrabajados).toFixed(2)],
-        ['  ISR Retención', '', (-resultado.isrDiasTrabajados).toFixed(2)],
-        ['  Días Trabajados (neto)', '', resultado.salarioDiasTrabajadosNeto.toFixed(2)],
+      filas.push(
+        [`Días Trabajados Pendientes (${resultado.diasTrabajadosPendientes} días, bruto)`, 'Sí', resultado.salarioDiasTrabajadosBruto],
+        ['  AFP Empleado', '', -resultado.afpDiasTrabajados],
+        ['  SFS Empleado', '', -resultado.sfsDiasTrabajados],
+        ['  ISR Retención', '', -resultado.isrDiasTrabajados],
+        ['  Días Trabajados (neto)', '', resultado.salarioDiasTrabajadosNeto],
       )
     }
-    rows.push(['Subtotal Prestaciones', '', subtotal.toFixed(2)])
+    filas.push(['Subtotal Prestaciones', '', subtotal])
     if (saldoISR > 0) {
-      rows.push(['Saldo ISR a Favor', 'Sí', saldoISR.toFixed(2)])
+      filas.push(['Saldo ISR a Favor', 'Sí', saldoISR])
     }
     if (totalPrestamos > 0) {
-      rows.push(['Descuento Préstamos Pendientes', 'Sí', (-totalPrestamos).toFixed(2)])
+      filas.push(['Descuento Préstamos Pendientes', 'Sí', -totalPrestamos])
     }
     if (resultado.cumplioPreaviso !== null) {
-      rows.push([
+      filas.push([
         'Cumplimiento Preaviso (Art. 76)',
         resultado.cumplioPreaviso ? 'Cumplió' : `Incumplió por ${Math.abs(resultado.diferenciaDiasPreaviso ?? 0)} días`,
         `${resultado.diasAnticipacionReal} de ${resultado.diasPreavisoRequeridos} días requeridos`,
       ])
     }
-    rows.push(['TOTAL NETO A PAGAR', '', total.toFixed(2)])
-    exportarCSV(
-      `liquidacion_${fullName(emp).replace(/\s+/g, '_')}_${fechaTerminacion}.csv`,
-      ['Concepto', 'Aplica', 'Monto (RD$)'],
-      rows,
-    )
-    setToast('CSV exportado')
+    await exportarExcel({
+      nombreArchivo: `liquidacion-${fullName(emp).replace(/\s+/g, '-')}-${fechaTerminacion}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Liquidación',
+        titulo: `Liquidación — ${fullName(emp)}`,
+        subtitulo: `${MOTIVO_LABELS[motivo]} · Terminación: ${formatDate(fechaTerminacion)}`,
+        encabezados: ['Concepto', 'Aplica', 'Monto (RD$)'],
+        filas,
+        totales: ['TOTAL NETO A PAGAR', '', total],
+        anchos: [42, 14, 20],
+      }],
+    })
+    setToast('Liquidación exportada a Excel')
+    setTimeout(() => setToast(null), 2500)
+  }
+
+  // Exporta el historial completo de liquidaciones registradas (todas las
+  // desvinculaciones, no solo la que está seleccionada en el formulario) con
+  // el mismo desglose de conceptos que cada una tuvo al finalizarse.
+  async function handleExportHistorial() {
+    if (liquidacionesOrdenadas.length === 0) return
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filas = liquidacionesOrdenadas.map(l => {
+      const empL = empMap[l.empleadoId]
+      return [
+        empL ? fullName(empL) : 'Empleado eliminado',
+        empL?.cargo ?? '—',
+        MOTIVO_LABELS[l.motivo],
+        formatDate(l.fechaTerminacion),
+        Number(l.anosServicio.toFixed(2)),
+        l.cesantia,
+        l.preaviso,
+        l.asistenciaEconomica,
+        l.vacaciones,
+        l.regalia,
+        l.diasTrabajadosPendientes ?? 0,
+        l.salarioDiasTrabajadosNeto ?? 0,
+        l.saldoISRReembolsado ?? 0,
+        -l.totalPrestamosDescontados,
+        l.totalPagado,
+        formatDate(l.fechaRegistro),
+      ]
+    })
+    const suma = (f: (l: (typeof liquidacionesOrdenadas)[number]) => number) =>
+      liquidacionesOrdenadas.reduce((s, l) => s + f(l), 0)
+    await exportarExcel({
+      nombreArchivo: 'liquidaciones-registradas',
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Liquidaciones',
+        titulo: 'Liquidaciones Registradas',
+        subtitulo: `${liquidacionesOrdenadas.length} liquidación(es) · Ley 16-92`,
+        encabezados: [
+          'Empleado', 'Cargo', 'Motivo', 'Fecha Terminación', 'Años Servicio',
+          'Cesantía', 'Preaviso', 'Asist. Económica', 'Vacaciones', 'Regalía',
+          'Días Trab. Pend.', 'Días Trab. (neto)', 'Saldo ISR Reembolsado',
+          'Desc. Préstamos', 'Total Pagado', 'Fecha Registro',
+        ],
+        filas,
+        totales: [
+          `TOTAL — ${liquidacionesOrdenadas.length} liquidación(es)`, '', '', '', '',
+          suma(l => l.cesantia), suma(l => l.preaviso), suma(l => l.asistenciaEconomica),
+          suma(l => l.vacaciones), suma(l => l.regalia), '',
+          suma(l => l.salarioDiasTrabajadosNeto ?? 0), suma(l => l.saldoISRReembolsado ?? 0),
+          -suma(l => l.totalPrestamosDescontados), suma(l => l.totalPagado), '',
+        ],
+        anchos: [24, 18, 20, 16, 13, 14, 13, 15, 13, 13, 13, 15, 16, 14, 15, 16],
+        columnasEnteras: [10],
+      }],
+    })
+    setToast('Historial de liquidaciones exportado a Excel')
     setTimeout(() => setToast(null), 2500)
   }
 
@@ -340,7 +399,7 @@ export default function LiquidacionPage() {
       pagoDiasTrabajadosPendiente: undefined,
     })
 
-    handleExportCSV()
+    void handleExportExcel()
 
     setToast(`Liquidación registrada — ${fullName(emp)} marcado como inactivo`)
     setConfirmFinalizar(false)
@@ -890,11 +949,11 @@ export default function LiquidacionPage() {
             {/* Actions */}
             <div className="flex justify-end gap-3">
               <button
-                onClick={handleExportCSV}
+                onClick={handleExportExcel}
                 className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors"
               >
                 <Download className="h-4 w-4" />
-                Exportar CSV
+                Exportar Excel
               </button>
               <button
                 onClick={() => setConfirmFinalizar(true)}
@@ -941,9 +1000,20 @@ export default function LiquidacionPage() {
 
         {/* ── Liquidaciones registradas ─────────────────────────────────── */}
         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-          <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4 flex items-center gap-2">
-            <History className="h-4 w-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Liquidaciones Registradas</h2>
+          <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-zinc-400 dark:text-zinc-500 shrink-0" />
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Liquidaciones Registradas</h2>
+            </div>
+            {liquidacionesOrdenadas.length > 0 && (
+              <button
+                onClick={handleExportHistorial}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Exportar Excel
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

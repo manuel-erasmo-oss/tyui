@@ -10,11 +10,13 @@ import {
   DIAS_VACACIONES_HASTA_5_ANOS,
   DIAS_VACACIONES_MAS_5_ANOS,
 } from '@/lib/dominican-labor'
+import { useEmpresa } from '@/lib/empresa-context'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
-import { CalendarDays, Users, Clock, AlertCircle } from 'lucide-react'
+import { CalendarDays, Users, Clock, AlertCircle, Download } from 'lucide-react'
 
 export default function VacacionesPage() {
   const { empleadosEnNomina } = useEmpleados()
+  const { empresa } = useEmpresa()
   const filas = empleadosEnNomina.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
@@ -34,11 +36,51 @@ export default function VacacionesPage() {
   const totalValor       = filas.reduce((s, f) => s + f.valorAcumulado, 0)
   const empleadosAptos   = filas.filter(f => f.puedeGozar).length
 
+  // Exporta exactamente las mismas filas ya calculadas para la tabla en
+  // pantalla (mismo desglose, mismo total). Carga la librería bajo demanda.
+  async function handleExportar() {
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filasExcel = filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, puedeGozar }) => [
+      fullName(empleado),
+      empleado.cedula,
+      formatAnosServicio(anos),
+      diasAnuales,
+      valorDiario,
+      Number(diasAcumulados.toFixed(2)),
+      Number(valorAcumulado.toFixed(2)),
+      puedeGozar ? 'Puede gozar' : 'En acumulación',
+    ])
+    await exportarExcel({
+      nombreArchivo: `vacaciones-${new Date().toISOString().slice(0, 10)}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Vacaciones',
+        titulo: 'Vacaciones por Empleado',
+        subtitulo: 'Art. 177 · Código de Trabajo · Ley 16-92',
+        encabezados: ['Empleado', 'Cédula', 'Antigüedad', 'Días/Año', 'Tarifa Diaria', 'Días Acumulados', 'Valor Acumulado', 'Estado'],
+        filas: filasExcel,
+        totales: ['TOTAL', '', '', '', '', Number(totalDias.toFixed(2)), Number(totalValor.toFixed(2)), ''],
+        anchos: [26, 16, 14, 10, 14, 16, 16, 16],
+        columnasEnteras: [3],
+      }],
+    })
+  }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Vacaciones"
         subtitle="Art. 177 · Código de Trabajo · Ley 16-92"
+        actions={
+          <button
+            onClick={handleExportar}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Excel
+          </button>
+        }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 

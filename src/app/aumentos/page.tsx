@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
   TrendingUp, Users, Building2, Check, ChevronDown, CalendarClock, Clock,
   FileSpreadsheet, ShieldCheck, UserCheck, Ban, History, X, Info, CheckCircle2,
+  Download,
 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Toast } from '@/components/ui/Toast'
@@ -12,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useAumentos } from '@/lib/aumentos-context'
 import { useAuth } from '@/lib/auth-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import { ImportadorAumentosExcel } from '@/components/aumentos/ImportadorAumentosExcel'
 import { formatRD, fullName, formatDate } from '@/lib/utils'
 import type { Empleado, RegistroAumento, EstadoAumento } from '@/types'
@@ -36,6 +38,7 @@ function EstadoBadge({ estado }: { estado: EstadoAumento }) {
 export default function AumentosPage() {
   const { empleados, empleadosActivos } = useEmpleados()
   const { user } = useAuth()
+  const { empresa } = useEmpresa()
   const { solicitar, aprobar, rechazar, aplicar, getPendientes, getHistorial } = useAumentos()
 
   // ─── Solicitud por criterio ────────────────────────────────────────────────
@@ -185,9 +188,68 @@ export default function AumentosPage() {
 
   const historialFiltrado = getHistorial(filtroHistorialEmpleado === 'todos' ? undefined : filtroHistorialEmpleado)
 
+  // Exporta el registro COMPLETO de solicitudes de aumento (todos los estados
+  // — pendientes, aprobadas, aplicadas, rechazadas), sin importar el filtro
+  // de empleado activo en la tabla de Historial: el valor de este export es
+  // ser el rastro de auditoría completo, no una vista filtrada.
+  async function handleExportarExcel() {
+    const registros = historialGlobal
+    if (registros.length === 0) return
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filas = registros.map(r => {
+      const emp = empleadoDe(r.empleadoId)
+      const pctAumento = r.salarioAnterior > 0
+        ? ((r.salarioNuevo - r.salarioAnterior) / r.salarioAnterior) * 100
+        : 0
+      return [
+        emp ? fullName(emp) : 'Empleado eliminado',
+        emp?.departamento ?? '—',
+        r.salarioAnterior,
+        r.salarioNuevo,
+        `${pctAumento.toFixed(2)}%`,
+        r.motivo,
+        estadoLabel(r.estado),
+        r.aprobadoPor ?? '—',
+        formatDate(r.fechaSolicitud),
+        r.fechaAplicacion ? formatDate(r.fechaAplicacion) : '—',
+      ]
+    })
+    await exportarExcel({
+      nombreArchivo: `aumentos-salariales-${new Date().toISOString().slice(0, 10)}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Aumentos',
+        titulo: 'Aumentos Salariales — Registro Completo',
+        subtitulo: `${registros.length} solicitud(es) · todos los estados`,
+        encabezados: [
+          'Empleado', 'Departamento', 'Salario Anterior', 'Salario Nuevo',
+          '% de Aumento', 'Motivo', 'Estado', 'Aprobado Por',
+          'Fecha de Solicitud', 'Fecha de Aplicación',
+        ],
+        filas,
+        anchos: [24, 16, 16, 16, 12, 30, 14, 18, 16, 16],
+      }],
+    })
+    setToast(`${registros.length} solicitud(es) de aumento exportada(s) a Excel`)
+  }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
-      <Header title="Aumentos Salariales" subtitle="Selección por criterio, con aprobación antes de impactar nómina" />
+      <Header
+        title="Aumentos Salariales"
+        subtitle="Selección por criterio, con aprobación antes de impactar nómina"
+        actions={
+          <button
+            onClick={handleExportarExcel}
+            disabled={historialGlobal.length === 0}
+            className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Excel
+          </button>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 

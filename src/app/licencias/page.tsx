@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
+import { useEmpresa } from '@/lib/empresa-context'
 import {
   useLicencias, DIAS_LICENCIA, DIAS_SUGERIDOS_SUBSIDIO, labelLicencia, esLicenciaConSubsidio,
 } from '@/lib/licencias-context'
@@ -12,7 +13,7 @@ import { formatRD, formatDate, fullName, BTN_PRIMARY } from '@/lib/utils'
 import type { TipoLicencia } from '@/types'
 import {
   FileClock, CalendarPlus, Banknote, Trash2, Plus, Info, Heart, HeartCrack, Baby,
-  Stethoscope, HardHat, ShieldCheck,
+  Stethoscope, HardHat, ShieldCheck, Download,
 } from 'lucide-react'
 
 const TIPOS: TipoLicencia[] = [
@@ -40,8 +41,18 @@ function iconoTipo(tipo: TipoLicencia) {
 const INPUT_CLASS =
   'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none'
 
+function labelModalidad(l: { tipo: TipoLicencia, modalidadEnfermedad?: 'ambulatoria' | 'hospitalaria' }): string {
+  if (l.tipo === 'enfermedad_comun') {
+    return l.modalidadEnfermedad === 'hospitalaria' ? 'Hospitalaria (40%)' : 'Ambulatoria (60%)'
+  }
+  if (l.tipo === 'accidente_laboral') return 'SRL (75%)'
+  if (l.tipo === 'maternidad') return 'SISALRIL (Art. 236)'
+  return '—'
+}
+
 export default function LicenciasPage() {
   const { empleadosActivos, empleados } = useEmpleados()
+  const { empresa } = useEmpresa()
   const { licencias, registrar, eliminar } = useLicencias()
 
   const [empleadoId, setEmpleadoId] = useState('')
@@ -109,6 +120,45 @@ export default function LicenciasPage() {
   }
 
   const licenciasOrdenadas = [...licencias].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))
+
+  async function handleExportar() {
+    if (licenciasOrdenadas.length === 0) return
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filas = licenciasOrdenadas.map(l => {
+      const emp = empMap[l.empleadoId]
+      return [
+        emp ? fullName(emp) : 'Empleado eliminado',
+        labelLicencia(l.tipo),
+        formatDate(l.fechaInicio),
+        formatDate(l.fechaFin),
+        labelModalidad(l),
+        l.dias,
+        l.montoPagado,
+        l.montoSubsidioEstimado ?? 0,
+      ]
+    })
+    const totalPagado = licenciasOrdenadas.reduce((s, l) => s + l.montoPagado, 0)
+    const totalSubsidio = licenciasOrdenadas.reduce((s, l) => s + (l.montoSubsidioEstimado ?? 0), 0)
+    await exportarExcel({
+      nombreArchivo: `licencias-${new Date().toISOString().split('T')[0]}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Licencias',
+        titulo: 'Licencias Registradas',
+        subtitulo: `${licenciasOrdenadas.length} licencia(s) — generado ${formatDate(new Date().toISOString())}`,
+        encabezados: [
+          'Empleado', 'Tipo de Licencia', 'Fecha Inicio', 'Fecha Fin', 'Modalidad',
+          'Días', 'Pagado por la Empresa', 'Subsidio TSS/ARL Estimado',
+        ],
+        filas,
+        totales: ['TOTAL', '', '', '', '', '', totalPagado, totalSubsidio],
+        anchos: [26, 20, 14, 14, 18, 8, 20, 22],
+        columnasEnteras: [5],
+      }],
+    })
+    setToast('Licencias exportadas a Excel')
+  }
 
   return (
     <div className="flex flex-col overflow-hidden h-full">
@@ -270,8 +320,17 @@ export default function LicenciasPage() {
 
         {/* ── Table ────────────────────────────────────────────────────── */}
         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-          <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+          <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4 flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Licencias Registradas</h2>
+            {licenciasOrdenadas.length > 0 && (
+              <button
+                onClick={handleExportar}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Exportar Excel
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

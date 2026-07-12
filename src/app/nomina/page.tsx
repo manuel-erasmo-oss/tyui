@@ -64,23 +64,6 @@ const MESES = [
 
 const hoy = new Date()
 
-// ── CSV export ────────────────────────────────────────────────────────────────
-function exportarCSV(filename: string, headers: string[], rows: (string | number)[][]) {
-  const bom = '﻿'
-  const csv = [headers, ...rows]
-    .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
-    .join('\r\n')
-  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
-}
-
 // ── Label helpers ─────────────────────────────────────────────────────────────
 // Nómina en USD — capa de presentación pura, nunca la base del cálculo. El
 // motor tributario (dominican-labor.ts) siempre calcula y persiste en RD$;
@@ -889,26 +872,79 @@ export default function NominaPage() {
     setToast('Período cerrado · Pagos de préstamos registrados')
   }
 
-  function handleExportar() {
+  // Export a Excel con TODO el detalle transaccional del período: una hoja
+  // de resumen por empleado (mismos totales que ya se ven en la tabla) más
+  // una segunda hoja con cada línea de ajuste individual (bonos, comisiones,
+  // préstamos, descuentos) — no solo los totales agregados por empleado.
+  // La librería de Excel (exceljs, ~250KB) se carga bajo demanda recién al
+  // hacer clic, para no inflar el bundle inicial de esta página.
+  async function handleExportar() {
     if (!periodoActual) return
-    const ajustesPorEmp  = periodoActual.ajustesPorEmpleado ?? {}
-    const rows = empleadosPeriodo.map(e => {
-      const r = resultadoDePeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual)
-      return [
-        fullName(e), e.cargo, e.departamento,
-        r.totalBruto.toFixed(2), r.afpEmpleado.toFixed(2), r.sfsEmpleado.toFixed(2),
-        r.isrMensual.toFixed(2), r.sfsDependientes.toFixed(2), r.totalDescuentos.toFixed(2),
-        r.salarioNeto.toFixed(2), r.afpEmpleador.toFixed(2), r.sfsEmpleador.toFixed(2),
-        r.srlEmpleador.toFixed(2), r.infotepEmpleador.toFixed(2), r.totalCostoEmpleador.toFixed(2),
-      ]
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
+
+    const resultados = empleadosPeriodo.map(e => {
+      const ajustes = ajustesPorEmp[e.id] ?? []
+      return { empleado: e, ajustes, r: resultadoDePeriodo(e, ajustes, periodoActual) }
     })
+
+    const filasResumen = resultados.map(({ empleado: e, r }) => [
+      fullName(e), e.cargo, e.departamento,
+      r.totalBruto, r.afpEmpleado, r.sfsEmpleado, r.isrMensual, r.sfsDependientes,
+      r.totalDescuentos, r.salarioNeto, r.afpEmpleador, r.sfsEmpleador,
+      r.srlEmpleador, r.infotepEmpleador, r.totalCostoEmpleador,
+    ])
+    const suma = (f: (x: (typeof resultados)[number]) => number) => resultados.reduce((s, x) => s + f(x), 0)
+    const totalesResumen = [
+      `TOTAL — ${resultados.length} empleado(s)`, '', '',
+      suma(x => x.r.totalBruto), suma(x => x.r.afpEmpleado), suma(x => x.r.sfsEmpleado),
+      suma(x => x.r.isrMensual), suma(x => x.r.sfsDependientes), suma(x => x.r.totalDescuentos),
+      suma(x => x.r.salarioNeto), suma(x => x.r.afpEmpleador), suma(x => x.r.sfsEmpleador),
+      suma(x => x.r.srlEmpleador), suma(x => x.r.infotepEmpleador), suma(x => x.r.totalCostoEmpleador),
+    ]
+
+    const filasAjustes: (string | number)[][] = []
+    for (const { empleado: e, ajustes } of resultados) {
+      for (const a of ajustes) {
+        filasAjustes.push([
+          fullName(e), e.cargo,
+          a.tipo === 'ingreso' ? 'Ingreso' : 'Descuento',
+          labelAjuste(a),
+          a.descripcion || '—',
+          isHorasConcepto(a.concepto) ? `${a.valor} horas` : a.valor,
+        ])
+      }
+    }
+
     const slug = periodoActualLabel.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
-    exportarCSV(
-      `nomina-${slug}.csv`,
-      ['Empleado','Cargo','Departamento','S. Bruto','AFP Emp','SFS Emp','ISR','SFS Dep.','Total Desc.','S. Neto','AFP Empr','SFS Empr','SRL','Infotep','Costo Total'],
-      rows,
-    )
-    setToast('Nómina exportada correctamente')
+    const estadoLabel = periodoActual.estado === 'cerrada' ? 'Cerrada'
+      : periodoActual.estado === 'procesada' ? 'Procesada' : 'En proceso'
+
+    await exportarExcel({
+      nombreArchivo: `nomina-${slug}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [
+        {
+          nombre: 'Resumen por Empleado',
+          titulo: `Nómina — ${periodoActualLabel}`,
+          subtitulo: `${resultados.length} empleado(s) · Estado: ${estadoLabel}`,
+          encabezados: ['Empleado', 'Cargo', 'Departamento', 'S. Bruto', 'AFP Empleado', 'SFS Empleado', 'ISR', 'SFS Dependientes', 'Total Descuentos', 'S. Neto', 'AFP Empleador', 'SFS Empleador', 'SRL Empleador', 'Infotep', 'Costo Total Empresa'],
+          filas: filasResumen,
+          totales: totalesResumen,
+          anchos: [26, 20, 18, 14, 13, 13, 12, 16, 15, 14, 13, 13, 13, 12, 16],
+        },
+        ...(filasAjustes.length > 0 ? [{
+          nombre: 'Detalle de Ajustes',
+          titulo: `Ajustes del Período — ${periodoActualLabel}`,
+          subtitulo: `${filasAjustes.length} ajuste(s) individuales`,
+          encabezados: ['Empleado', 'Cargo', 'Tipo', 'Concepto', 'Descripción', 'Valor'],
+          filas: filasAjustes,
+          anchos: [26, 20, 12, 20, 32, 14],
+        }] : []),
+      ],
+    })
+    setToast('Nómina exportada a Excel')
   }
 
   function getAjustes(empleadoId: string): AjusteLinea[] {
@@ -1609,7 +1645,7 @@ export default function NominaPage() {
               className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
             >
               <Download className="h-4 w-4" />
-              Exportar CSV
+              Exportar Excel
             </button>
             {empresa.tasaCambioUSD && (
               <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]" title="Solo cambia lo que se muestra en pantalla — el PDF, el CSV y el correo siguen en RD$">
