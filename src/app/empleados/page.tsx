@@ -11,7 +11,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getDivisorSalarioDiario, aplicarSaldoISRFavor, ajustesToParams } from '@/lib/dominican-labor'
+import { useRouter } from 'next/navigation'
+import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getDivisorSalarioDiario, aplicarSaldoISRFavor, ajustesToParams, MOTIVO_LIQUIDACION_LABELS } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
   fullName, contratoBadgeClass, contratoLabel, BTN_PRIMARY,
@@ -26,7 +27,7 @@ import {
 import type { EmpForm } from '@/lib/empleado-form'
 import { EmpleadoAvatar } from '@/components/empleados/EmpleadoAvatar'
 import { EmpleadoFormFields, FlagImg, inputCls, labelCls } from '@/components/empleados/EmpleadoFormFields'
-import type { Empleado, Dependiente, ParentescoDependiente, PeriodoNomina, AjusteLinea, TipoPeriodo, ResultadoNomina, TipoCreditoISR } from '@/types'
+import type { Empleado, Dependiente, ParentescoDependiente, PeriodoNomina, AjusteLinea, TipoPeriodo, ResultadoNomina, TipoCreditoISR, MotivoLiquidacion } from '@/types'
 
 // ── Floating Form Modal ───────────────────────────────────────────────────────
 type WindowState = 'normal' | 'maximized' | 'minimized'
@@ -227,9 +228,10 @@ function EmpleadoDrawer({
   onToggleActivo: () => void
   onEliminar: () => void
 }) {
-  const { update, suspender, reactivar } = useEmpleados()
+  const { update, suspender, reactivar, marcarSalidaPendiente, cancelarSalidaPendiente } = useEmpleados()
   const { periodos } = usePeriodos()
   const { registrar: registrarSaldoISR, getSaldosActivos, getMontoAplicadoEnPeriodo } = useSaldoISR()
+  const router = useRouter()
   const [showSaldoISRForm, setShowSaldoISRForm] = useState(false)
   const [saldoISRMonto, setSaldoISRMonto] = useState('')
   const [saldoISRMotivo, setSaldoISRMotivo] = useState('')
@@ -239,6 +241,10 @@ function EmpleadoDrawer({
   const [mostrarSuspension, setMostrarSuspension] = useState(false)
   const [motivoSusp, setMotivoSusp] = useState('')
   const [fechaSusp, setFechaSusp] = useState(() => new Date().toISOString().slice(0, 10))
+  const [mostrarSalida, setMostrarSalida] = useState(false)
+  const [fechaSalida, setFechaSalida] = useState(() => new Date().toISOString().slice(0, 10))
+  const [motivoSalida, setMotivoSalida] = useState<MotivoLiquidacion | ''>('')
+  const [pagoDiasSalida, setPagoDiasSalida] = useState<'nomina' | 'liquidacion' | ''>('')
   const [tabActivo, setTabActivo] = useState<'info' | 'dependientes' | 'historial'>('info')
   const [showDepForm, setShowDepForm] = useState(false)
   const [depNombre, setDepNombre]     = useState('')
@@ -337,6 +343,9 @@ function EmpleadoDrawer({
               {empleado.activo && empleado.suspendido && (
                 <Badge variant="warning">Suspendido</Badge>
               )}
+              {empleado.activo && empleado.salidaPendiente && (
+                <Badge variant="danger">Salida Pendiente</Badge>
+              )}
               {pais && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
                   <FlagImg code={pais.code} className="h-3.5 w-5" /> {pais.nombre}
@@ -347,6 +356,20 @@ function EmpleadoDrawer({
               <p className="mt-1.5 text-xs text-amber-700 dark:text-amber-400">
                 Suspendido desde el {formatDate(empleado.fechaSuspension!)}
                 {empleado.motivoSuspension && ` — ${empleado.motivoSuspension}`}
+              </p>
+            )}
+            {empleado.activo && empleado.salidaPendiente && (
+              <p className="mt-1.5 text-xs text-rose-700 dark:text-rose-400">
+                Sale el {formatDate(empleado.fechaSalidaPendiente!)} — {MOTIVO_LIQUIDACION_LABELS[empleado.motivoSalidaPendiente!]}
+                {' · '}días trabajados: {empleado.pagoDiasTrabajadosPendiente === 'nomina' ? 'por nómina' : 'con la liquidación'}
+                {' — '}
+                <button
+                  type="button"
+                  onClick={() => router.push(`/liquidacion?empleadoId=${empleado.id}`)}
+                  className="font-semibold underline underline-offset-2 hover:text-rose-800 dark:hover:text-rose-300"
+                >
+                  Ir a Liquidación
+                </button>
               </p>
             )}
           </div>
@@ -986,6 +1009,87 @@ function EmpleadoDrawer({
           </div>
         )}
 
+        {/* ── Salida pendiente de liquidar ─────────────────────────── */}
+        {mostrarSalida && (
+          <div className="shrink-0 border-t border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-950/20 px-6 py-4 space-y-3">
+            <p className="text-xs font-semibold text-rose-800 dark:text-rose-300">
+              Registrar salida — el empleado queda "con salida pendiente" (sigue activo, conserva
+              su historial) hasta que se calculen sus prestaciones en Liquidación. Deja de
+              acumular nómina desde la fecha indicada.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Fecha de salida</label>
+                <input type="date" value={fechaSalida} onChange={e => setFechaSalida(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-2 text-sm focus:border-[#1B2980] focus:outline-none" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Motivo</label>
+                <select value={motivoSalida} onChange={e => setMotivoSalida(e.target.value as MotivoLiquidacion | '')}
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-2 text-sm focus:border-[#1B2980] focus:outline-none">
+                  <option value="">— Seleccionar —</option>
+                  {Object.entries(MOTIVO_LIQUIDACION_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                ¿Cómo se pagarán los días trabajados de este período, aún no cubiertos por una nómina cerrada?
+              </label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-xs transition-colors ${
+                  pagoDiasSalida === 'nomina'
+                    ? 'border-[#1B2980] dark:border-indigo-500 bg-white dark:bg-[#1a1d2e] ring-1 ring-[#1B2980] dark:ring-indigo-500'
+                    : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:border-zinc-300 dark:hover:border-zinc-600'
+                }`}>
+                  <input type="radio" name="pagoDiasSalida" value="nomina" checked={pagoDiasSalida === 'nomina'}
+                    onChange={() => setPagoDiasSalida('nomina')} className="mt-0.5" />
+                  <span>
+                    <span className="block font-semibold text-zinc-700 dark:text-zinc-300">En la próxima nómina</span>
+                    <span className="block text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Se prorratean automáticamente en el período de Nómina que cubra esta fecha.
+                    </span>
+                  </span>
+                </label>
+                <label className={`flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2.5 text-xs transition-colors ${
+                  pagoDiasSalida === 'liquidacion'
+                    ? 'border-[#1B2980] dark:border-indigo-500 bg-white dark:bg-[#1a1d2e] ring-1 ring-[#1B2980] dark:ring-indigo-500'
+                    : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:border-zinc-300 dark:hover:border-zinc-600'
+                }`}>
+                  <input type="radio" name="pagoDiasSalida" value="liquidacion" checked={pagoDiasSalida === 'liquidacion'}
+                    onChange={() => setPagoDiasSalida('liquidacion')} className="mt-0.5" />
+                  <span>
+                    <span className="block font-semibold text-zinc-700 dark:text-zinc-300">Junto con la liquidación</span>
+                    <span className="block text-zinc-500 dark:text-zinc-400 mt-0.5">
+                      Se agregan como línea aparte —con AFP/SFS/ISR calculados— al liquidar sus prestaciones.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { setMostrarSalida(false); setMotivoSalida(''); setPagoDiasSalida('') }}
+                className="rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-white dark:hover:bg-[#1a1d2e] transition-colors">
+                Cancelar
+              </button>
+              <button
+                disabled={!fechaSalida || !motivoSalida || !pagoDiasSalida}
+                onClick={() => {
+                  if (!fechaSalida || !motivoSalida || !pagoDiasSalida) return
+                  marcarSalidaPendiente(empleado.id, fechaSalida, motivoSalida, pagoDiasSalida)
+                  setMostrarSalida(false)
+                  setMotivoSalida('')
+                  setPagoDiasSalida('')
+                }}
+                className="rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:cursor-not-allowed px-3 py-2 text-xs font-semibold text-white transition-colors">
+                Confirmar Salida Pendiente
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Footer actions ──────────────────────────────────────── */}
         <div className="shrink-0 flex items-center justify-between gap-2 border-t border-zinc-100 dark:border-[#1d2035] bg-white dark:bg-[#141722] px-6 py-4">
           <button onClick={onEliminar}
@@ -997,7 +1101,7 @@ function EmpleadoDrawer({
               className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
               <Pencil className="h-3.5 w-3.5" /> Editar
             </button>
-            {empleado.activo && (
+            {empleado.activo && !empleado.salidaPendiente && (
               empleado.suspendido ? (
                 <button onClick={() => reactivar(empleado.id)}
                   className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-medium text-white transition-colors">
@@ -1010,14 +1114,24 @@ function EmpleadoDrawer({
                 </button>
               )
             )}
-            <button onClick={onToggleActivo}
-              className={`rounded-lg px-4 py-2 text-xs font-medium transition-colors ${
-                empleado.activo
-                  ? 'border border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
-              }`}>
-              {empleado.activo ? 'Dar de baja' : 'Reactivar'}
-            </button>
+            {empleado.activo ? (
+              empleado.salidaPendiente ? (
+                <button onClick={() => cancelarSalidaPendiente(empleado.id)}
+                  className="rounded-lg border border-rose-200 dark:border-rose-800/50 px-4 py-2 text-xs font-medium text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors">
+                  Cancelar Salida Pendiente
+                </button>
+              ) : (
+                <button onClick={() => setMostrarSalida(v => !v)}
+                  className="rounded-lg border border-amber-200 dark:border-amber-800/50 px-4 py-2 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors">
+                  Dar de baja
+                </button>
+              )
+            ) : (
+              <button onClick={onToggleActivo}
+                className="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-medium text-white transition-colors">
+                Reactivar
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1175,6 +1289,7 @@ export default function EmpleadosPage() {
                         <div className="flex flex-wrap gap-1">
                           <Badge variant={emp.activo ? 'success' : 'neutral'}>{emp.activo ? 'Activo' : 'Inactivo'}</Badge>
                           {emp.activo && emp.suspendido && <Badge variant="warning">Suspendido</Badge>}
+                          {emp.activo && emp.salidaPendiente && <Badge variant="danger">Salida Pendiente</Badge>}
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
@@ -1216,9 +1331,11 @@ export default function EmpleadosPage() {
             onClose={() => setEmpSeleccionado(null)}
             onEditar={() => { setEditando(empleadoSeleccionado); setEmpSeleccionado(null) }}
             onToggleActivo={() => {
-              update(empleadoSeleccionado.id, { activo: !empleadoSeleccionado.activo })
+              // Solo se llama desde el estado inactivo — "Dar de baja" ahora pasa
+              // por marcarSalidaPendiente()/Liquidación, no por este toggle directo.
+              update(empleadoSeleccionado.id, { activo: true })
               setEmpSeleccionado(null)
-              setToast(empleadoSeleccionado.activo ? 'Empleado dado de baja' : 'Empleado reactivado')
+              setToast('Empleado reactivado')
             }}
             onEliminar={() => {
               if (!confirm(`¿Eliminar a ${fullName(empleadoSeleccionado)}? Esta acción no se puede deshacer.`)) return

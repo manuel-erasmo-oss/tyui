@@ -171,53 +171,72 @@ function rangoPeriodo(
     : { inicio: new Date(anio, mes - 1, 16), fin: new Date(anio, mes - 1, diasEnMes) }
 }
 
-// Si el empleado está suspendido y su fecha de suspensión cae DENTRO (o
+// Si una fecha de corte (suspensión o salida pendiente) cae DENTRO (o
 // después) del rango de este período, devuelve cuántos días calendario
-// trabajó antes de suspenderse, sobre el total de días del período — para
-// prorratear su salario en vez de pagarle el período completo o excluirlo
-// por completo. `null` si no aplica (no suspendido, o ya estaba suspendido
-// desde ANTES de que este período empezara — ese caso se excluye del todo
-// en empleadosDelPeriodo, no se prorratea).
-function diasSuspensionEnPeriodo(
-  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+// trabajó antes de esa fecha, sobre el total de días del período — para
+// prorratear el salario en vez de pagar el período completo o excluirlo por
+// completo. `null` si la fecha de corte cae ANTES de que el período
+// empezara — ese caso se excluye del todo en empleadosDelPeriodo, no se
+// prorratea.
+function diasCorteEnPeriodo(
+  fechaCorte: Date, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): { diasTrabajados: number; diasLaborablesMes: number } | null {
-  if (!empleado.suspendido || !empleado.fechaSuspension) return null
   const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
-  const fechaSuspension = new Date(empleado.fechaSuspension)
-  if (fechaSuspension < inicio) return null
-  const finEfectivo = fechaSuspension < fin ? fechaSuspension : fin
+  if (fechaCorte < inicio) return null
+  const finEfectivo = fechaCorte < fin ? fechaCorte : fin
   const msPorDia = 24 * 3600 * 1000
   const diasTrabajados     = Math.floor((finEfectivo.getTime() - inicio.getTime()) / msPorDia) + 1
   const diasLaborablesMes  = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
   return { diasTrabajados, diasLaborablesMes }
 }
 
+function diasSuspensionEnPeriodo(
+  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { diasTrabajados: number; diasLaborablesMes: number } | null {
+  if (!empleado.suspendido || !empleado.fechaSuspension) return null
+  return diasCorteEnPeriodo(new Date(empleado.fechaSuspension), mes, anio, tipo, quincena)
+}
+
+// Igual que diasSuspensionEnPeriodo, pero para un empleado marcado con
+// salida pendiente que eligió pagar sus días trabajados "por nómina" en vez
+// de junto con la liquidación (Empleado.pagoDiasTrabajadosPendiente).
+function diasSalidaEnPeriodo(
+  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { diasTrabajados: number; diasLaborablesMes: number } | null {
+  if (!empleado.salidaPendiente || empleado.pagoDiasTrabajadosPendiente !== 'nomina' || !empleado.fechaSalidaPendiente) return null
+  return diasCorteEnPeriodo(new Date(empleado.fechaSalidaPendiente), mes, anio, tipo, quincena)
+}
+
 // Lista de empleados que participan de un período específico: los normales
-// (empleadosEnNomina) más cualquier empleado suspendido cuya fecha de
-// suspensión cae dentro de este período — porque sí trabajó una parte y le
-// corresponde su pago prorrateado, aunque hoy ya esté suspendido. Un
-// empleado suspendido desde ANTES de que el período comenzara no se agrega
-// (0 días trabajados, correctamente excluido).
+// (empleadosEnNomina) más cualquier empleado suspendido o con salida
+// pendiente (pago "por nómina") cuya fecha de corte cae dentro de este
+// período — porque sí trabajó una parte y le corresponde su pago
+// prorrateado, aunque ya esté suspendido o a punto de irse. Una fecha de
+// corte ANTERIOR a que el período comenzara no se agrega (0 días
+// trabajados, correctamente excluido).
 function empleadosDelPeriodo(
   todos: Empleado[], normales: Empleado[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): Empleado[] {
   const extra = todos.filter(e =>
-    e.activo && e.suspendido && !normales.some(n => n.id === e.id) &&
-    diasSuspensionEnPeriodo(e, mes, anio, tipo, quincena) !== null
+    e.activo && !normales.some(n => n.id === e.id) && (
+      (e.suspendido && diasSuspensionEnPeriodo(e, mes, anio, tipo, quincena) !== null) ||
+      (e.salidaPendiente && diasSalidaEnPeriodo(e, mes, anio, tipo, quincena) !== null)
+    )
   )
   return extra.length ? [...normales, ...extra] : normales
 }
 
 // Envoltorio de conveniencia: calcula la nómina de un empleado para un
 // período específico, aplicando automáticamente el prorrateo por suspensión
-// si corresponde — evita tener que acordarse de calcular diasSuspensionEnPeriodo
-// en cada call-site.
+// o salida pendiente si corresponde — evita tener que acordarse de calcular
+// diasSuspensionEnPeriodo/diasSalidaEnPeriodo en cada call-site.
 function calcularParaPeriodo(
   empleado: Empleado, ajustes: AjusteLinea[],
   periodo: { mes: number; anio: number; tipo: TipoPeriodo; quincena?: 1 | 2 },
 ): ResultadoNomina {
   const quincena = periodo.quincena ?? 1
   const dias = diasSuspensionEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
+    ?? diasSalidaEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
   return calcularConAjustes(empleado, ajustes, periodo.tipo, quincena, dias)
 }
 

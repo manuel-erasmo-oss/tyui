@@ -1,4 +1,4 @@
-import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, ConceptoAjuste, Empleado, Empresa, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa, TipoPeriodo } from '@/types'
+import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, ConceptoAjuste, Empleado, Empresa, MotivoLiquidacion, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa, TipoPeriodo } from '@/types'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -406,6 +406,78 @@ export function getDiasPreavisoRequeridos(anosServicio: number): number {
   if (anosServicio < 0.5)  return 7   // 3–6 meses
   if (anosServicio < 1)    return 14  // 6–12 meses
   return 28                           // 12+ meses fijo
+}
+
+// Etiquetas de MotivoLiquidacion — usadas por Liquidación y por el
+// mini-formulario de "salida pendiente" en Empleados, para no divergir.
+export const MOTIVO_LIQUIDACION_LABELS: Record<MotivoLiquidacion, string> = {
+  renuncia: 'Renuncia Voluntaria',
+  despido_sin_causa: 'Despido Sin Causa (Art. 87)',
+  despido_con_causa: 'Despido Con Causa (Art. 88)',
+  mutuo_acuerdo: 'Mutuo Acuerdo',
+  vencimiento_contrato: 'Vencimiento de Contrato (Art. 74/82)',
+}
+
+// ─── Rango de fechas calendario de un período de nómina ────────────────────
+// El mes completo para mensual, o la mitad correspondiente (1-15 / 16-fin)
+// para quincenal. Usado por Liquidación para ubicar el fin del último
+// período pagado de un empleado (ver calcularDiasTrabajadosPendientes).
+export function rangoPeriodo(
+  mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2 = 1,
+): { inicio: Date; fin: Date } {
+  const diasEnMes = new Date(anio, mes, 0).getDate()
+  if (tipo === 'mensual') return { inicio: new Date(anio, mes - 1, 1), fin: new Date(anio, mes - 1, diasEnMes) }
+  return quincena === 1
+    ? { inicio: new Date(anio, mes - 1, 1), fin: new Date(anio, mes - 1, 15) }
+    : { inicio: new Date(anio, mes - 1, 16), fin: new Date(anio, mes - 1, diasEnMes) }
+}
+
+// ─── Días trabajados pendientes de pago al momento de la liquidación ───────
+// Cuando Empleado.pagoDiasTrabajadosPendiente === 'liquidacion': cuenta los
+// días calendario entre el fin del último período de Nómina en que el
+// empleado fue efectivamente procesado (empleadosProcesados) y su fecha de
+// terminación — o desde fechaIngreso si nunca se le procesó ninguno. `null`
+// si no hay días pendientes (ej. la fecha de terminación cae dentro o antes
+// de un período ya procesado — no le queda nada suelto por pagar).
+//
+// diasLaborablesMes usa los días del mes calendario de la fecha de
+// terminación como denominador del prorrateo — correcto para el caso normal
+// (el hueco cabe dentro de un solo mes). Si el hueco excepcionalmente
+// abarcara más de un mes (nómina sin correr por varios ciclos), se topa al
+// propio diasTrabajados para nunca prorratear por encima de un mes completo
+// de salario.
+export function calcularDiasTrabajadosPendientes(
+  empleado: Empleado,
+  periodos: PeriodoNomina[],
+  fechaTerminacion: Date,
+): { diasTrabajados: number; diasLaborablesMes: number; fechaInicio: Date } | null {
+  const msPorDia = 24 * 3600 * 1000
+
+  // Igual criterio que calcularSalarioPromedioUltimos12Meses: si el período
+  // trackea quién fue procesado, respeta esa membresía; si no la trackea
+  // (períodos antiguos, o datos de demo), asume que todo período
+  // procesada/cerrada incluyó al empleado — de lo contrario nunca se
+  // encontraría el último período pagado y se caería al fallback de
+  // fechaIngreso, inflando artificialmente los días pendientes.
+  const procesados = periodos
+    .filter(p =>
+      (p.estado === 'procesada' || p.estado === 'cerrada') &&
+      (p.empleadosProcesados ? p.empleadosProcesados.includes(empleado.id) : true)
+    )
+    .sort((a, b) => (b.anio - a.anio) || (b.mes - a.mes) || ((b.quincena ?? 1) - (a.quincena ?? 1)))
+
+  const ultimoFin = procesados.length
+    ? rangoPeriodo(procesados[0].mes, procesados[0].anio, procesados[0].tipo, procesados[0].quincena ?? 1).fin
+    : new Date(new Date(empleado.fechaIngreso).getTime() - msPorDia)
+
+  const fechaInicio = new Date(ultimoFin.getTime() + msPorDia)
+  if (fechaInicio > fechaTerminacion) return null
+
+  const diasTrabajados = Math.floor((fechaTerminacion.getTime() - fechaInicio.getTime()) / msPorDia) + 1
+  const diasEnMesTerm = new Date(fechaTerminacion.getFullYear(), fechaTerminacion.getMonth() + 1, 0).getDate()
+  const diasLaborablesMes = Math.max(diasEnMesTerm, diasTrabajados)
+
+  return { diasTrabajados, diasLaborablesMes, fechaInicio }
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

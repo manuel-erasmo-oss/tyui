@@ -138,6 +138,24 @@ export interface Empleado {
   fechaSuspension?: string    // ISO date — inicio de la suspensión vigente
   motivoSuspension?: string   // texto libre (ej. "Licencia médica no cubierta")
 
+  // ─── Salida pendiente de liquidar ───────────────────────────────────────────
+  // Se marca al dar de baja a un empleado desde Empleados — ANTES de calcular
+  // sus prestaciones en Liquidación. Distinto de `activo: false` (que solo se
+  // pone al FINALIZAR la liquidación, no antes): mientras salidaPendiente es
+  // true, el empleado sigue en empleadosActivos (sigue siendo seleccionable en
+  // Liquidación, conserva su roster/historial) pero sale de empleadosEnNomina
+  // (deja de acumular nómina nueva — ya se está yendo).
+  salidaPendiente?: boolean
+  fechaSalidaPendiente?: string           // fecha de salida capturada al marcar la baja
+  motivoSalidaPendiente?: MotivoLiquidacion
+  // Cómo se pagarán los días trabajados del período aún no cubiertos por una
+  // nómina cerrada (la mayoría de las salidas ocurren a mitad de quincena/mes):
+  // 'nomina' los prorratea en el próximo período de Nómina que cubra
+  // fechaSalidaPendiente (mismo mecanismo que el prorrateo por suspensión);
+  // 'liquidacion' los agrega como línea aparte —con AFP/SFS/ISR calculados,
+  // a diferencia de las prestaciones exentas— al finalizar en Liquidación.
+  pagoDiasTrabajadosPendiente?: 'nomina' | 'liquidacion'
+
   // ─── Aporte voluntario a AFP ────────────────────────────────────────────────
   // % adicional sobre el 2.87%/7.10% obligatorio (Ley 87-01). A diferencia del
   // aporte obligatorio, el aporte voluntario del EMPLEADO no reduce la base
@@ -527,6 +545,20 @@ export interface RegistroLiquidacion {
   // trabajador avise con la misma anticipación mínima que el empleador
   // (7/14/28 días según antigüedad).
   fechaNotificacionRenuncia?: string
+
+  // ─── Días trabajados pendientes de pago (salida a mitad de período) ──────
+  // Solo cuando Empleado.pagoDiasTrabajadosPendiente === 'liquidacion' al
+  // momento de finalizar. A diferencia de cesantía/preaviso/asistencia
+  // económica (indemnizaciones exentas), estos días SON salario ordinario —
+  // llevan AFP/SFS/ISR calculados con el mismo motor de nómina
+  // (calcularNomina) sobre los días proporcionales, no un monto bruto sin
+  // retención como vacaciones/regalía.
+  diasTrabajadosPendientes?: number
+  salarioDiasTrabajadosBruto?: number
+  afpDiasTrabajados?: number
+  sfsDiasTrabajados?: number
+  isrDiasTrabajados?: number
+  salarioDiasTrabajadosNeto?: number   // ya incluido en totalPagado
 }
 
 // ─── Feriados Nacionales ──────────────────────────────────────────────────────
