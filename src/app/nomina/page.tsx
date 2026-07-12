@@ -281,7 +281,7 @@ function descargarComprobantePDF(
   doc.setTextColor(110, 110, 116)
   doc.text(`${empleado.cargo}  ·  ${empleado.departamento}  ·  Cédula: ${formatCedula(empleado.cedula)}`, 20, y)
   y += 4.5
-  doc.text(`Ingreso: ${formatDate(empleado.fechaIngreso)}  ·  Salario base: ${formatRD(empleado.salarioBase, 0)}`, 20, y)
+  doc.text(`Ingreso: ${formatDate(empleado.fechaIngreso)}  ·  Salario base: ${formatRD(empleado.salarioBase)}`, 20, y)
   y += 10
 
   // Two columns
@@ -373,7 +373,7 @@ function descargarComprobantePDF(
   doc.text('SALARIO NETO A PAGAR', 22, y + 5.5)
   doc.setFontSize(13)
   doc.setFont('helvetica', 'bold')
-  doc.text(formatRD(nomina.salarioNeto, 0), W - 22, y + 10, { align: 'right' })
+  doc.text(formatRD(nomina.salarioNeto), W - 22, y + 10, { align: 'right' })
 
   // Aportes empresa — tarjeta tenue para agruparlo como bloque propio
   y += 21
@@ -428,14 +428,14 @@ function descargarComprobantePDF(
     doc.setFontSize(6.5)
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(150, 150, 150)
-    doc.text(`ISR consolidado con ingreso de otro empleador (${formatRD(empleado.ingresoOtroEmpleadorMensual!, 0)}/mes)`, 14, y)
+    doc.text(`ISR consolidado con ingreso de otro empleador (${formatRD(empleado.ingresoOtroEmpleadorMensual!)}/mes)`, 14, y)
     y += 4
   }
 
   doc.setFontSize(6.5)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(170, 170, 170)
-  doc.text(`Regalía/período: ${formatRD(nomina.regaliaPascual, 0)}`, 14, y)
+  doc.text(`Regalía/período: ${formatRD(nomina.regaliaPascual)}`, 14, y)
   doc.text(`Vacaciones: ${nomina.vacacionesMensualesDias.toFixed(2)} días`, 90, y)
   doc.text('Ley 16-92  ·  Ley 87-01  ·  Ley 11-92', W - 14, y, { align: 'right' })
 
@@ -549,7 +549,7 @@ function DetalleNomina({
               )}
               {(empleado.ingresoOtroEmpleadorMensual ?? 0) > 0 && (
                 <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
-                  ISR consolidado con ingreso de otro empleador ({fmt(empleado.ingresoOtroEmpleadorMensual!, 0)}/mes)
+                  ISR consolidado con ingreso de otro empleador ({fmt(empleado.ingresoOtroEmpleadorMensual!)}/mes)
                   — esta empresa solo retiene su porción proporcional
                 </p>
               )}
@@ -564,7 +564,7 @@ function DetalleNomina({
         <div className="grid grid-cols-2 gap-4 border-t border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] p-6 rounded-b-xl">
           <div className="rounded-xl bg-white dark:bg-[#141722] border border-zinc-200 dark:border-[#252840] p-4">
             <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase font-semibold tracking-wide">Salario Neto a Pagar</p>
-            <p className="mt-1 text-2xl font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">{fmt(nomina.salarioNeto, 0)}</p>
+            <p className="mt-1 text-2xl font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">{fmt(nomina.salarioNeto)}</p>
             {nomina.grossingUpEmpresa > 0 && (
               <p className="mt-1.5 text-[11px] text-emerald-600 dark:text-emerald-400">
                 Incluye reembolso de grossing-up: +{fmt(nomina.grossingUpEmpresa)}
@@ -610,7 +610,7 @@ function DetalleNomina({
 
         <div className="border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex gap-4 text-xs text-zinc-500 dark:text-zinc-400">
-            <span>Regalía/período: <strong className="text-zinc-800 dark:text-zinc-200">{fmt(nomina.regaliaPascual, 0)}</strong></span>
+            <span>Regalía/período: <strong className="text-zinc-800 dark:text-zinc-200">{fmt(nomina.regaliaPascual)}</strong></span>
             <span>Vacaciones: <strong className="text-zinc-800 dark:text-zinc-200">{nomina.vacacionesMensualesDias.toFixed(2)} días</strong></span>
           </div>
           <button
@@ -1231,13 +1231,13 @@ export default function NominaPage() {
                     <div className="flex justify-between items-baseline">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400">Neto Total</span>
                       <span className="text-lg font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">
-                        {fmt(p.totales.neto, 0)}
+                        {fmt(p.totales.neto)}
                       </span>
                     </div>
                     <div className="flex justify-between items-baseline">
                       <span className="text-xs text-zinc-500 dark:text-zinc-400">Costo Empresa</span>
                       <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
-                        {fmt(p.totales.costoTotal, 0)}
+                        {fmt(p.totales.costoTotal)}
                       </span>
                     </div>
                     {p.estado === 'cerrada' && (
@@ -1455,7 +1455,7 @@ export default function NominaPage() {
                             <th className="px-3 py-2 font-medium text-right">Acciones</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-100 dark:divide-[#1d2035]">
+                        <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                           {filas.map(({ empleado: emp, resultado }) => (
                             <tr key={emp.id}>
                               <td className="px-3 py-2 font-medium text-zinc-800 dark:text-zinc-200">{fullName(emp)}</td>
@@ -1619,28 +1619,28 @@ export default function NominaPage() {
         <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           <StatCard
             label="Total Bruto"
-            value={fmt(totales.bruto, 0)}
+            value={fmt(totales.bruto)}
             sub="Suma devengados"
             icon={Wallet}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
           />
           <StatCard
             label="Total Neto"
-            value={fmt(totales.neto, 0)}
+            value={fmt(totales.neto)}
             sub="A transferir empleados"
             icon={BarChart3}
             iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
           />
           <StatCard
             label="Aportes TSS Empresa"
-            value={fmt(totales.aportes, 0)}
+            value={fmt(totales.aportes)}
             sub="AFP + SFS + SRL + Infotep"
             icon={TrendingUp}
             iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
           />
           <StatCard
             label="ISR Retenido"
-            value={fmt(totales.isr, 0)}
+            value={fmt(totales.isr)}
             sub={periodoActual.tipo === 'quincenal' && quincenaActual === 1 ? 'Anticipo — sin ISR' : 'Por remitir a DGII'}
             icon={Receipt}
             iconColor="bg-violet-50 text-violet-600 dark:bg-violet-950/40 dark:text-violet-400"
@@ -1752,7 +1752,7 @@ export default function NominaPage() {
                       <tr
                         key={empleado.id}
                         onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
-                        className={`cursor-pointer border-b border-zinc-50 dark:border-[#1d2035] transition-colors ${
+                        className={`cursor-pointer border-b border-zinc-200 dark:border-[#252840] transition-colors ${
                           isProcesado
                             ? 'bg-emerald-50/40 dark:bg-emerald-950/10'
                             : 'hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20'
@@ -1805,7 +1805,7 @@ export default function NominaPage() {
                                 }`}
                               >
                                 {labelAjuste(a)}{' '}
-                                {isHorasConcepto(a.concepto) ? `${a.valor}h` : fmt(a.valor, 0)}
+                                {isHorasConcepto(a.concepto) ? `${a.valor}h` : fmt(a.valor)}
                                 {esEnProceso && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); handleRemoveAjuste(empleado.id, a.id) }}
@@ -1830,26 +1830,26 @@ export default function NominaPage() {
                         </td>
 
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
-                          {fmt(resultado.totalBruto, 0)}
+                          {fmt(resultado.totalBruto)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                          {fmt(resultado.afpEmpleado + resultado.sfsEmpleado, 0)}
+                          {fmt(resultado.afpEmpleado + resultado.sfsEmpleado)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {resultado.isrMensual === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
-                            : fmt(resultado.isrMensual, 0)}
+                            : fmt(resultado.isrMensual)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {resultado.sfsDependientes === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
-                            : fmt(resultado.sfsDependientes, 0)}
+                            : fmt(resultado.sfsDependientes)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
-                          {fmt(resultado.salarioNeto, 0)}
+                          {fmt(resultado.salarioNeto)}
                         </td>
                         <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                          {fmt(resultado.totalCostoEmpleador, 0)}
+                          {fmt(resultado.totalCostoEmpleador)}
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1.5">
@@ -2018,13 +2018,13 @@ export default function NominaPage() {
                   <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400" colSpan={esEnProceso ? 3 : 2}>
                     TOTALES — {empleadosPeriodo.length} empleados
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{fmt(totales.bruto, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{fmt(totales.bruto)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                    {fmt(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0), 0)}
+                    {fmt(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0))}
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totales.isr, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">{fmt(totales.neto, 0)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totales.costoTotal, 0)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totales.isr)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">{fmt(totales.neto)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totales.costoTotal)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -2178,12 +2178,12 @@ export default function NominaPage() {
                                 <th className="px-3 py-2 font-medium">Alerta</th>
                               </tr>
                             </thead>
-                            <tbody className="divide-y divide-zinc-100 dark:divide-[#1d2035]">
+                            <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                               {filasConAlerta.map(f => (
                                 <tr key={f.empleado.id}>
                                   <td className="px-3 py-2 font-medium text-zinc-800 dark:text-zinc-200">{fullName(f.empleado)}</td>
                                   <td className={`px-3 py-2 text-right tabular-nums ${f.netoNegativo ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-zinc-600 dark:text-zinc-300'}`}>
-                                    {fmt(f.neto, 0)}
+                                    {fmt(f.neto)}
                                   </td>
                                   <td className="px-3 py-2">
                                     <div className="flex flex-wrap gap-1">

@@ -352,7 +352,7 @@ function EmpleadoDrawer({
           </div>
           {/* Quick stats */}
           <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
-            <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(empleado.salarioBase, 0)}</p>
+            <p className="text-2xl font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(empleado.salarioBase)}</p>
             <p className="text-[11px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Salario mensual</p>
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{formatAnosServicio(anos)} de antigüedad</p>
           </div>
@@ -497,8 +497,8 @@ function EmpleadoDrawer({
                   {[
                     { label: 'Fecha de Ingreso', value: formatDate(empleado.fechaIngreso) },
                     { label: 'Antigüedad',        value: formatAnosServicio(anos) },
-                    { label: 'Salario Mensual',   value: formatRD(empleado.salarioBase, 0) },
-                    { label: 'Salario Anual',     value: formatRD(empleado.salarioBase * 12, 0) },
+                    { label: 'Salario Mensual',   value: formatRD(empleado.salarioBase) },
+                    { label: 'Salario Anual',     value: formatRD(empleado.salarioBase * 12) },
                     { label: 'Banco',             value: empleado.banco ?? '—' },
                     { label: 'N° Cuenta',         value: empleado.numeroCuenta ?? '—' },
                   ].map(item => (
@@ -529,7 +529,7 @@ function EmpleadoDrawer({
                         <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">{r.label}</p>
                         <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{r.sub}</p>
                       </div>
-                      <span className={`text-sm font-bold tabular-nums ${r.color}`}>{formatRD(r.value, 0)}</span>
+                      <span className={`text-sm font-bold tabular-nums ${r.color}`}>{formatRD(r.value)}</span>
                     </div>
                   ))}
                 </div>
@@ -635,9 +635,9 @@ function EmpleadoDrawer({
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Año {s.anio} · original {formatRD(s.monto, 0)}</p>
+                            <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Año {s.anio} · original {formatRD(s.monto)}</p>
                           </div>
-                          <span className="text-sm font-bold tabular-nums text-teal-600 dark:text-teal-400">{formatRD(s.saldoPendiente, 0)}</span>
+                          <span className="text-sm font-bold tabular-nums text-teal-600 dark:text-teal-400">{formatRD(s.saldoPendiente)}</span>
                         </div>
                       </div>
                     ))}
@@ -866,7 +866,7 @@ function EmpleadoDrawer({
                 ].map(kpi => (
                   <div key={kpi.label} className="rounded-xl border border-zinc-100 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2.5">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{kpi.label}</p>
-                    <p className="mt-1 text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">{formatRD(kpi.value, 0)}</p>
+                    <p className="mt-1 text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">{formatRD(kpi.value)}</p>
                   </div>
                 ))}
               </div>
@@ -886,24 +886,24 @@ function EmpleadoDrawer({
                   </thead>
                   <tbody>
                     {historial.map(({ periodo, resultado }) => (
-                      <tr key={periodo.id} className="border-b border-zinc-50 dark:border-[#1d2035] hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                      <tr key={periodo.id} className="border-b border-zinc-200 dark:border-[#252840] hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                         <td className="px-5 py-3">
                           <p className="font-medium text-zinc-800 dark:text-zinc-200">{labelPeriodoHist(periodo)}</p>
                           <p className="text-[10px] text-zinc-400 dark:text-zinc-500 capitalize">{periodo.tipo}</p>
                         </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(resultado.totalBruto, 0)}</td>
-                        <td className="px-3 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(resultado.afpEmpleado + resultado.sfsEmpleado, 0)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(resultado.totalBruto)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(resultado.afpEmpleado + resultado.sfsEmpleado)}</td>
                         <td className="px-3 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {resultado.isrMensual === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
-                            : formatRD(resultado.isrMensual, 0)}
+                            : formatRD(resultado.isrMensual)}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                           {resultado.sfsDependientes === 0
                             ? <span className="text-zinc-300 dark:text-zinc-600">—</span>
-                            : formatRD(resultado.sfsDependientes, 0)}
+                            : formatRD(resultado.sfsDependientes)}
                         </td>
-                        <td className="px-3 py-3 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(resultado.salarioNeto, 0)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(resultado.salarioNeto)}</td>
                         <td className="px-3 py-3">
                           {periodo.estado === 'cerrada' ? (
                             <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-zinc-100 text-zinc-600 dark:bg-[#1a1d2e] dark:text-zinc-400">Cerrada</span>
@@ -922,19 +922,19 @@ function EmpleadoDrawer({
                         Total — {historial.length} período{historial.length !== 1 ? 's' : ''}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">
-                        {formatRD(historial.reduce((s, h) => s + h.resultado.totalBruto, 0), 0)}
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.totalBruto, 0))}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                        {formatRD(historial.reduce((s, h) => s + h.resultado.afpEmpleado + h.resultado.sfsEmpleado, 0), 0)}
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.afpEmpleado + h.resultado.sfsEmpleado, 0))}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                        {formatRD(historial.reduce((s, h) => s + h.resultado.isrMensual, 0), 0)}
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.isrMensual, 0))}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                        {formatRD(historial.reduce((s, h) => s + h.resultado.sfsDependientes, 0), 0)}
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.sfsDependientes, 0))}
                       </td>
                       <td className="px-3 py-2.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
-                        {formatRD(historial.reduce((s, h) => s + h.resultado.salarioNeto, 0), 0)}
+                        {formatRD(historial.reduce((s, h) => s + h.resultado.salarioNeto, 0))}
                       </td>
                       <td />
                     </tr>
@@ -1133,7 +1133,7 @@ export default function EmpleadosPage() {
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filtrados.map(emp => {
                   const pais = emp.nacionalidad ? getPais(emp.nacionalidad) : undefined
                   return (
@@ -1170,7 +1170,7 @@ export default function EmpleadosPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-400 text-xs">{formatDate(emp.fechaIngreso)}</td>
-                      <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(emp.salarioBase, 0)}</td>
+                      <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(emp.salarioBase)}</td>
                       <td className="px-4 py-3.5">
                         <div className="flex flex-wrap gap-1">
                           <Badge variant={emp.activo ? 'success' : 'neutral'}>{emp.activo ? 'Activo' : 'Inactivo'}</Badge>

@@ -44,9 +44,9 @@ const PARAMS_TSS: ParamRow[] = [
   { label: 'SRL Categoría III', value: `${(TASAS_TSS.srlCategoriaIII * 100).toFixed(2)}%`, descripcion: 'Seguro de Riesgos Laborales — industria pesada (solo empleador)', fuente: 'CNSS — Ley 87-01' },
   { label: 'SRL Categoría IV', value: `${(TASAS_TSS.srlCategoriaIV * 100).toFixed(2)}%`, descripcion: 'Seguro de Riesgos Laborales — construcción y minería, alto riesgo (solo empleador)', fuente: 'CNSS — Ley 87-01' },
   { label: 'Infotep', value: `${(TASAS_TSS.infotepEmpleador * 100).toFixed(2)}%`, descripcion: 'Aporte obligatorio del empleador para formación técnico-profesional', fuente: 'INFOTEP — Ley 116-80' },
-  { label: 'Tope Cotizable AFP', value: formatRD(TOPE_COTIZABLE_AFP, 0), descripcion: '20 veces el salario mínimo cotizable TSS', fuente: 'CNSS — Resolución 079-2025' },
-  { label: 'Tope Cotizable SFS', value: formatRD(TOPE_COTIZABLE_SFS, 0), descripcion: '10 veces el salario mínimo cotizable TSS', fuente: 'CNSS — Resolución 079-2025' },
-  { label: 'Tope Cotizable SRL', value: formatRD(TOPE_COTIZABLE_SRL, 0), descripcion: '4 veces el salario mínimo cotizable TSS', fuente: 'CNSS — Resolución 079-2025' },
+  { label: 'Tope Cotizable AFP', value: formatRD(TOPE_COTIZABLE_AFP), descripcion: '20 veces el salario mínimo cotizable TSS', fuente: 'CNSS — Resolución 079-2025' },
+  { label: 'Tope Cotizable SFS', value: formatRD(TOPE_COTIZABLE_SFS), descripcion: '10 veces el salario mínimo cotizable TSS', fuente: 'CNSS — Resolución 079-2025' },
+  { label: 'Tope Cotizable SRL', value: formatRD(TOPE_COTIZABLE_SRL), descripcion: '4 veces el salario mínimo cotizable TSS', fuente: 'CNSS — Resolución 079-2025' },
 ]
 
 const PARAMS_ISR: ParamRow[] = [
@@ -57,11 +57,11 @@ const PARAMS_ISR: ParamRow[] = [
 ]
 
 const PARAMS_SALARIOS: ParamRow[] = [
-  { label: 'Grandes Empresas', value: formatRD(SALARIO_MINIMO.grandesEmpresas, 0), descripcion: 'Más de 50 trabajadores o capital > RD$ 2M', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
-  { label: 'Mediana Empresa', value: formatRD(SALARIO_MINIMO.medianaEmpresa, 0), descripcion: '20 a 49 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
-  { label: 'Pequeñas Empresas', value: formatRD(SALARIO_MINIMO.pequeñasEmpresas, 0), descripcion: '10 a 19 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
-  { label: 'Microempresas', value: formatRD(SALARIO_MINIMO.microempresas, 0), descripcion: 'Menos de 10 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
-  { label: 'Zona Franca', value: formatRD(SALARIO_MINIMO.zonaFranca, 0), descripcion: 'Trabajadores en zonas francas industriales', fuente: 'Comité Nac. de Salarios' },
+  { label: 'Grandes Empresas', value: formatRD(SALARIO_MINIMO.grandesEmpresas), descripcion: 'Más de 50 trabajadores o capital > RD$ 2M', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
+  { label: 'Mediana Empresa', value: formatRD(SALARIO_MINIMO.medianaEmpresa), descripcion: '20 a 49 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
+  { label: 'Pequeñas Empresas', value: formatRD(SALARIO_MINIMO.pequeñasEmpresas), descripcion: '10 a 19 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
+  { label: 'Microempresas', value: formatRD(SALARIO_MINIMO.microempresas), descripcion: 'Menos de 10 trabajadores', fuente: 'Res. 079-2025 — vigente desde 01-feb-2026' },
+  { label: 'Zona Franca', value: formatRD(SALARIO_MINIMO.zonaFranca), descripcion: 'Trabajadores en zonas francas industriales', fuente: 'Comité Nac. de Salarios' },
 ]
 
 function ParamTable({ rows }: { rows: ParamRow[] }) {
@@ -76,7 +76,7 @@ function ParamTable({ rows }: { rows: ParamRow[] }) {
             <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fuente</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035] bg-white dark:bg-[#141722]">
+        <tbody className="divide-y divide-zinc-200 dark:divide-[#252840] bg-white dark:bg-[#141722]">
           {rows.map(row => (
             <tr key={row.label} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]">
               <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{row.label}</td>
@@ -122,7 +122,7 @@ function ConceptosLeyTable() {
             <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Base legal</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035] bg-white dark:bg-[#141722]">
+        <tbody className="divide-y divide-zinc-200 dark:divide-[#252840] bg-white dark:bg-[#141722]">
           {CONCEPTOS_LEY.map(c => (
             <tr key={c.concepto} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]">
               <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{c.nombre}</td>
@@ -774,7 +774,7 @@ export default function ConfiguracionPage() {
                         Tu configuración está al día — no hay ningún pendiente activo.
                       </p>
                     ) : (
-                      <ul className="divide-y divide-zinc-100 dark:divide-[#1d2035] overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                      <ul className="divide-y divide-zinc-200 dark:divide-[#252840] overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
                         {pendientes.map(item => (
                           <li key={item.label}>
                             <button
@@ -1150,7 +1150,7 @@ export default function ConfiguracionPage() {
                               Aún no has confirmado ningún feriado para {anioActual}.
                             </p>
                           ) : (
-                            <ul className="divide-y divide-zinc-100 dark:divide-[#1d2035] overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                            <ul className="divide-y divide-zinc-200 dark:divide-[#252840] overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
                               {feriados.map(f => (
                                 <li key={f.id} className="flex items-center justify-between gap-3 bg-white dark:bg-[#141722] px-3 py-2.5">
                                   <div className="flex min-w-0 items-center gap-3">
@@ -1216,7 +1216,7 @@ export default function ConfiguracionPage() {
                                     <th className="px-4 py-3" />
                                   </tr>
                                 </thead>
-                                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035] bg-white dark:bg-[#141722]">
+                                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840] bg-white dark:bg-[#141722]">
                                   {conceptosPersonalizados.map(c => (
                                     <tr key={c.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]">
                                       <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{c.nombre}</td>

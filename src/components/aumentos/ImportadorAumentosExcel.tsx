@@ -186,7 +186,7 @@ export function ImportadorAumentosExcel({ onFinish }: Props) {
             salarioAnterior = existente.salarioBase
             if (salario.valor !== null) {
               if (salario.valor <= existente.salarioBase) {
-                error = `El nuevo salario debe ser mayor al actual (${formatRD(existente.salarioBase, 0)})`
+                error = `El nuevo salario debe ser mayor al actual (${formatRD(existente.salarioBase)})`
               } else {
                 tipoAjuste = 'fijo'
                 salarioNuevo = Math.round(salario.valor)
@@ -394,7 +394,7 @@ export function ImportadorAumentosExcel({ onFinish }: Props) {
                   <th className="px-4 py-2.5 font-medium">Estado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-[#1a1d2e]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filas.map(f => (
                   <tr key={f.fila}>
                     <td className="px-4 py-2.5 text-zinc-400 tabular-nums">{f.fila}</td>
@@ -407,15 +407,15 @@ export function ImportadorAumentosExcel({ onFinish }: Props) {
                     <td className="px-4 py-2.5">
                       {f.tipoAjuste ? (
                         <Badge variant="info">
-                          {f.tipoAjuste === 'porcentaje' ? `+${f.valorAjuste}%` : `+${formatRD(f.valorAjuste ?? 0, 0)}`}
+                          {f.tipoAjuste === 'porcentaje' ? `+${f.valorAjuste}%` : `+${formatRD(f.valorAjuste ?? 0)}`}
                         </Badge>
                       ) : '—'}
                     </td>
                     <td className="px-4 py-2.5 text-right text-zinc-500 tabular-nums">
-                      {f.salarioAnterior !== undefined ? formatRD(f.salarioAnterior, 0) : '—'}
+                      {f.salarioAnterior !== undefined ? formatRD(f.salarioAnterior) : '—'}
                     </td>
                     <td className="px-4 py-2.5 text-right font-semibold text-[#151f66] dark:text-indigo-300 tabular-nums">
-                      {f.salarioNuevo !== undefined ? formatRD(f.salarioNuevo, 0) : '—'}
+                      {f.salarioNuevo !== undefined ? formatRD(f.salarioNuevo) : '—'}
                     </td>
                     <td className="px-4 py-2.5">
                       {f.error ? (

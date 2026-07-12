@@ -201,7 +201,7 @@ export function OnboardingWizard() {
                 </label>
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                   {CATEGORIAS.map(c => (
-                    <OptionCard key={c.value} active={categoria === c.value} onClick={() => setCategoria(c.value)} title={c.label} extra={formatRD(c.salario, 0)} />
+                    <OptionCard key={c.value} active={categoria === c.value} onClick={() => setCategoria(c.value)} title={c.label} extra={formatRD(c.salario)} />
                   ))}
                 </div>
               </div>

@@ -204,7 +204,7 @@ export function AgendaNomina() {
       </div>
 
       {/* Event list */}
-      <div className="flex-1 overflow-y-auto max-h-[180px] divide-y divide-zinc-50 dark:divide-[#1d2035]">
+      <div className="flex-1 overflow-y-auto max-h-[180px] divide-y divide-zinc-200 dark:divide-[#252840]">
         {allEvents.length === 0 && (
           <p className="text-center text-[11px] text-zinc-400 dark:text-zinc-600 py-4">
             Sin eventos este mes

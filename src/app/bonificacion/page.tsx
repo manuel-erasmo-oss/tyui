@@ -80,14 +80,14 @@ export default function BonificacionPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             label="10% Distribuible"
-            value={formatRD(distribuible, 0)}
+            value={formatRD(distribuible)}
             sub="Utilidad neta × 10% (Art. 223)"
             icon={Percent}
             iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
           />
           <StatCard
             label="Total a Repartir"
-            value={formatRD(totalRepartido, 0)}
+            value={formatRD(totalRepartido)}
             sub={`${filas.length} empleado(s) de tiempo indefinido`}
             icon={Banknote}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
@@ -121,7 +121,7 @@ export default function BonificacionPage() {
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Monto a Pagar</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filas.length === 0 && (
                   <tr>
                     <td colSpan={6}>
@@ -155,23 +155,23 @@ export default function BonificacionPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400 text-xs">{formatAnosServicio(anos)}</td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(empleado.salarioBase, 0)}</td>
+                    <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(empleado.salarioBase)}</td>
                     <td className="px-4 py-3.5 text-center">
                       <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
                         {diasTope} días
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                      {formatRD(proporcional, 0)}
+                      {formatRD(proporcional)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
                       <div className="flex items-center justify-end gap-1.5">
-                        {formatRD(montoFinal, 0)}
+                        {formatRD(montoFinal)}
                         {topeAplicado && <Badge variant="warning">Tope</Badge>}
                       </div>
                       {topeAplicado && (
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500 font-normal mt-0.5">
-                          Tope: {formatRD(topeIndividual, 0)}
+                          Tope: {formatRD(topeIndividual)}
                         </p>
                       )}
                     </td>
@@ -184,10 +184,10 @@ export default function BonificacionPage() {
                     TOTAL — {filas.length} empleado(s)
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-600 dark:text-zinc-400">
-                    {formatRD(filas.reduce((s, f) => s + f.proporcional, 0), 0)}
+                    {formatRD(filas.reduce((s, f) => s + f.proporcional, 0))}
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
-                    {formatRD(totalRepartido, 0)}
+                    {formatRD(totalRepartido)}
                   </td>
                 </tr>
               </tfoot>

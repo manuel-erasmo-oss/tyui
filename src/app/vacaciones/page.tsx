@@ -52,7 +52,7 @@ export default function VacacionesPage() {
           />
           <StatCard
             label="Valor Provisión"
-            value={formatRD(totalValor, 0)}
+            value={formatRD(totalValor)}
             sub="Días acumulados × tarifa diaria"
             icon={Clock}
             iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
@@ -87,7 +87,7 @@ export default function VacacionesPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filas.length === 0 && (
                   <tr>
                     <td colSpan={7}>
@@ -130,13 +130,13 @@ export default function VacacionesPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
-                      {formatRD(valorDiario, 0)}
+                      {formatRD(valorDiario)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">
                       {diasAcumulados.toFixed(2)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">
-                      {formatRD(valorAcumulado, 0)}
+                      {formatRD(valorAcumulado)}
                     </td>
                     <td className="px-4 py-3.5">
                       {puedeGozar
@@ -156,7 +156,7 @@ export default function VacacionesPage() {
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
                   <td colSpan={4} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
                   <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{totalDias.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{formatRD(totalValor, 0)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{formatRD(totalValor)}</td>
                   <td />
                 </tr>
               </tfoot>

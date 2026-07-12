@@ -129,21 +129,21 @@ export default function LicenciasPage() {
           />
           <StatCard
             label="Pagado por la Empresa Este Mes"
-            value={formatRD(totalPagadoMes, 0)}
+            value={formatRD(totalPagadoMes)}
             sub="Vía nómina — no incluye subsidios TSS"
             icon={Banknote}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
           />
           <StatCard
             label="Subsidio SISALRIL/ARL Este Mes"
-            value={formatRD(totalSubsidioMes, 0)}
+            value={formatRD(totalSubsidioMes)}
             sub="Informativo — lo paga/reembolsa TSS"
             icon={ShieldCheck}
             iconColor="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
           />
           <StatCard
             label="Total Histórico Pagado"
-            value={formatRD(totalPagadoGeneral, 0)}
+            value={formatRD(totalPagadoGeneral)}
             sub={`${licencias.length} licencia(s) registrada(s)`}
             icon={CalendarPlus}
             iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
@@ -287,7 +287,7 @@ export default function LicenciasPage() {
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {licenciasOrdenadas.length === 0 && (
                   <tr>
                     <td colSpan={8}>

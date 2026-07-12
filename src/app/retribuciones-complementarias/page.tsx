@@ -133,21 +133,21 @@ export default function RetribucionesComplementariasPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <StatCard
             label="Total Retribuciones (Mensual)"
-            value={formatRD(totalMensual, 0)}
+            value={formatRD(totalMensual)}
             sub={`${lineas.length} concepto(s) registrado(s)`}
             icon={Landmark}
             iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
           />
           <StatCard
             label="Impuesto Sustitutivo (27%)"
-            value={formatRD(impuestoMensual, 0)}
+            value={formatRD(impuestoMensual)}
             sub="Sobre el valor mensual de los beneficios"
             icon={Percent}
             iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
           />
           <StatCard
             label="Impuesto Anualizado (referencia)"
-            value={formatRD(impuestoAnualizado, 0)}
+            value={formatRD(impuestoAnualizado)}
             sub="Impuesto mensual × 12 — para presupuesto"
             icon={CalendarClock}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
@@ -172,7 +172,7 @@ export default function RetribucionesComplementariasPage() {
                   <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 w-16"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {lineas.length === 0 && (
                   <tr>
                     <td colSpan={4}>
@@ -197,10 +197,10 @@ export default function RetribucionesComplementariasPage() {
                       <p className="font-medium text-[#1B2980] dark:text-indigo-400">{l.concepto}</p>
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                      {formatRD(l.valorMensual, 0)}
+                      {formatRD(l.valorMensual)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                      {formatRD(l.valorMensual * TASA_IMPUESTO_SUSTITUTIVO, 0)}
+                      {formatRD(l.valorMensual * TASA_IMPUESTO_SUSTITUTIVO)}
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       <button
@@ -221,10 +221,10 @@ export default function RetribucionesComplementariasPage() {
                       TOTAL — {lineas.length} concepto(s)
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-600 dark:text-zinc-400">
-                      {formatRD(totalMensual, 0)}
+                      {formatRD(totalMensual)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
-                      {formatRD(impuestoMensual, 0)}
+                      {formatRD(impuestoMensual)}
                     </td>
                     <td></td>
                   </tr>

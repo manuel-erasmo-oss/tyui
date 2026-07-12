@@ -191,16 +191,16 @@ export default function DashboardPage() {
                     {empleadosBajoMinimo.length} empleado{empleadosBajoMinimo.length !== 1 ? 's' : ''} por debajo del salario mínimo
                   </p>
                   <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
-                    {empresa.zonaFranca ? categoriaAlertaLabel : `Categoría ${categoriaAlertaLabel}`} — mínimo legal {formatRD(salarioMinimoAplicable, 0)}/mes
+                    {empresa.zonaFranca ? categoriaAlertaLabel : `Categoría ${categoriaAlertaLabel}`} — mínimo legal {formatRD(salarioMinimoAplicable)}/mes
                   </p>
                   <ul className="mt-2.5 space-y-1.5">
                     {empleadosBajoMinimo.map(e => (
                       <li key={e.id} className="flex items-center justify-between text-xs">
                         <span className="text-amber-800 dark:text-amber-300">{fullName(e)}</span>
                         <span className="tabular-nums font-semibold text-amber-800 dark:text-amber-300">
-                          {formatRD(e.salarioBase, 0)}
+                          {formatRD(e.salarioBase)}
                           <span className="ml-1.5 font-normal text-amber-600 dark:text-amber-500">
-                            (faltan {formatRD(salarioMinimoAplicable - e.salarioBase, 0)})
+                            (faltan {formatRD(salarioMinimoAplicable - e.salarioBase)})
                           </span>
                         </span>
                       </li>
@@ -306,7 +306,7 @@ export default function DashboardPage() {
                   Ver todos <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
-              <div className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <div className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {empleadosActivos.slice(0, 5).map((emp, i) => {
                   const n = nominas[i]
                   return (

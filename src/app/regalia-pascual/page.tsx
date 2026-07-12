@@ -42,14 +42,14 @@ export default function RegaliaPage() {
         <div className="grid grid-cols-3 gap-4">
           <StatCard
             label="Acumulado al Mes Actual"
-            value={formatRD(totalAcumulado, 0)}
+            value={formatRD(totalAcumulado)}
             sub={`${mesActual}/12 meses del año`}
             icon={Gift}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
           />
           <StatCard
             label="Proyección Anual Total"
-            value={formatRD(totalProyectado, 0)}
+            value={formatRD(totalProyectado)}
             sub="Si todos completan el año"
             icon={Calendar}
             iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
@@ -84,7 +84,7 @@ export default function RegaliaPage() {
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Progreso</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filas.length === 0 && (
                   <tr>
                     <td colSpan={6}>
@@ -120,7 +120,7 @@ export default function RegaliaPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
-                      {formatRD(empleado.salarioBase, 0)}
+                      {formatRD(empleado.salarioBase)}
                     </td>
                     <td className="px-4 py-3.5 text-center">
                       <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-0.5 text-xs font-medium text-zinc-700 dark:text-zinc-400">
@@ -128,10 +128,10 @@ export default function RegaliaPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
-                      {formatRD(acumulado, 0)}
+                      {formatRD(acumulado)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
-                      {formatRD(proyeccionAnual, 0)}
+                      {formatRD(proyeccionAnual)}
                     </td>
                     <td className="px-4 py-3.5 w-36">
                       <div className="flex items-center gap-2">
@@ -152,8 +152,8 @@ export default function RegaliaPage() {
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
                   <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700 dark:text-emerald-300">{formatRD(totalAcumulado, 0)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-zinc-700 dark:text-zinc-300">{formatRD(totalProyectado, 0)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700 dark:text-emerald-300">{formatRD(totalAcumulado)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-zinc-700 dark:text-zinc-300">{formatRD(totalProyectado)}</td>
                   <td />
                 </tr>
               </tfoot>

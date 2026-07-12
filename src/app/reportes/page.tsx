@@ -213,11 +213,11 @@ function ReporteGerencial({
         head: [['Indicador', 'Valor']],
         body: [
           ['Total Empleados Activos', `${kpis.empleados}`],
-          ['Nómina Bruta (último período)', formatRD(kpis.bruto, 0)],
-          ['Nómina Neta (último período)', formatRD(kpis.neto, 0)],
-          ['ISR Total Retenido', formatRD(kpis.isr, 0)],
-          ['Aportes Empleador TSS', formatRD(kpis.aportes, 0)],
-          ['Costo Total Empresa', formatRD(kpis.costo, 0)],
+          ['Nómina Bruta (último período)', formatRD(kpis.bruto)],
+          ['Nómina Neta (último período)', formatRD(kpis.neto)],
+          ['ISR Total Retenido', formatRD(kpis.isr)],
+          ['Aportes Empleador TSS', formatRD(kpis.aportes)],
+          ['Costo Total Empresa', formatRD(kpis.costo)],
         ],
         theme: 'striped',
         headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
@@ -238,10 +238,10 @@ function ReporteGerencial({
           : null
         return [
           periodoLabel(p), `${p.totalEmpleados}`,
-          formatRD(p.totales.bruto, 0), formatRD(p.totales.descuentos, 0),
-          formatRD(p.totales.neto, 0),
+          formatRD(p.totales.bruto), formatRD(p.totales.descuentos),
+          formatRD(p.totales.neto),
           delta === null ? '—' : `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}%`,
-          formatRD(p.totales.costoTotal, 0),
+          formatRD(p.totales.costoTotal),
         ]
       }),
       theme: 'striped',
@@ -257,7 +257,7 @@ function ReporteGerencial({
       autoTable(doc, {
         startY: after2 + 10,
         head: [['Departamento', 'Empleados', 'Sal. Bruto', 'Sal. Neto', 'Costo Total', '% del Total']],
-        body: desglose.map(d => [d.depto, `${d.headcount}`, formatRD(d.bruto, 0), formatRD(d.neto, 0), formatRD(d.costo, 0), `${d.pct.toFixed(1)}%`]),
+        body: desglose.map(d => [d.depto, `${d.headcount}`, formatRD(d.bruto), formatRD(d.neto), formatRD(d.costo), `${d.pct.toFixed(1)}%`]),
         theme: 'striped',
         headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
         bodyStyles: { fontSize: 8 },
@@ -347,11 +347,11 @@ function ReporteGerencial({
             </p>
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
               <StatCard label="Empleados Activos"   value={`${kpis.empleados}`}       icon={Users}       iconColor="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400" />
-              <StatCard label="Nómina Bruta"        value={formatRD(kpis.bruto, 0)}   icon={Wallet}      iconColor="bg-zinc-100 text-zinc-700 dark:bg-[#1a1d2e] dark:text-zinc-300" />
-              <StatCard label="Nómina Neta"         value={formatRD(kpis.neto, 0)}    icon={TrendingUp}  iconColor="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" />
-              <StatCard label="ISR Retenido"        value={formatRD(kpis.isr, 0)}     icon={Receipt}     iconColor="bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400" />
-              <StatCard label="Aportes Empleador"   value={formatRD(kpis.aportes, 0)} icon={Building2}   iconColor="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" />
-              <StatCard label="Costo Total Empresa" value={formatRD(kpis.costo, 0)}   icon={Briefcase}   iconColor="bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400" />
+              <StatCard label="Nómina Bruta"        value={formatRD(kpis.bruto)}   icon={Wallet}      iconColor="bg-zinc-100 text-zinc-700 dark:bg-[#1a1d2e] dark:text-zinc-300" />
+              <StatCard label="Nómina Neta"         value={formatRD(kpis.neto)}    icon={TrendingUp}  iconColor="bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" />
+              <StatCard label="ISR Retenido"        value={formatRD(kpis.isr)}     icon={Receipt}     iconColor="bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-400" />
+              <StatCard label="Aportes Empleador"   value={formatRD(kpis.aportes)} icon={Building2}   iconColor="bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" />
+              <StatCard label="Costo Total Empresa" value={formatRD(kpis.costo)}   icon={Briefcase}   iconColor="bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400" />
             </div>
           </div>
 
@@ -377,7 +377,7 @@ function ReporteGerencial({
                 ] as const).map(({ label, value, cls }) => (
                   <div key={label} className="rounded-lg bg-white dark:bg-[#141722] border border-indigo-100 dark:border-indigo-900/40 p-3">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{label}</p>
-                    <p className={`text-sm font-bold tabular-nums mt-1 ${cls}`}>{formatRD(value, 0)}</p>
+                    <p className={`text-sm font-bold tabular-nums mt-1 ${cls}`}>{formatRD(value)}</p>
                   </div>
                 ))}
               </div>
@@ -413,7 +413,7 @@ function ReporteGerencial({
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                  <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                     {ultimos6.map((p, i) => {
                       const delta = i < ultimos6.length - 1
                         ? ((p.totales.neto - ultimos6[i + 1].totales.neto) / ultimos6[i + 1].totales.neto * 100)
@@ -425,9 +425,9 @@ function ReporteGerencial({
                             {i === 0 && <span className="ml-2 inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-800/50">Último</span>}
                           </td>
                           <td className="px-5 py-3 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{p.totalEmpleados}</td>
-                          <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(p.totales.bruto, 0)}</td>
-                          <td className="px-5 py-3 text-right tabular-nums text-rose-700 dark:text-rose-400">{formatRD(p.totales.descuentos, 0)}</td>
-                          <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatRD(p.totales.neto, 0)}</td>
+                          <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(p.totales.bruto)}</td>
+                          <td className="px-5 py-3 text-right tabular-nums text-rose-700 dark:text-rose-400">{formatRD(p.totales.descuentos)}</td>
+                          <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatRD(p.totales.neto)}</td>
                           <td className="px-5 py-3 text-right tabular-nums text-xs">
                             {delta === null ? (
                               <span className="text-zinc-300 dark:text-zinc-600">—</span>
@@ -437,7 +437,7 @@ function ReporteGerencial({
                               </span>
                             )}
                           </td>
-                          <td className="px-5 py-3 text-right tabular-nums text-indigo-700 dark:text-indigo-400">{formatRD(p.totales.costoTotal, 0)}</td>
+                          <td className="px-5 py-3 text-right tabular-nums text-indigo-700 dark:text-indigo-400">{formatRD(p.totales.costoTotal)}</td>
                         </tr>
                       )
                     })}
@@ -463,14 +463,14 @@ function ReporteGerencial({
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                  <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                     {desglose.map(d => (
                       <tr key={d.depto} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                         <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{d.depto}</td>
                         <td className="px-5 py-3 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{d.headcount}</td>
-                        <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(d.bruto, 0)}</td>
-                        <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatRD(d.neto, 0)}</td>
-                        <td className="px-5 py-3 text-right tabular-nums text-indigo-700 dark:text-indigo-400 font-medium">{formatRD(d.costo, 0)}</td>
+                        <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(d.bruto)}</td>
+                        <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatRD(d.neto)}</td>
+                        <td className="px-5 py-3 text-right tabular-nums text-indigo-700 dark:text-indigo-400 font-medium">{formatRD(d.costo)}</td>
                         <td className="px-5 py-3">
                           <div className="flex items-center justify-end gap-2">
                             <div className="w-20 h-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] overflow-hidden">
@@ -707,41 +707,41 @@ function ReporteNomina({
                   <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400 whitespace-nowrap">Costo Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filasVisible.map(({ emp, res }) => (
                   <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors text-right">
                     <td className="px-5 py-3 text-left">
                       <p className="font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{fullName(emp)}</p>
                     </td>
                     <td className="px-4 py-3 text-left text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{emp.cargo}</td>
-                    <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(res.totalBruto, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(res.afpEmpleado, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(res.sfsEmpleado, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-400 whitespace-nowrap">{formatRD(res.isrMensual, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-rose-800 dark:text-rose-300 font-medium whitespace-nowrap">{formatRD(res.totalDescuentos, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-emerald-700 dark:text-emerald-400 font-semibold whitespace-nowrap">{formatRD(res.salarioNeto, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.afpEmpleador, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.sfsEmpleador, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.srlEmpleador, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.infotepEmpleador, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-indigo-700 dark:text-indigo-400 font-semibold whitespace-nowrap">{formatRD(res.totalCostoEmpleador, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(res.totalBruto)}</td>
+                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(res.afpEmpleado)}</td>
+                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(res.sfsEmpleado)}</td>
+                    <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-400 whitespace-nowrap">{formatRD(res.isrMensual)}</td>
+                    <td className="px-4 py-3 tabular-nums text-rose-800 dark:text-rose-300 font-medium whitespace-nowrap">{formatRD(res.totalDescuentos)}</td>
+                    <td className="px-4 py-3 tabular-nums text-emerald-700 dark:text-emerald-400 font-semibold whitespace-nowrap">{formatRD(res.salarioNeto)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.afpEmpleador)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.sfsEmpleador)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.srlEmpleador)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.infotepEmpleador)}</td>
+                    <td className="px-4 py-3 tabular-nums text-indigo-700 dark:text-indigo-400 font-semibold whitespace-nowrap">{formatRD(res.totalCostoEmpleador)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold text-right">
                   <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
-                  <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(totales.bruto, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.sfsEmp, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-300 whitespace-nowrap">{formatRD(totales.isr, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-rose-800 dark:text-rose-200 whitespace-nowrap">{formatRD(totales.descuentos, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-emerald-700 dark:text-emerald-300 whitespace-nowrap">{formatRD(totales.neto, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.srlEmpl, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.infotepEmpl, 0)}</td>
-                  <td className="px-4 py-3 tabular-nums text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(totales.costo, 0)}</td>
+                  <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(totales.bruto)}</td>
+                  <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp)}</td>
+                  <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.sfsEmp)}</td>
+                  <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-300 whitespace-nowrap">{formatRD(totales.isr)}</td>
+                  <td className="px-4 py-3 tabular-nums text-rose-800 dark:text-rose-200 whitespace-nowrap">{formatRD(totales.descuentos)}</td>
+                  <td className="px-4 py-3 tabular-nums text-emerald-700 dark:text-emerald-300 whitespace-nowrap">{formatRD(totales.neto)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.srlEmpl)}</td>
+                  <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.infotepEmpl)}</td>
+                  <td className="px-4 py-3 tabular-nums text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(totales.costo)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -905,7 +905,7 @@ function ReporteEmpleados({
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filasVisible.map(e => {
                   const anos = (Date.now() - new Date(e.fechaIngreso).getTime()) / (365.25*24*3600*1000)
                   return (
@@ -922,7 +922,7 @@ function ReporteEmpleados({
                       </td>
                       <td className="px-5 py-3 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{formatDate(e.fechaIngreso)}</td>
                       <td className="px-5 py-3 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{formatAnosServicio(anos)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">{formatRD(e.salarioBase, 0)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums font-medium text-zinc-800 dark:text-zinc-200 whitespace-nowrap">{formatRD(e.salarioBase)}</td>
                       <td className="px-5 py-3 text-xs text-zinc-500 dark:text-zinc-400">{e.banco ?? '—'}</td>
                     </tr>
                   )
@@ -1079,15 +1079,15 @@ function ReportePrestamos({
           <div className="grid grid-cols-3 gap-4">
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Montos Otorgados</p>
-              <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">{formatRD(summary.totalMonto, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">{formatRD(summary.totalMonto)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Saldo Pendiente</p>
-              <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{formatRD(summary.totalSaldo, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{formatRD(summary.totalSaldo)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Cuotas Mensuales Activas</p>
-              <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(summary.totalCuotas, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(summary.totalCuotas)}</p>
             </div>
           </div>
 
@@ -1111,7 +1111,7 @@ function ReportePrestamos({
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map(p => {
                     const emp = empMap[p.empleadoId]
                     const pct = (p.monto - p.saldoPendiente) / p.monto * 100
@@ -1123,8 +1123,8 @@ function ReportePrestamos({
                           </p>
                           {emp && <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{emp.cargo}</p>}
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(p.monto, 0)}</td>
-                        <td className="px-4 py-3 text-right tabular-nums text-rose-700 dark:text-rose-400 font-medium whitespace-nowrap">{formatRD(p.saldoPendiente, 0)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(p.monto)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-rose-700 dark:text-rose-400 font-medium whitespace-nowrap">{formatRD(p.saldoPendiente)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] overflow-hidden min-w-[60px]">
@@ -1136,7 +1136,7 @@ function ReportePrestamos({
                             <span className="text-xs tabular-nums text-zinc-600 dark:text-zinc-400 shrink-0">{pct.toFixed(0)}%</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(p.cuotaBase, 0)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(p.cuotaBase)}</td>
                         <td className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400 capitalize">{p.frecuencia}</td>
                         <td className="px-4 py-3 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{formatDate(p.fechaOtorgamiento)}</td>
                         <td className="px-4 py-3">
@@ -1494,22 +1494,22 @@ function ReporteTSS({
           <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total TSS</p>
-              <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">{formatRD(totales.totalTSS, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100 tabular-nums">{formatRD(totales.totalTSS)}</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">Empleado + Empleador</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">TSS Empleado</p>
-              <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{formatRD(totales.afpEmp + totales.sfsEmp, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{formatRD(totales.afpEmp + totales.sfsEmp)}</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">AFP + SFS descontado</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">TSS Empleador</p>
-              <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(totales.afpEmpl + totales.sfsEmpl + totales.srl + totales.infotep, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{formatRD(totales.afpEmpl + totales.sfsEmpl + totales.srl + totales.infotep)}</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">AFP + SFS + SRL + Infotep empresa</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">ISR Retenido</p>
-              <p className="mt-1 text-xl font-bold text-violet-700 dark:text-violet-400 tabular-nums">{formatRD(totales.isr, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-violet-700 dark:text-violet-400 tabular-nums">{formatRD(totales.isr)}</p>
               <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-1">Para remitir DGII día 10</p>
             </div>
           </div>
@@ -1534,7 +1534,7 @@ function ReporteTSS({
                     <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-300 whitespace-nowrap">Total</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {conciliacionFilas.map(f => (
                     <tr key={f.concepto} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3 text-zinc-800 dark:text-zinc-200 whitespace-nowrap">{f.concepto}</td>
@@ -1591,7 +1591,7 @@ function ReporteTSS({
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-violet-500 dark:text-violet-400 whitespace-nowrap">ISR</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map(({ emp, res, totalTSS }) => (
                     <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors text-right">
                       <td className="px-5 py-3 text-left">
@@ -1599,30 +1599,30 @@ function ReporteTSS({
                         <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{emp.cargo}</p>
                       </td>
                       <td className="px-4 py-3 text-left font-mono text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{formatCedula(emp.cedula)}</td>
-                      <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(res.salarioCotizable, 0)}</td>
-                      <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(res.afpEmpleado, 0)}</td>
-                      <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(res.sfsEmpleado, 0)}</td>
-                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.afpEmpleador, 0)}</td>
-                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.sfsEmpleador, 0)}</td>
-                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.srlEmpleador, 0)}</td>
-                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.infotepEmpleador, 0)}</td>
-                      <td className="px-4 py-3 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{formatRD(totalTSS, 0)}</td>
-                      <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-400 whitespace-nowrap">{formatRD(res.isrMensual, 0)}</td>
+                      <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(res.salarioCotizable)}</td>
+                      <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(res.afpEmpleado)}</td>
+                      <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(res.sfsEmpleado)}</td>
+                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.afpEmpleador)}</td>
+                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.sfsEmpleador)}</td>
+                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.srlEmpleador)}</td>
+                      <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(res.infotepEmpleador)}</td>
+                      <td className="px-4 py-3 tabular-nums font-semibold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{formatRD(totalTSS)}</td>
+                      <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-400 whitespace-nowrap">{formatRD(res.isrMensual)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold text-right">
                     <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
-                    <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(totales.cotizable, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.sfsEmp, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.srl, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.infotep, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.totalTSS, 0)}</td>
-                    <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-300 whitespace-nowrap">{formatRD(totales.isr, 0)}</td>
+                    <td className="px-4 py-3 tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(totales.cotizable)}</td>
+                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.afpEmp)}</td>
+                    <td className="px-4 py-3 tabular-nums text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(totales.sfsEmp)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.afpEmpl)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.sfsEmpl)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.srl)}</td>
+                    <td className="px-4 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.infotep)}</td>
+                    <td className="px-4 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.totalTSS)}</td>
+                    <td className="px-4 py-3 tabular-nums text-violet-700 dark:text-violet-300 whitespace-nowrap">{formatRD(totales.isr)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -1646,8 +1646,8 @@ function ReporteTSS({
                       <p className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">Tramo {t.label}</p>
                     </div>
                     <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">{t.count} emp.</p>
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">ISR prom.: {formatRD(t.avgISR, 0)}</p>
-                    <p className="text-[11px] text-violet-600 dark:text-violet-400 font-medium">Total: {formatRD(t.totalISR, 0)}</p>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400">ISR prom.: {formatRD(t.avgISR)}</p>
+                    <p className="text-[11px] text-violet-600 dark:text-violet-400 font-medium">Total: {formatRD(t.totalISR)}</p>
                   </div>
                 ))}
               </div>
@@ -1733,8 +1733,8 @@ function ReporteCostoPorDepto({
     autoTable(doc, {
       startY: 44,
       head: [['Departamento','Empleados','Sal. Bruto','Sal. Neto','TSS Empleador','Costo Total','% del Total']],
-      body: deptos.map(d => [d.depto, `${d.headcount}`, formatRD(d.bruto, 0), formatRD(d.neto, 0), formatRD(d.tss, 0), formatRD(d.costo, 0), `${d.pct.toFixed(1)}%`]),
-      foot: [['TOTALES', `${totales.headcount}`, formatRD(totales.bruto, 0), formatRD(totales.neto, 0), formatRD(totales.tss, 0), formatRD(totales.costo, 0), '100%']],
+      body: deptos.map(d => [d.depto, `${d.headcount}`, formatRD(d.bruto), formatRD(d.neto), formatRD(d.tss), formatRD(d.costo), `${d.pct.toFixed(1)}%`]),
+      foot: [['TOTALES', `${totales.headcount}`, formatRD(totales.bruto), formatRD(totales.neto), formatRD(totales.tss), formatRD(totales.costo), '100%']],
       theme: 'striped',
       headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
       footStyles: { fillColor: [240, 240, 240], textColor: NAVY, fontStyle: 'bold', fontSize: 8 },
@@ -1788,7 +1788,7 @@ function ReporteCostoPorDepto({
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Costo Total</p>
-              <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(totales.costo, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(totales.costo)}</p>
             </div>
           </div>
           <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
@@ -1806,15 +1806,15 @@ function ReporteCostoPorDepto({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {deptoVisible.map(d => (
                     <tr key={d.depto} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100">{d.depto}</td>
                       <td className="px-5 py-3 text-right tabular-nums text-zinc-600 dark:text-zinc-400">{d.headcount}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(d.bruto, 0)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatRD(d.neto, 0)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-amber-700 dark:text-amber-400">{formatRD(d.tss, 0)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-indigo-700 dark:text-indigo-400 font-medium">{formatRD(d.costo, 0)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(d.bruto)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatRD(d.neto)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-amber-700 dark:text-amber-400">{formatRD(d.tss)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-indigo-700 dark:text-indigo-400 font-medium">{formatRD(d.costo)}</td>
                       <td className="px-5 py-3">
                         <div className="flex items-center justify-end gap-2">
                           <div className="w-20 h-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] overflow-hidden">
@@ -1830,10 +1830,10 @@ function ReporteCostoPorDepto({
                   <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold text-right">
                     <td className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES</td>
                     <td className="px-5 py-3 tabular-nums">{totales.headcount}</td>
-                    <td className="px-5 py-3 tabular-nums">{formatRD(totales.bruto, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-emerald-700 dark:text-emerald-300">{formatRD(totales.neto, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300">{formatRD(totales.tss, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-indigo-700 dark:text-indigo-300">{formatRD(totales.costo, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums">{formatRD(totales.bruto)}</td>
+                    <td className="px-5 py-3 tabular-nums text-emerald-700 dark:text-emerald-300">{formatRD(totales.neto)}</td>
+                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300">{formatRD(totales.tss)}</td>
+                    <td className="px-5 py-3 tabular-nums text-indigo-700 dark:text-indigo-300">{formatRD(totales.costo)}</td>
                     <td className="px-5 py-3">100%</td>
                   </tr>
                 </tfoot>
@@ -2051,7 +2051,7 @@ function ReportePlanillaACH({
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total a Transferir</p>
-              <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatRD(totalNeto, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatRD(totalNeto)}</p>
             </div>
             {sinCuenta > 0 && (
               <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/20 p-4">
@@ -2126,21 +2126,21 @@ function ReportePlanillaACH({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map(({ emp, neto }) => (
                     <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{fullName(emp)}</td>
                       <td className="px-5 py-3 text-xs text-zinc-500 dark:text-zinc-400">{emp.departamento}</td>
                       <td className="px-5 py-3 text-xs text-zinc-600 dark:text-zinc-400">{emp.banco ?? '—'}</td>
                       <td className="px-5 py-3 font-mono text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{emp.numeroCuenta ?? '—'}</td>
-                      <td className="px-5 py-3 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{formatRD(neto, 0)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{formatRD(neto)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold">
                     <td colSpan={4} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTAL TRANSFERIR ({filasVisible.length} cuentas)</td>
-                    <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{formatRD(totalNeto, 0)}</td>
+                    <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{formatRD(totalNeto)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -2329,21 +2329,21 @@ function ReporteHorasExtras({
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Horas Extras 35%</p>
               <p className="mt-1 text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{resumen.he35.toFixed(1)} hrs</p>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.imp35, 0)}</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.imp35)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Horas Extras 100%</p>
               <p className="mt-1 text-xl font-bold text-rose-700 dark:text-rose-400 tabular-nums">{resumen.he100.toFixed(1)} hrs</p>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.imp100, 0)}</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.imp100)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Recargo Nocturno (15%)</p>
               <p className="mt-1 text-xl font-bold text-sky-700 dark:text-sky-400 tabular-nums">{resumen.nocturnas.toFixed(1)} hrs</p>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.impNocturno, 0)}</p>
+              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">{formatRD(resumen.impNocturno)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Importe HE</p>
-              <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(resumen.total, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(resumen.total)}</p>
             </div>
           </div>
           <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] overflow-hidden shadow-sm dark:shadow-none">
@@ -2361,7 +2361,7 @@ function ReporteHorasExtras({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map((r, idx) => {
                     const emp = empMap[r.empId]
                     return (
@@ -2369,12 +2369,12 @@ function ReporteHorasExtras({
                         <td className="px-5 py-3 font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{emp ? fullName(emp) : r.empId}</td>
                         <td className="px-5 py-3 text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{r.per}</td>
                         <td className="px-5 py-3 tabular-nums text-center text-amber-700 dark:text-amber-400">{r.he35.toFixed(1)}</td>
-                        <td className="px-5 py-3 tabular-nums text-right text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(r.imp35, 0)}</td>
+                        <td className="px-5 py-3 tabular-nums text-right text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(r.imp35)}</td>
                         <td className="px-5 py-3 tabular-nums text-center text-rose-700 dark:text-rose-400">{r.he100.toFixed(1)}</td>
-                        <td className="px-5 py-3 tabular-nums text-right text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(r.imp100, 0)}</td>
+                        <td className="px-5 py-3 tabular-nums text-right text-rose-700 dark:text-rose-400 whitespace-nowrap">{formatRD(r.imp100)}</td>
                         <td className="px-5 py-3 tabular-nums text-center text-sky-700 dark:text-sky-400">{r.nocturnas.toFixed(1)}</td>
-                        <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-400 whitespace-nowrap">{formatRD(r.impNocturno, 0)}</td>
-                        <td className="px-5 py-3 tabular-nums text-right font-semibold text-indigo-700 dark:text-indigo-400 whitespace-nowrap">{formatRD(r.total, 0)}</td>
+                        <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-400 whitespace-nowrap">{formatRD(r.impNocturno)}</td>
+                        <td className="px-5 py-3 tabular-nums text-right font-semibold text-indigo-700 dark:text-indigo-400 whitespace-nowrap">{formatRD(r.total)}</td>
                       </tr>
                     )
                   })}
@@ -2383,12 +2383,12 @@ function ReporteHorasExtras({
                   <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold">
                     <td colSpan={2} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} registros)</td>
                     <td className="px-5 py-3 tabular-nums text-center text-amber-700 dark:text-amber-300">{resumen.he35.toFixed(1)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(resumen.imp35, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(resumen.imp35)}</td>
                     <td className="px-5 py-3 tabular-nums text-center text-rose-700 dark:text-rose-300">{resumen.he100.toFixed(1)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(resumen.imp100, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-rose-700 dark:text-rose-300 whitespace-nowrap">{formatRD(resumen.imp100)}</td>
                     <td className="px-5 py-3 tabular-nums text-center text-sky-700 dark:text-sky-300">{resumen.nocturnas.toFixed(1)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-300 whitespace-nowrap">{formatRD(resumen.impNocturno, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(resumen.total, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-300 whitespace-nowrap">{formatRD(resumen.impNocturno)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(resumen.total)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -2422,7 +2422,7 @@ function ReporteHorasExtras({
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">Ningún empleado se acerca a los topes de horas extras en {anioFiltro}.</p>
               </div>
             ) : (
-              <div className="divide-y divide-zinc-100 dark:divide-[#1d2035]">
+              <div className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {alertasTrimestrales.length > 0 && (
                   <div className="px-5 py-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 mb-2">Tope trimestral — 80 horas acumuladas (cálculo exacto)</p>
@@ -2437,7 +2437,7 @@ function ReporteHorasExtras({
                             <th className="py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Estado</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                        <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                           {alertasTrimestrales.map(a => {
                             const emp = empMap[a.empId]
                             const pct = a.horas / TOPE_TRIMESTRAL_HORAS * 100
@@ -2480,7 +2480,7 @@ function ReporteHorasExtras({
                             <th className="py-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400">Estado</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                        <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                           {alertasSemanales.map((r, idx) => {
                             const emp = empMap[r.empId]
                             const excede = r.promedioSemanal > TOPE_SEMANAL_HORAS
@@ -2586,11 +2586,11 @@ function ReporteProyeccionAnual({
       startY: 44,
       head: [['Empleado','Cargo','Sal. Base','Bruto × 12','Regalía','Vacaciones','Costo Total Proy.','YTD Real','% Ejec.']],
       body: filas.map(r => [
-        fullName(r.emp), r.emp.cargo, formatRD(r.emp.salarioBase, 0),
-        formatRD(r.brutoAnual, 0), formatRD(r.regalia, 0), formatRD(r.vacaciones, 0),
-        formatRD(r.totalProyectado, 0), formatRD(r.ytdReal, 0), `${r.pctEjecutado.toFixed(1)}%`,
+        fullName(r.emp), r.emp.cargo, formatRD(r.emp.salarioBase),
+        formatRD(r.brutoAnual), formatRD(r.regalia), formatRD(r.vacaciones),
+        formatRD(r.totalProyectado), formatRD(r.ytdReal), `${r.pctEjecutado.toFixed(1)}%`,
       ]),
-      foot: [['TOTALES', '', '', formatRD(totales.brutoAnual, 0), formatRD(totales.regalia, 0), formatRD(totales.vacaciones, 0), formatRD(totales.totalProyectado, 0), formatRD(totales.ytdReal, 0), '']],
+      foot: [['TOTALES', '', '', formatRD(totales.brutoAnual), formatRD(totales.regalia), formatRD(totales.vacaciones), formatRD(totales.totalProyectado), formatRD(totales.ytdReal), '']],
       theme: 'striped',
       headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 7 },
       footStyles: { fillColor: [240, 240, 240], textColor: NAVY, fontStyle: 'bold', fontSize: 7 },
@@ -2635,11 +2635,11 @@ function ReporteProyeccionAnual({
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Costo Total Proyectado</p>
-              <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(totales.totalProyectado, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-indigo-700 dark:text-indigo-400 tabular-nums">{formatRD(totales.totalProyectado)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Ejecutado YTD</p>
-              <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatRD(totales.ytdReal, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatRD(totales.ytdReal)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">% Ejecutado</p>
@@ -2663,7 +2663,7 @@ function ReporteProyeccionAnual({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map(({ emp, brutoAnual, regalia, vacaciones, totalProyectado, ytdReal, pctEjecutado }) => (
                     <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3">
@@ -2671,12 +2671,12 @@ function ReporteProyeccionAnual({
                         <p className="text-[11px] text-zinc-400 dark:text-zinc-500">{emp.departamento}</p>
                       </td>
                       <td className="px-5 py-3 text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">{emp.cargo}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(emp.salarioBase, 0)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(brutoAnual, 0)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(regalia, 0)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(vacaciones, 0)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-indigo-700 dark:text-indigo-400 font-semibold whitespace-nowrap">{formatRD(totalProyectado, 0)}</td>
-                      <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{formatRD(ytdReal, 0)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(emp.salarioBase)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-zinc-700 dark:text-zinc-300 whitespace-nowrap">{formatRD(brutoAnual)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(regalia)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-amber-700 dark:text-amber-400 whitespace-nowrap">{formatRD(vacaciones)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-indigo-700 dark:text-indigo-400 font-semibold whitespace-nowrap">{formatRD(totalProyectado)}</td>
+                      <td className="px-5 py-3 text-right tabular-nums text-emerald-700 dark:text-emerald-400 whitespace-nowrap">{formatRD(ytdReal)}</td>
                       <td className="px-5 py-3 text-center">
                         <div className="flex items-center gap-1.5 justify-end">
                           <div className="w-14 h-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] overflow-hidden">
@@ -2691,11 +2691,11 @@ function ReporteProyeccionAnual({
                 <tfoot>
                   <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold text-right">
                     <td colSpan={3} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} empleados)</td>
-                    <td className="px-5 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.brutoAnual, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.regalia, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.vacaciones, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(totales.totalProyectado, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-emerald-700 dark:text-emerald-300 whitespace-nowrap">{formatRD(totales.ytdReal, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums whitespace-nowrap">{formatRD(totales.brutoAnual)}</td>
+                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.regalia)}</td>
+                    <td className="px-5 py-3 tabular-nums text-amber-700 dark:text-amber-300 whitespace-nowrap">{formatRD(totales.vacaciones)}</td>
+                    <td className="px-5 py-3 tabular-nums text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(totales.totalProyectado)}</td>
+                    <td className="px-5 py-3 tabular-nums text-emerald-700 dark:text-emerald-300 whitespace-nowrap">{formatRD(totales.ytdReal)}</td>
                     <td className="px-5 py-3 text-center text-xs">
                       {totales.totalProyectado > 0 ? `${(totales.ytdReal / totales.totalProyectado * 100).toFixed(1)}%` : '—'}
                     </td>
@@ -2885,7 +2885,7 @@ function ReportePreaviso({
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map(({ l, emp, diasRequeridos, diasReales, diferencia, cumplio }) => (
                     <tr key={l.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3">
@@ -3179,7 +3179,7 @@ function ReporteAntiguedad({
                       <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">% del Total</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                  <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                     {porRango.map(r => (
                       <tr key={r.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                         <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{r.label}</td>
@@ -3207,7 +3207,7 @@ function ReporteAntiguedad({
                       <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Antigüedad Promedio</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                  <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                     {porPosicion.map(p => (
                       <tr key={p.cargo} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                         <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-zinc-100">{p.cargo}</td>
@@ -3253,7 +3253,7 @@ function ReporteAntiguedad({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map(({ emp, anos }) => (
                     <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3">
@@ -3516,7 +3516,7 @@ function ReporteSinIngresos({
                     <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Alerta</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map(({ emp, motivo }) => (
                     <tr key={emp.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3">
@@ -3727,11 +3727,11 @@ function ReporteLicencias({
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Total Pagado por Cielo Cloud</p>
-              <p className="mt-1 text-xl font-bold text-[#1B2980] dark:text-indigo-400 tabular-nums">{formatRD(resumen.montoPagado, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-[#1B2980] dark:text-indigo-400 tabular-nums">{formatRD(resumen.montoPagado)}</p>
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Subsidio Estimado TSS/ARL</p>
-              <p className="mt-1 text-xl font-bold text-sky-700 dark:text-sky-400 tabular-nums">{formatRD(resumen.subsidio, 0)}</p>
+              <p className="mt-1 text-xl font-bold text-sky-700 dark:text-sky-400 tabular-nums">{formatRD(resumen.subsidio)}</p>
             </div>
           </div>
 
@@ -3750,7 +3750,7 @@ function ReporteLicencias({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filasVisible.map(({ l, emp, mes }) => (
                     <tr key={l.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3">
@@ -3772,8 +3772,8 @@ function ReporteLicencias({
                   <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e] text-[#1B2980] dark:text-indigo-300 font-bold">
                     <td colSpan={4} className="px-5 py-3 text-left text-xs uppercase tracking-wide">TOTALES ({filasVisible.length} licencias)</td>
                     <td className="px-5 py-3 tabular-nums text-center">{resumen.dias}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(resumen.montoPagado, 0)}</td>
-                    <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-300 whitespace-nowrap">{formatRD(resumen.subsidio, 0)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-indigo-700 dark:text-indigo-300 whitespace-nowrap">{formatRD(resumen.montoPagado)}</td>
+                    <td className="px-5 py-3 tabular-nums text-right text-sky-700 dark:text-sky-300 whitespace-nowrap">{formatRD(resumen.subsidio)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -3796,7 +3796,7 @@ function ReporteLicencias({
                     <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Subsidio Estimado</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {porTipo.map(t => (
                     <tr key={t.tipo}>
                       <td className="px-5 py-2.5">

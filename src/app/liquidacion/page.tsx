@@ -449,7 +449,7 @@ export default function LiquidacionPage() {
                       <Banknote className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
                       <div>
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Salario Base</p>
-                        <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{formatRD(emp.salarioBase, 0)}</p>
+                        <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{formatRD(emp.salarioBase)}</p>
                       </div>
                     </div>
                   </div>
@@ -624,7 +624,7 @@ export default function LiquidacionPage() {
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">Seleccione los préstamos/avances a descontar del finiquito</p>
                   </div>
                 </div>
-                <div className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <div className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {prestamosActivos.map(p => (
                     <label
                       key={p.id}
@@ -643,7 +643,7 @@ export default function LiquidacionPage() {
                           {p.notas || (p.tipo === 'avance' ? 'Avance de salario' : 'Préstamo')}
                         </p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          Original: {formatRD(p.monto, 0)} · {p.cuotas} cuotas
+                          Original: {formatRD(p.monto)} · {p.cuotas} cuotas
                           {p.tasaInteres > 0 && ` · ${p.tasaInteres}% mensual`}
                         </p>
                       </div>
@@ -690,34 +690,34 @@ export default function LiquidacionPage() {
                   <div>
                     <p className="text-zinc-500 uppercase tracking-wide">Cesantía</p>
                     <p className={`font-semibold mt-0.5 ${resultado.cesantia > 0 ? 'text-rose-300' : 'text-zinc-600'}`}>
-                      {resultado.cesantia > 0 ? formatRD(resultado.cesantia, 0) : '—'}
+                      {resultado.cesantia > 0 ? formatRD(resultado.cesantia) : '—'}
                     </p>
                   </div>
                   <div>
                     <p className="text-zinc-500 uppercase tracking-wide">Preaviso</p>
                     <p className={`font-semibold mt-0.5 ${resultado.preaviso > 0 ? 'text-amber-300' : 'text-zinc-600'}`}>
-                      {resultado.preaviso > 0 ? formatRD(resultado.preaviso, 0) : '—'}
+                      {resultado.preaviso > 0 ? formatRD(resultado.preaviso) : '—'}
                     </p>
                   </div>
                   <div>
                     <p className="text-zinc-500 uppercase tracking-wide">Asist. Económica</p>
                     <p className={`font-semibold mt-0.5 ${resultado.asistenciaEconomica > 0 ? 'text-violet-300' : 'text-zinc-600'}`}>
-                      {resultado.asistenciaEconomica > 0 ? formatRD(resultado.asistenciaEconomica, 0) : '—'}
+                      {resultado.asistenciaEconomica > 0 ? formatRD(resultado.asistenciaEconomica) : '—'}
                     </p>
                   </div>
                   <div>
                     <p className="text-zinc-500 uppercase tracking-wide">Vacaciones</p>
-                    <p className="font-semibold mt-0.5 text-sky-300">{formatRD(resultado.vacaciones, 0)}</p>
+                    <p className="font-semibold mt-0.5 text-sky-300">{formatRD(resultado.vacaciones)}</p>
                   </div>
                   <div>
                     <p className="text-zinc-500 uppercase tracking-wide">Regalía</p>
-                    <p className="font-semibold mt-0.5 text-emerald-300">{formatRD(resultado.regalia, 0)}</p>
+                    <p className="font-semibold mt-0.5 text-emerald-300">{formatRD(resultado.regalia)}</p>
                   </div>
                   {resultado.saldoISR > 0 && (
                     <div className="col-span-2 md:col-span-5 border-t border-zinc-800 pt-3">
                       <p className="text-zinc-500 uppercase tracking-wide">Saldo ISR a Favor</p>
                       <p className="font-semibold mt-0.5 text-teal-300">
-                        +{formatRD(resultado.saldoISR, 0)}
+                        +{formatRD(resultado.saldoISR)}
                       </p>
                     </div>
                   )}
@@ -725,7 +725,7 @@ export default function LiquidacionPage() {
                     <div className="col-span-2 md:col-span-5 border-t border-zinc-800 pt-3">
                       <p className="text-zinc-500 uppercase tracking-wide">Desc. Préstamos</p>
                       <p className="font-semibold mt-0.5 text-rose-400">
-                        ({formatRD(resultado.totalPrestamos, 0)})
+                        ({formatRD(resultado.totalPrestamos)})
                       </p>
                     </div>
                   )}
@@ -801,7 +801,7 @@ export default function LiquidacionPage() {
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Pagado</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {liquidacionesOrdenadas.length === 0 && (
                   <tr>
                     <td colSpan={4}>

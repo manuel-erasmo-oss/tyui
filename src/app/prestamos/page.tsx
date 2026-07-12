@@ -142,7 +142,7 @@ function TablaAmortizacion({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+          <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
             {rows.map(row => (
               <tr
                 key={row.num}
@@ -218,17 +218,17 @@ function PanelCapacidadPago({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div>
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Salario Base</p>
-          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(salarioBase, 0)}</p>
+          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(salarioBase)}</p>
         </div>
         <div>
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
             Cuotas Activas {cantidadPrestamosActivos > 0 ? `(${cantidadPrestamosActivos})` : ''}
           </p>
-          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(sumaCuotasActivas, 0)}</p>
+          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(sumaCuotasActivas)}</p>
         </div>
         <div>
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Nueva Cuota</p>
-          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(nuevaCuota, 0)}</p>
+          <p className="text-sm font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(nuevaCuota)}</p>
         </div>
         <div>
           <p className="text-[11px] text-zinc-400 dark:text-zinc-500">% del Salario Base</p>
@@ -475,7 +475,7 @@ function VistaDetalle({
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {prestamo.pagos.map(pago => (
                     <tr key={pago.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-4 py-2.5 text-sm text-zinc-700 dark:text-zinc-300">{formatDate(pago.fecha)}</td>
@@ -834,7 +834,7 @@ export default function PrestamosPage() {
           />
           <StatCard
             label="Saldo Total Pendiente"
-            value={formatRD(saldoTotalPendiente, 0)}
+            value={formatRD(saldoTotalPendiente)}
             sub="Suma de saldos activos"
             icon={TrendingDown}
             iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
@@ -1215,7 +1215,7 @@ export default function PrestamosPage() {
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                  <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                     {prestamosFiltrados.map(prestamo => {
                       const pct      = (prestamo.monto - prestamo.saldoPendiente) / prestamo.monto * 100
                       const empName  = getEmpleadoName(prestamo.empleadoId)

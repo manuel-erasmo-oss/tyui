@@ -122,7 +122,7 @@ export default function BandasSalarialesPage() {
     const max = Math.max(...salarios)
     const NUM_BUCKETS = 6
     if (min === max) {
-      return [{ label: formatRD(min, 0), count: salarios.length, pct: 100 }]
+      return [{ label: formatRD(min), count: salarios.length, pct: 100 }]
     }
     const ancho = (max - min) / NUM_BUCKETS
     const buckets = Array.from({ length: NUM_BUCKETS }, (_, i) => {
@@ -136,7 +136,7 @@ export default function BandasSalarialesPage() {
     }
     const maxCount = Math.max(...buckets.map(b => b.count))
     return buckets.map(b => ({
-      label: `${formatRD(b.desde, 0)} – ${formatRD(b.hasta, 0)}`,
+      label: `${formatRD(b.desde)} – ${formatRD(b.hasta)}`,
       count: b.count,
       pct: maxCount > 0 ? (b.count / maxCount) * 100 : 0,
     }))
@@ -278,7 +278,7 @@ export default function BandasSalarialesPage() {
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+              <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {bandasOrdenadas.length === 0 && (
                   <tr>
                     <td colSpan={6}>
@@ -303,9 +303,9 @@ export default function BandasSalarialesPage() {
                       <td className="px-5 py-3.5">
                         <p className="font-medium text-[#1B2980] dark:text-indigo-400">{b.posicion}</p>
                       </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(b.salarioMinimo, 0)}</td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(b.salarioMedio, 0)}</td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(b.salarioMaximo, 0)}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(b.salarioMinimo)}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(b.salarioMedio)}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(b.salarioMaximo)}</td>
                       <td className="px-4 py-3.5 text-center tabular-nums text-zinc-500 dark:text-zinc-400">{empleadosEnBanda}</td>
                       <td className="px-4 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -363,7 +363,7 @@ export default function BandasSalarialesPage() {
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Diferencia</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-50 dark:divide-[#1d2035]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {fueraDeBanda.map(({ empleado, banda, direccion, diferencia }) => (
                     <tr key={empleado.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                       <td className="px-5 py-3.5">
@@ -371,9 +371,9 @@ export default function BandasSalarialesPage() {
                         <p className="text-xs text-zinc-400 dark:text-zinc-500">{empleado.cargo}</p>
                       </td>
                       <td className="px-4 py-3.5 text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-                        {formatRD(banda.salarioMinimo, 0)} – {formatRD(banda.salarioMaximo, 0)}
+                        {formatRD(banda.salarioMinimo)} – {formatRD(banda.salarioMaximo)}
                       </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(empleado.salarioBase, 0)}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">{formatRD(empleado.salarioBase)}</td>
                       <td className="px-4 py-3.5 text-center">
                         <span
                           className={cn(
@@ -388,7 +388,7 @@ export default function BandasSalarialesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">
-                        {formatRD(diferencia, 0)}
+                        {formatRD(diferencia)}
                       </td>
                     </tr>
                   ))}

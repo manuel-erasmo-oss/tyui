@@ -440,7 +440,7 @@ export function ImportadorHorasExcel({ empleados, empleadosElegibles, ajustesPor
                     <th className="px-4 py-2.5 font-medium">Estado</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-[#1a1d2e]">
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {filas.map(f => (
                     <tr key={f.fila}>
                       <td className="px-4 py-2.5 text-zinc-400 tabular-nums">{f.fila}</td>
