@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import {
   ChevronRight,
   Download,
@@ -1767,9 +1767,8 @@ export default function NominaPage() {
                   const colSpanTotal = esEnProceso ? 10 : 9
 
                   return (
-                    <>
+                    <Fragment key={empleado.id}>
                       <tr
-                        key={empleado.id}
                         onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
                         className={`cursor-pointer border-b border-zinc-200 dark:border-[#252840] transition-colors ${
                           isProcesado
@@ -1895,7 +1894,6 @@ export default function NominaPage() {
                       {/* Inline ajuste form */}
                       {isExpanded && (
                         <tr
-                          key={`${empleado.id}-form`}
                           className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]"
                         >
                           <td colSpan={colSpanTotal} className="px-5 py-4">
@@ -2028,7 +2026,7 @@ export default function NominaPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   )
                 })}
               </tbody>
