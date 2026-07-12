@@ -111,12 +111,15 @@ interface FilaAmortizacionUI extends FilaAmortizacion {
 }
 
 function TablaAmortizacion({
-  rows, titulo, subtitulo, mostrarEstado = false,
+  rows, titulo, subtitulo, mostrarEstado = false, onExportar,
 }: {
   rows: FilaAmortizacionUI[]
   titulo: string
   subtitulo: string
   mostrarEstado?: boolean
+  // Solo se pasa desde la vista de detalle de un préstamo ya otorgado — la
+  // vista previa del formulario de creación no tiene nada que exportar todavía.
+  onExportar?: () => void
 }) {
   const headers = mostrarEstado
     ? ['#', 'Cuota', 'Capital', 'Interés', 'Saldo Remanente', 'Estado']
@@ -124,9 +127,20 @@ function TablaAmortizacion({
 
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
-      <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{titulo}</h3>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{subtitulo}</p>
+      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+        <div>
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{titulo}</h3>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">{subtitulo}</p>
+        </div>
+        {onExportar && (
+          <button
+            onClick={onExportar}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors shrink-0"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar Excel
+          </button>
+        )}
       </div>
       <div className="overflow-x-auto max-h-96 overflow-y-auto">
         <table className="w-full text-sm">
@@ -306,6 +320,7 @@ function VistaDetalle({
   onBack: () => void
   onRegistrarPago: (prestamoId: string, monto: number) => void
 }) {
+  const { empresa } = useEmpresa()
   const [pagoMonto, setPagoMonto] = useState('')
   const [pagoDesc, setPagoDesc]   = useState('')
 
@@ -354,6 +369,34 @@ function VistaDetalle({
     a.download = prestamo.documentoNombre
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Exporta la tabla de amortización completa (cada cuota proyectada), con
+  // el nombre del empleado y los datos del préstamo en el subtítulo.
+  async function handleExportarAmortizacion() {
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filas = rows.map(row => [
+      row.num,
+      row.cuota,
+      row.capital,
+      row.interes,
+      row.saldo,
+      row.pagado ? 'Pagada' : row.esProxima ? 'Próxima' : 'Pendiente',
+    ])
+    const slug = nombreEmpleado.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
+    await exportarExcel({
+      nombreArchivo: `amortizacion-${slug}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Amortización',
+        titulo: `Tabla de Amortización — ${nombreEmpleado}`,
+        subtitulo: `${formatRD(prestamo.monto)} · ${prestamo.cuotas} cuotas · ${prestamo.tasaInteres}% ${modoInteres === 'simple' ? '(interés simple)' : '(francés)'}`,
+        encabezados: ['#', 'Cuota', 'Capital', 'Interés', 'Saldo Remanente', 'Estado'],
+        filas,
+        anchos: [8, 14, 14, 14, 16, 14],
+      }],
+    })
   }
 
   return (
@@ -452,6 +495,7 @@ function VistaDetalle({
           titulo="Tabla de Amortización"
           subtitulo={`Proyección de cuotas · ${prestamo.cuotas} períodos · modo ${modoInteres === 'simple' ? 'interés simple' : 'francés'}`}
           mostrarEstado
+          onExportar={handleExportarAmortizacion}
         />
 
         {/* Payment history */}
@@ -737,6 +781,48 @@ export default function PrestamosPage() {
     setToast('Préstamo cancelado')
   }
 
+  // Exporta la cartera actualmente visible — respeta el tab de estado activo
+  // (Activos/Pagados/Cancelados/Todos) y el buscador por nombre/departamento.
+  async function handleExportarPrestamos() {
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filas = prestamosFiltrados.map(p => {
+      const emp = getEmpleado(p.empleadoId)
+      const pct = p.monto > 0 ? (p.monto - p.saldoPendiente) / p.monto * 100 : 0
+      return [
+        getEmpleadoName(p.empleadoId),
+        emp?.departamento ?? '—',
+        p.tipo === 'avance' ? 'Avance' : 'Préstamo',
+        p.monto,
+        p.saldoPendiente,
+        `${pct.toFixed(1)}%`,
+        p.cuotaBase,
+        `${p.pagos.length}/${p.cuotas}`,
+        p.tasaInteres === 0 ? 'Sin interés' : `${p.tasaInteres}%`,
+        (p.modoInteres ?? 'francés') === 'simple' ? 'Simple' : 'Francés',
+        frecuenciaLabel(p.frecuencia),
+        formatDate(p.fechaOtorgamiento),
+        estadoLabel(p.estado),
+      ]
+    })
+    const filtroTab = FILTER_TABS.find(t => t.value === filtroEstado)?.label ?? filtroEstado
+    const subtituloPartes = [filtroTab, busqueda.trim() ? `Búsqueda: "${busqueda.trim()}"` : null].filter(Boolean)
+    const hoy = new Date().toISOString().slice(0, 10)
+    await exportarExcel({
+      nombreArchivo: `prestamos-${hoy}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Préstamos',
+        titulo: 'Cartera de Préstamos',
+        subtitulo: `${prestamosFiltrados.length} registro(s) · ${subtituloPartes.join(' · ')}`,
+        encabezados: ['Empleado', 'Departamento', 'Tipo', 'Monto Original', 'Saldo Pendiente', '% Pagado', 'Cuota', 'Cuotas', 'Tasa Interés', 'Modo Interés', 'Frecuencia', 'Fecha', 'Estado'],
+        filas,
+        anchos: [24, 18, 12, 15, 15, 11, 13, 10, 13, 13, 12, 14, 12],
+      }],
+    })
+    setToast('Préstamos exportados a Excel')
+  }
+
   function handleRegistrarPago(prestamoId: string, monto: number) {
     registrarPago(prestamoId, {
       fecha: new Date().toISOString(),
@@ -802,6 +888,13 @@ export default function PrestamosPage() {
             </button>
           ) : (
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportarPrestamos}
+                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3.5 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Exportar Excel
+              </button>
               <button
                 onClick={() => { setModoNuevo('avance'); setFTasa('0'); setFModoInteres('francés'); setFCuotas('1'); setShowForm(true) }}
                 className="flex items-center gap-2 rounded-lg border border-[#1B2980] dark:border-indigo-500 px-3.5 py-2 text-sm font-semibold text-[#1B2980] dark:text-indigo-400 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"

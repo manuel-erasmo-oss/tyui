@@ -200,6 +200,17 @@ function labelPeriodoHist(p: PeriodoNomina): string {
   return `${mes} ${p.anio}`
 }
 
+// Estado combinado de un empleado para el listado exportado — refleja las
+// mismas condiciones que ya muestran los badges de la tabla/drawer
+// (Activo/Inactivo, y Suspendido/Salida Pendiente cuando aplica sobre un
+// empleado activo).
+function estadoEmpleadoLabel(e: Empleado): string {
+  const partes = [e.activo ? 'Activo' : 'Inactivo']
+  if (e.activo && e.suspendido) partes.push('Suspendido')
+  if (e.activo && e.salidaPendiente) partes.push('Salida Pendiente')
+  return partes.join(' / ')
+}
+
 // Reusa ajustesToParams (dominican-labor.ts) en vez de repetir el bucketing
 // de conceptos inline — antes esta copia ni siquiera incluía recargo_nocturno
 // ni el catálogo de conceptos personalizados; ahora es la misma fuente de
@@ -230,6 +241,7 @@ function EmpleadoDrawer({
 }) {
   const { update, suspender, reactivar, marcarSalidaPendiente, cancelarSalidaPendiente } = useEmpleados()
   const { periodos } = usePeriodos()
+  const { empresa } = useEmpresa()
   const { registrar: registrarSaldoISR, getSaldosActivos, getMontoAplicadoEnPeriodo } = useSaldoISR()
   const router = useRouter()
   const [showSaldoISRForm, setShowSaldoISRForm] = useState(false)
@@ -879,6 +891,48 @@ function EmpleadoDrawer({
               isr:   acc.isr   + h.resultado.isrMensual,
             }), { bruto: 0, neto: 0, isr: 0 })
 
+          // Exporta exactamente las mismas filas ya visibles en la tabla de
+          // abajo (mismo período/S.Bruto/AFP+SFS/ISR/Dep.SFS/S.Neto/Estado),
+          // con una fila de totales que coincide con el <tfoot> en pantalla.
+          async function handleExportarHistorial() {
+            const { exportarExcel } = await import('@/lib/excel-export')
+            const estadoLabel = (p: PeriodoNomina) =>
+              p.estado === 'cerrada' ? 'Cerrada' : p.estado === 'procesada' ? 'Procesada' : 'En Proceso'
+            const filas = historial.map(({ periodo, resultado }) => [
+              labelPeriodoHist(periodo),
+              resultado.totalBruto,
+              resultado.afpEmpleado + resultado.sfsEmpleado,
+              resultado.isrMensual,
+              resultado.sfsDependientes,
+              resultado.salarioNeto,
+              estadoLabel(periodo),
+            ])
+            const totales = [
+              `TOTAL — ${historial.length} período(s)`,
+              historial.reduce((s, h) => s + h.resultado.totalBruto, 0),
+              historial.reduce((s, h) => s + h.resultado.afpEmpleado + h.resultado.sfsEmpleado, 0),
+              historial.reduce((s, h) => s + h.resultado.isrMensual, 0),
+              historial.reduce((s, h) => s + h.resultado.sfsDependientes, 0),
+              historial.reduce((s, h) => s + h.resultado.salarioNeto, 0),
+              '',
+            ]
+            const slug = fullName(empleado).replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-')
+            await exportarExcel({
+              nombreArchivo: `historial-nomina-${slug}`,
+              empresa: empresa.nombre,
+              rnc: empresa.rnc,
+              hojas: [{
+                nombre: 'Historial Nómina',
+                titulo: `Historial de Nómina — ${fullName(empleado)}`,
+                subtitulo: `${historial.length} período(s)`,
+                encabezados: ['Período', 'S. Bruto', 'AFP+SFS', 'ISR', 'Dep. SFS', 'S. Neto', 'Estado'],
+                filas,
+                totales,
+                anchos: [18, 14, 13, 12, 12, 14, 14],
+              }],
+            })
+          }
+
           return (
             <div className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-3 gap-3 p-5 border-b border-zinc-100 dark:border-[#1d2035]">
@@ -892,6 +946,19 @@ function EmpleadoDrawer({
                     <p className="mt-1 text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">{formatRD(kpi.value)}</p>
                   </div>
                 ))}
+              </div>
+
+              <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-100 dark:border-[#1d2035]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                  Detalle por Período
+                </p>
+                <button
+                  onClick={handleExportarHistorial}
+                  className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exportar Excel
+                </button>
               </div>
 
               <div className="overflow-x-auto">
@@ -1191,19 +1258,70 @@ export default function EmpleadosPage() {
     setToast('Cambios guardados')
   }
 
+  // Exporta exactamente la lista ya filtrada que se ve en pantalla (respeta
+  // búsqueda, departamento y el toggle de "Mostrar inactivos"), no siempre
+  // todos los empleados.
+  async function handleExportarEmpleados() {
+    const { exportarExcel } = await import('@/lib/excel-export')
+    const filas = filtrados.map(e => [
+      fullName(e),
+      formatDocNumber(e.cedula, e.tipoDocumento),
+      labelTipoDoc(e.tipoDocumento),
+      e.nacionalidad ? (getPais(e.nacionalidad)?.nombre ?? e.nacionalidad) : '—',
+      e.departamento,
+      e.cargo,
+      contratoLabel(e.tipoContrato),
+      formatDate(e.fechaIngreso),
+      e.salarioBase,
+      estadoEmpleadoLabel(e),
+      e.banco ?? '—',
+      e.numeroCuenta ?? '—',
+      e.email ?? '—',
+      e.telefono ?? '—',
+    ])
+    const filtroPartes = [
+      departamento !== 'Todos' ? departamento : null,
+      busqueda.trim() ? `Búsqueda: "${busqueda.trim()}"` : null,
+    ].filter(Boolean)
+    const hoy = new Date().toISOString().slice(0, 10)
+    await exportarExcel({
+      nombreArchivo: `empleados-${hoy}`,
+      empresa: empresa.nombre,
+      rnc: empresa.rnc,
+      hojas: [{
+        nombre: 'Empleados',
+        titulo: 'Listado de Empleados',
+        subtitulo: `${filtrados.length} empleado(s)${filtroPartes.length ? ' · ' + filtroPartes.join(' · ') : ''}`,
+        encabezados: ['Empleado', 'Documento', 'Tipo Doc.', 'Nacionalidad', 'Departamento', 'Cargo', 'Tipo Contrato', 'Fecha Ingreso', 'Salario Base', 'Estado', 'Banco', 'N° Cuenta', 'Email', 'Teléfono'],
+        filas,
+        anchos: [26, 16, 14, 16, 18, 20, 16, 14, 14, 16, 16, 16, 24, 14],
+      }],
+    })
+    setToast('Empleados exportados a Excel')
+  }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Empleados"
         subtitle={`${empleados.filter(e => e.activo).length} activos · ${empleados.filter(e => !e.activo).length} inactivos`}
         actions={
-          <button
-            onClick={() => setMostrarNuevo(true)}
-            className={BTN_PRIMARY}
-          >
-            <Plus className="h-4 w-4" />
-            Nuevo Empleado
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportarEmpleados}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              Exportar Excel
+            </button>
+            <button
+              onClick={() => setMostrarNuevo(true)}
+              className={BTN_PRIMARY}
+            >
+              <Plus className="h-4 w-4" />
+              Nuevo Empleado
+            </button>
+          </div>
         }
       />
 
