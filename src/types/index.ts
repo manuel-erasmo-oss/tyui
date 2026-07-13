@@ -559,6 +559,36 @@ export interface RegistroLiquidacion {
   sfsDiasTrabajados?: number
   isrDiasTrabajados?: number
   salarioDiasTrabajadosNeto?: number   // ya incluido en totalPagado
+
+  // ─── Método de pago (Recibo de Descargo) ─────────────────────────────────
+  // Capturado en el paso de confirmación, antes de generar la planilla en
+  // PDF que empleado y empleador firman — queda impreso en ese documento.
+  // Opcional para no romper liquidaciones registradas antes de este campo.
+  metodoPago?: 'cheque' | 'efectivo' | 'transferencia'
+  referenciaPago?: string   // número de cheque / referencia de transferencia — texto libre, opcional
+
+  // ─── Desglose del cálculo, snapshot al momento de finalizar ──────────────
+  // Una entrada por concepto (siempre las 6, se haya ajustado o no) con la
+  // fórmula ya formateada (días × tarifa, tramo legal aplicado) — es lo que
+  // alimenta la planilla en PDF y el Excel de detalle SIN volver a calcular
+  // nada después (el empleado ya está inactivo; recalcular en vivo podría
+  // dar un resultado distinto si algo cambiara, igual que ya se evita en
+  // Reportería vía PeriodoNomina.resultadosPorEmpleado). Si montoFinal
+  // difiere de montoAuto, fue un ajuste manual con motivoAjuste obligatorio.
+  desgloseCalculo?: DesgloseConceptoLiquidacion[]
+}
+
+export type ConceptoLiquidacion = 'cesantia' | 'preaviso' | 'asistenciaEconomica' | 'vacaciones' | 'regalia' | 'diasTrabajados'
+
+export interface DesgloseConceptoLiquidacion {
+  concepto: ConceptoLiquidacion
+  label: string
+  articulo: string        // referencia legal, ej. "Art. 80 — Código de Trabajo"
+  detalle: string[]       // líneas de fórmula ya formateadas (ej. "23 días × RD$2,308.02/día")
+  montoAuto: number       // lo que el sistema calculó automáticamente
+  montoFinal: number      // lo que realmente se pagó (= montoAuto si no se ajustó)
+  ajustado: boolean
+  motivoAjuste?: string
 }
 
 // ─── Feriados Nacionales ──────────────────────────────────────────────────────

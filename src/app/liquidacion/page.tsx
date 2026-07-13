@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import jsPDF from 'jspdf'
 import { Header } from '@/components/layout/Header'
 import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
@@ -9,12 +10,22 @@ import { usePrestamos } from '@/lib/prestamos-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
-import { calcularCesantia, calcularPreaviso, calcularAsistenciaEconomica, calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario, getDiasPreavisoRequeridos, calcularDiasTrabajadosPendientes, calcularNomina, MOTIVO_LIQUIDACION_LABELS } from '@/lib/dominican-labor'
-import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY } from '@/lib/utils'
-import type { MotivoLiquidacion } from '@/types'
-import { Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins, AlertTriangle, History, Info, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import {
+  calcularCesantiaDetalle, calcularPreavisoDetalle, calcularAsistenciaEconomicaDetalle,
+  calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario, getDiasPreavisoRequeridos,
+  calcularDiasTrabajadosPendientes, calcularNomina, MOTIVO_LIQUIDACION_LABELS,
+} from '@/lib/dominican-labor'
+import { formatRD, formatNum, formatDate, formatAnosServicio, formatCedula, fullName, BTN_PRIMARY } from '@/lib/utils'
+import type { Empleado, Empresa, MotivoLiquidacion, ConceptoLiquidacion, DesgloseConceptoLiquidacion, RegistroLiquidacion } from '@/types'
+import {
+  Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins,
+  AlertTriangle, History, Info, CheckCircle2, XCircle, Clock, Pencil, RotateCcw,
+  ArrowRight, ArrowLeft, Wallet, Landmark, ShieldCheck, PartyPopper, Printer,
+} from 'lucide-react'
 
 type Motivo = MotivoLiquidacion
+type Paso = 1 | 2 | 3 | 'exito'
+type MetodoPago = 'cheque' | 'efectivo' | 'transferencia'
 
 const MOTIVO_LABELS: Record<Motivo, string> = {
   renuncia: 'Renuncia Voluntaria',
@@ -47,8 +58,340 @@ const LEGAL_NOTES: Record<Motivo, { title: string; text: string }> = {
   },
 }
 
+const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
+  cheque: 'Cheque',
+  efectivo: 'Efectivo',
+  transferencia: 'Transferencia Bancaria',
+}
+const METODO_PAGO_ICONS: Record<MetodoPago, typeof Wallet> = {
+  cheque: FileText,
+  efectivo: Wallet,
+  transferencia: Landmark,
+}
+const METODO_PAGO_REF_LABEL: Record<MetodoPago, string> = {
+  cheque: 'Número de cheque (opcional)',
+  efectivo: 'Referencia / recibo (opcional)',
+  transferencia: 'Número de referencia (opcional)',
+}
+
 const INPUT_CLASS =
   'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none'
+
+// ── Planilla en PDF — Recibo de Descargo y Liquidación de Prestaciones ─────
+// Documento pensado para que empleado y empleador firmen: usa el snapshot
+// desgloseCalculo/metodoPago ya persistido en el registro (nunca recalcula
+// nada en vivo — el empleado ya está inactivo, así que el registro es la
+// única fuente de verdad, igual criterio que PeriodoNomina.resultadosPorEmpleado
+// en Nómina). Mismo lenguaje visual que descargarComprobantePDF en Nómina
+// (header navy, tarjetas tenues, caja de total con filo superior claro,
+// pie de página fijo) para que los documentos de la app se vean consistentes.
+function descargarPlanillaLiquidacionPDF(liquidacion: RegistroLiquidacion, empleado: Empleado, empresa: Empresa) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const W = 210
+  const NR = 27, NG = 41, NB = 128
+  const LINE_GRAY: [number, number, number] = [228, 228, 231]
+
+  doc.setFillColor(NR, NG, NB)
+  doc.rect(0, 0, W, 28, 'F')
+  doc.setFillColor(47, 63, 168)
+  doc.rect(0, 27, W, 1, 'F')
+
+  let tX = 14
+  if (empresa.logo) {
+    try {
+      const fmt = empresa.logo.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+      doc.addImage(empresa.logo, fmt, 14, 5, 18, 18)
+      tX = 36
+    } catch { /* logo corrupto o formato no soportado — se omite */ }
+  }
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text(empresa.nombre || 'Empresa', tX, 12)
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(210, 214, 240)
+  doc.text(`RNC: ${empresa.rnc || '—'}  ·  ${empresa.ciudad || 'República Dominicana'}`, tX, 18)
+  doc.setTextColor(255, 255, 255)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.text('RECIBO DE DESCARGO Y LIQUIDACIÓN', W - 14, 11, { align: 'right' })
+  doc.text('DE PRESTACIONES LABORALES', W - 14, 16, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.2)
+  doc.setTextColor(210, 214, 240)
+  doc.text(`Emitido: ${new Date().toLocaleDateString('es-DO')}`, W - 14, 22.5, { align: 'right' })
+
+  let y = 36
+  doc.setFillColor(250, 250, 251)
+  doc.setDrawColor(...LINE_GRAY)
+  doc.roundedRect(14, y, W - 28, 27, 2, 2, 'FD')
+  y += 7
+  doc.setTextColor(NR, NG, NB)
+  doc.setFontSize(12)
+  doc.setFont('helvetica', 'bold')
+  doc.text(fullName(empleado), 20, y)
+  y += 5
+  doc.setFontSize(7.6)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(110, 110, 116)
+  doc.text(`${empleado.cargo}  ·  ${empleado.departamento}  ·  Cédula: ${formatCedula(empleado.cedula)}`, 20, y)
+  y += 4.3
+  doc.text(`Ingreso: ${formatDate(empleado.fechaIngreso)}   Salida: ${formatDate(liquidacion.fechaTerminacion)}   Antigüedad: ${formatAnosServicio(liquidacion.anosServicio)}`, 20, y)
+  y += 4.3
+  doc.text(`Motivo de terminación: ${MOTIVO_LABELS[liquidacion.motivo]}`, 20, y)
+  y += 11
+
+  doc.setFontSize(8.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(NR, NG, NB)
+  doc.text('DESGLOSE DEL CÁLCULO', 14, y)
+  y += 5.5
+
+  const desglose = liquidacion.desgloseCalculo ?? []
+  desglose.forEach((d, i) => {
+    if (i > 0) {
+      doc.setDrawColor(240, 240, 242)
+      doc.line(14, y - 3, W - 14, y - 3)
+    }
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(40, 40, 40)
+    doc.text(d.label, 14, y)
+    const labelWidth = doc.getTextWidth(d.label)   // medido mientras la fuente sigue en bold/8pt
+    doc.setFontSize(6.6)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(160, 160, 160)
+    doc.text(d.articulo, 14 + labelWidth + 3, y)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(40, 40, 40)
+    doc.text(formatRD(d.montoFinal), W - 14, y, { align: 'right' })
+    y += 3.8
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(6.6)
+    doc.setTextColor(130, 130, 130)
+    d.detalle.forEach(line => { doc.text(line, 16, y); y += 3.3 })
+    if (d.ajustado) {
+      doc.setTextColor(180, 120, 10)
+      doc.setFont('helvetica', 'italic')
+      doc.text(`Ajustado manualmente — motivo: ${d.motivoAjuste}`, 16, y)
+      y += 3.3
+    }
+    y += 3
+  })
+
+  doc.setDrawColor(...LINE_GRAY)
+  doc.line(14, y, W - 14, y)
+  y += 5
+
+  if ((liquidacion.saldoISRReembolsado ?? 0) > 0) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(16, 150, 100)
+    doc.text('Saldo ISR a favor reembolsado', 14, y)
+    doc.text(`+${formatRD(liquidacion.saldoISRReembolsado!)}`, W - 14, y, { align: 'right' })
+    y += 4.5
+  }
+  if (liquidacion.totalPrestamosDescontados > 0) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(190, 40, 40)
+    doc.text('Descuento por préstamos/avances pendientes', 14, y)
+    doc.text(`-${formatRD(liquidacion.totalPrestamosDescontados)}`, W - 14, y, { align: 'right' })
+    y += 4.5
+  }
+  y += 3
+
+  doc.setFillColor(NR, NG, NB)
+  doc.roundedRect(14, y, W - 28, 16, 2.5, 2.5, 'F')
+  doc.setFillColor(47, 63, 168)
+  doc.roundedRect(14, y, W - 28, 4, 2.5, 2.5, 'F')
+  doc.setFillColor(NR, NG, NB)
+  doc.rect(14, y + 3, W - 28, 13, 'F')
+  doc.setTextColor(255, 255, 255)
+  doc.setFontSize(8)
+  doc.setFont('helvetica', 'normal')
+  doc.text('TOTAL NETO A PAGAR', 22, y + 6.5)
+  doc.setFontSize(14)
+  doc.setFont('helvetica', 'bold')
+  doc.text(formatRD(liquidacion.totalPagado), W - 22, y + 11.5, { align: 'right' })
+  y += 22
+
+  if (liquidacion.metodoPago) {
+    doc.setFillColor(247, 248, 252)
+    doc.setDrawColor(...LINE_GRAY)
+    doc.roundedRect(14, y, W - 28, 12, 2, 2, 'FD')
+    doc.setFontSize(7.4)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(NR, NG, NB)
+    doc.text('MÉTODO DE PAGO', 20, y + 5)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(60, 60, 60)
+    const refTxt = liquidacion.referenciaPago ? `  —  Ref. ${liquidacion.referenciaPago}` : ''
+    doc.text(`${METODO_PAGO_LABELS[liquidacion.metodoPago]}${refTxt}`, 20, y + 9.5)
+    y += 18
+  } else {
+    y += 4
+  }
+
+  doc.setFontSize(7)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(90, 90, 90)
+  const nota = `El/la trabajador(a) declara recibir a su entera satisfacción el pago de las prestaciones laborales detalladas en este documento, correspondientes a su relación laboral con ${empresa.nombre || 'la empresa'}, y acepta como correcto y válido el cálculo aquí presentado.`
+  const notaLines = doc.splitTextToSize(nota, W - 28) as string[]
+  doc.text(notaLines, 14, y)
+  y += notaLines.length * 3.6 + 16
+
+  if (y > 250) { doc.addPage(); y = 30 }
+  const sigY = y
+  doc.setDrawColor(120, 120, 120)
+  doc.line(20, sigY, 90, sigY)
+  doc.line(120, sigY, 190, sigY)
+  doc.setFontSize(7.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(40, 40, 40)
+  doc.text(fullName(empleado).toUpperCase(), 55, sigY + 4, { align: 'center' })
+  doc.text((empresa.nombre || 'EMPRESA').toUpperCase(), 155, sigY + 4, { align: 'center' })
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(120, 120, 120)
+  doc.text('Empleado(a)', 55, sigY + 8, { align: 'center' })
+  doc.text('Empleador / Representante', 155, sigY + 8, { align: 'center' })
+  doc.text(`Cédula: ${formatCedula(empleado.cedula)}`, 55, sigY + 12, { align: 'center' })
+  doc.text('Fecha: ____ / ____ / ______', 155, sigY + 12, { align: 'center' })
+
+  const pageH = doc.internal.pageSize.getHeight()
+  doc.setDrawColor(NR, NG, NB)
+  doc.setLineWidth(0.6)
+  doc.line(14, pageH - 12, W - 14, pageH - 12)
+  doc.setLineWidth(0.2)
+  doc.setFontSize(6.5)
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(NR, NG, NB)
+  doc.text('Cielo Cloud · Nómina', 14, pageH - 8)
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(170, 170, 170)
+  doc.text('Ley 16-92 · Código de Trabajo — República Dominicana', W - 14, pageH - 8, { align: 'right' })
+
+  doc.save(`recibo-descargo-${fullName(empleado).replace(/\s+/g, '-')}.pdf`)
+}
+
+// ── Tarjeta de concepto editable ────────────────────────────────────────────
+// Cada concepto (Cesantía, Preaviso, etc.) muestra su fórmula completa y
+// permite sobrescribir el monto a mano — el sistema sigue mostrando el valor
+// calculado como referencia, pero el usuario decide el monto final, con un
+// motivo obligatorio que queda impreso en la planilla de firma.
+interface ColoresConcepto {
+  border: string
+  bgIcon: string
+  textIcon: string
+  text: string
+}
+
+function ConceptoLiquidacionCard({
+  titulo, articulo, colores, Icon, montoAuto, montoFinal, detalle, override, onGuardar, onQuitar,
+}: {
+  titulo: string
+  articulo: string
+  colores: ColoresConcepto
+  Icon: typeof UserMinus
+  montoAuto: number
+  montoFinal: number
+  detalle: string[]
+  override?: { monto: number; motivo: string }
+  onGuardar: (monto: number, motivo: string) => void
+  onQuitar: () => void
+}) {
+  const [editando, setEditando] = useState(false)
+  const [montoInput, setMontoInput] = useState('')
+  const [motivoInput, setMotivoInput] = useState('')
+
+  function iniciarEdicion() {
+    setMontoInput(String(override?.monto ?? montoAuto))
+    setMotivoInput(override?.motivo ?? '')
+    setEditando(true)
+  }
+  function guardar() {
+    const monto = parseFloat(montoInput)
+    if (isNaN(monto) || monto < 0 || !motivoInput.trim()) return
+    onGuardar(monto, motivoInput.trim())
+    setEditando(false)
+  }
+
+  return (
+    <div className={`rounded-xl border ${colores.border} bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden`}>
+      <div className="p-5">
+        <div className="flex items-start justify-between">
+          <div>
+            <p className={`text-xs font-semibold uppercase tracking-wide ${colores.text}`}>{titulo}</p>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">{articulo}</p>
+          </div>
+          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${colores.bgIcon} ${colores.textIcon}`}>
+            <Icon className="h-4 w-4" />
+          </div>
+        </div>
+
+        {!editando ? (
+          <>
+            <p className={`mt-3 text-2xl font-bold tabular-nums ${colores.text}`}>{formatRD(montoFinal, 2)}</p>
+            {detalle.length > 0 && (
+              <div className="mt-2 space-y-0.5">
+                {detalle.map((linea, i) => (
+                  <p key={i} className="text-[10.5px] leading-snug text-zinc-400 dark:text-zinc-500">{linea}</p>
+                ))}
+              </div>
+            )}
+            {override && (
+              <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 px-2 py-1.5">
+                <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-[10.5px] leading-snug text-amber-700 dark:text-amber-400">
+                  Ajustado de {formatRD(montoAuto, 2)} — {override.motivo}
+                </p>
+              </div>
+            )}
+            <div className="mt-3 flex items-center gap-3">
+              <button onClick={iniciarEdicion} className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-[#1B2980] dark:hover:text-indigo-400 transition-colors">
+                <Pencil className="h-3 w-3" /> {override ? 'Editar ajuste' : 'Ajustar manualmente'}
+              </button>
+              {override && (
+                <button onClick={onQuitar} className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors">
+                  <RotateCcw className="h-3 w-3" /> Restaurar cálculo
+                </button>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="mt-3 space-y-2.5">
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Monto (RD$)</label>
+              <input
+                type="number" step="0.01" min="0" value={montoInput}
+                onChange={e => setMontoInput(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-2.5 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Motivo del ajuste (requerido)</label>
+              <input
+                type="text" value={motivoInput} onChange={e => setMotivoInput(e.target.value)}
+                placeholder="Ej. Acordado entre las partes no pagar preaviso"
+                className="mt-1 w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-2.5 py-1.5 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-0.5">
+              <button onClick={() => setEditando(false)} className="rounded-lg border border-zinc-200 dark:border-[#252840] px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={guardar}
+                disabled={!motivoInput.trim() || montoInput === '' || isNaN(parseFloat(montoInput))}
+                className="rounded-lg bg-[#1B2980] hover:bg-[#151f66] disabled:opacity-40 disabled:cursor-not-allowed px-2.5 py-1.5 text-xs font-semibold text-white transition-colors"
+              >
+                Guardar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function LiquidacionPage() {
   const { empleadosActivos, empleados, update } = useEmpleados()
@@ -57,37 +400,42 @@ export default function LiquidacionPage() {
   const { periodos } = usePeriodos()
   const { liquidaciones, registrar } = useLiquidaciones()
   const { getSaldosActivos, liquidar: liquidarSaldoISR } = useSaldoISR()
+
+  const [paso, setPaso] = useState<Paso>(1)
   const [empleadoId, setEmpleadoId] = useState<string>('')
   const [motivo, setMotivo] = useState<Motivo | ''>('')
   const [fechaTerminacion, setFechaTerminacion] = useState<string>(
     new Date().toISOString().split('T')[0]
   )
-  // Solo aplica cuando motivo === 'renuncia' — fecha en que el empleado avisó
-  // que se iba, distinta de fechaTerminacion (fecha efectiva de salida).
   const [fechaNotificacionRenuncia, setFechaNotificacionRenuncia] = useState<string>('')
   const [prestamosADescontar, setPrestamosADescontar] = useState<string[]>([])
+  const [overrides, setOverrides] = useState<Partial<Record<ConceptoLiquidacion, { monto: number; motivo: string }>>>({})
+  const [metodoPago, setMetodoPago] = useState<MetodoPago | ''>('')
+  const [referenciaPago, setReferenciaPago] = useState('')
+  const [confirmoRevision, setConfirmoRevision] = useState(false)
   const [confirmFinalizar, setConfirmFinalizar] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [ultimaLiquidacion, setUltimaLiquidacion] = useState<{ liquidacion: RegistroLiquidacion; empleado: Empleado } | null>(null)
 
-  // Pendientes por liquidar — empleados marcados "salida pendiente" desde
-  // Empleados, esperando a que se calculen aquí sus prestaciones.
   const pendientesLiquidar = useMemo(
     () => empleadosActivos.filter(e => e.salidaPendiente),
     [empleadosActivos]
   )
 
-  // Deep-link desde Empleados (?empleadoId=...) — solo se lee una vez al
-  // montar, vía window.location en vez de useSearchParams (esta app es
-  // 100% cliente con output:'export'; evita el requisito de envolver la
-  // página en <Suspense> que exige useSearchParams en build estático).
   useEffect(() => {
     const idFromUrl = new URLSearchParams(window.location.search).get('empleadoId')
     if (idFromUrl) setEmpleadoId(idFromUrl)
   }, [])
 
-  // Al seleccionar un empleado con salida pendiente, precarga motivo y fecha
-  // ya capturados en Empleados — evita que el usuario los vuelva a teclear.
+  // Al cambiar de empleado (incluso al vaciar la selección) se reinicia todo
+  // el estado del asistente — evita arrastrar ajustes/método de pago de una
+  // liquidación a otra por accidente.
   useEffect(() => {
+    setOverrides({})
+    setMetodoPago('')
+    setReferenciaPago('')
+    setConfirmoRevision(false)
+    setPaso(1)
     const e = empleadosActivos.find(x => x.id === empleadoId)
     if (!e?.salidaPendiente) return
     if (e.motivoSalidaPendiente) setMotivo(e.motivoSalidaPendiente)
@@ -102,7 +450,7 @@ export default function LiquidacionPage() {
   )
   const totalPagadoGeneral = liquidaciones.reduce((s, l) => s + l.totalPagado, 0)
 
-  // ── Calculation ────────────────────────────────────────────────────────────
+  // ── Cálculo automático (el motor legal — nunca se modifica en sitio) ──────
   const emp = empleadosActivos.find(e => e.id === empleadoId) ?? null
   const prestamosActivos = emp ? getPrestamosActivos(emp.id) : []
   const saldosISRActivos = emp ? getSaldosActivos(emp.id) : []
@@ -115,12 +463,6 @@ export default function LiquidacionPage() {
     const fechaTerm = new Date(fechaTerminacion)
     const anosServicio = (fechaTerm.getTime() - fechaHire.getTime()) / (365.25 * 24 * 3600 * 1000)
 
-    // Regalía: proportional to calendar year (Jan 1 → termination), pero nunca
-    // antes de la fecha de ingreso — un empleado contratado a mitad del año en
-    // curso (ej. junio) solo acumula regalía desde que empezó a trabajar, no
-    // desde el 1 de enero (bug: antes se ignoraba fechaIngreso por completo y
-    // se sobreestimaba la regalía de cualquier empleado con menos de un año
-    // en la empresa dentro del mismo año calendario).
     const inicioAnio = new Date(fechaTerm.getFullYear(), 0, 1)
     const inicioComputoRegalia = fechaHire.getTime() > inicioAnio.getTime() ? fechaHire : inicioAnio
     const mesesCalendario = Math.min(
@@ -128,48 +470,36 @@ export default function LiquidacionPage() {
       12
     )
 
-    // Vacaciones: proporcional al ciclo de aniversario, sin truncar el mes en
-    // curso — un empleado con 7.65 años acumula 0.65 de su octavo año, no 0
     const mesesCicloVac = anosServicio < 1
       ? anosServicio * 12
       : ((anosServicio % 1) * 12 || 12)
 
-    // Salario ordinario real (promedio últimos 12 meses de nómina procesada,
-    // incluye comisiones/horas extra habituales) — nunca menor al salario base.
-    // Aplica a Cesantía/Preaviso/Asistencia Económica (Art. 76/80/82 CT), que
-    // deben reflejar la capacidad real de ingreso del trabajador, no solo su
-    // salario contractual. Vacaciones y Regalía siguen usando el salario base
-    // actual, como corresponde a esos conceptos.
     const salarioOrdinario = calcularSalarioPromedioUltimos12Meses(emp, periodos, fechaTerm)
     const divisorDiario    = getDivisorSalarioDiario(emp)
 
-    const cesantia = (motivo === 'despido_sin_causa' || motivo === 'mutuo_acuerdo')
-      ? calcularCesantia(salarioOrdinario, anosServicio, divisorDiario)
-      : 0
+    const aplicaCesantiaPreaviso = motivo === 'despido_sin_causa' || motivo === 'mutuo_acuerdo'
+    const cesantiaDetalle = aplicaCesantiaPreaviso
+      ? calcularCesantiaDetalle(salarioOrdinario, anosServicio, divisorDiario)
+      : { dias: 0, tarifaDiaria: salarioOrdinario / divisorDiario, total: 0, tramo: `No genera cesantía automáticamente para "${MOTIVO_LABELS[motivo]}" (Art. 75/80)` }
+    const preavisoDetalle = aplicaCesantiaPreaviso
+      ? calcularPreavisoDetalle(salarioOrdinario, anosServicio, divisorDiario)
+      : { dias: 0, tarifaDiaria: salarioOrdinario / divisorDiario, total: 0, tramo: `No genera preaviso automáticamente para "${MOTIVO_LABELS[motivo]}" (Art. 75/76)` }
+    const asistenciaDetalle = motivo === 'vencimiento_contrato'
+      ? calcularAsistenciaEconomicaDetalle(salarioOrdinario, anosServicio, divisorDiario)
+      : { dias: 0, tarifaDiaria: salarioOrdinario / divisorDiario, total: 0, tramo: `Solo aplica a "Vencimiento de Contrato" (Art. 74/82)` }
 
-    const preaviso = (motivo === 'despido_sin_causa' || motivo === 'mutuo_acuerdo')
-      ? calcularPreaviso(salarioOrdinario, anosServicio, divisorDiario)
-      : 0
-
-    const asistenciaEconomica = motivo === 'vencimiento_contrato'
-      ? calcularAsistenciaEconomica(salarioOrdinario, anosServicio, divisorDiario)
-      : 0
+    const cesantia = cesantiaDetalle.total
+    const preaviso = preavisoDetalle.total
+    const asistenciaEconomica = asistenciaDetalle.total
 
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
-    // + saldo inicial: empleados con historial previo a Cielo Cloud (migración)
     const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac + (emp.saldoVacacionesInicial ?? 0)
-    const vacaciones = diasVacAcum * (emp.salarioBase / divisorDiario)
+    const tarifaDiariaVac = emp.salarioBase / divisorDiario
+    const vacaciones = diasVacAcum * tarifaDiariaVac
 
-    // Regalía del año en curso, neta de lo ya pagado antes de la migración
     const regaliaBruta = (emp.salarioBase / 12) * mesesCalendario
     const regalia = Math.max(0, regaliaBruta - (emp.regaliaPagadaEsteAnio ?? 0))
 
-    // Días trabajados pendientes de pago — solo si el empleado eligió pagarlos
-    // "junto con la liquidación" en vez de por nómina (Empleado.pagoDiasTrabajadosPendiente).
-    // A diferencia de cesantía/preaviso/asistencia económica (indemnizaciones
-    // exentas), estos días SON salario ordinario: se calculan con el mismo
-    // motor de nómina (calcularNomina) sobre los días proporcionales, así que
-    // llevan AFP/SFS/ISR igual que cualquier otro pago de salario.
     const diasPendData = emp.pagoDiasTrabajadosPendiente === 'liquidacion'
       ? calcularDiasTrabajadosPendientes(emp, periodos, fechaTerm)
       : null
@@ -183,20 +513,11 @@ export default function LiquidacionPage() {
     const isrDiasTrabajados = diasTrabajadosCalc?.isrMensual ?? 0
     const salarioDiasTrabajadosNeto = diasTrabajadosCalc?.salarioNeto ?? 0
 
-    const subtotal = cesantia + preaviso + asistenciaEconomica + vacaciones + regalia + salarioDiasTrabajadosNeto
     const totalPrestamos = prestamosADescontar.reduce((s, pid) => {
       const p = prestamosActivos.find(x => x.id === pid)
       return s + (p?.saldoPendiente ?? 0)
     }, 0)
-    // Saldo ISR a favor pendiente: la empresa se lo debe al empleado (ISR
-    // retenido de más en el pasado que nunca terminó de acreditarse vía
-    // nómina) — se reembolsa completo en la liquidación, no se descuenta.
-    const total = Math.max(0, subtotal + saldoISRPendiente - totalPrestamos)
 
-    // Cumplimiento de preaviso en renuncias (Art. 76) — el empleado también
-    // debe avisar con la anticipación mínima que le correspondería recibir
-    // si fuera despedido (7/14/28 días según antigüedad). Solo se evalúa
-    // cuando el motivo es renuncia y se capturó la fecha de notificación.
     const diasPreavisoRequeridos = motivo === 'renuncia' ? getDiasPreavisoRequeridos(anosServicio) : null
     const diasAnticipacionReal = (motivo === 'renuncia' && fechaNotificacionRenuncia)
       ? Math.round((fechaTerm.getTime() - new Date(fechaNotificacionRenuncia).getTime()) / (24 * 3600 * 1000))
@@ -209,60 +530,142 @@ export default function LiquidacionPage() {
       : null
 
     return {
-      anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario, cesantia, preaviso,
-      asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, saldoISR: saldoISRPendiente, total,
+      anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario,
+      cesantia, cesantiaDetalle, preaviso, preavisoDetalle, asistenciaEconomica, asistenciaDetalle,
+      vacaciones, diasVacAcum, diasVacAnuales, tarifaDiariaVac,
+      regalia, regaliaBruta,
+      totalPrestamos, saldoISR: saldoISRPendiente,
       diasPreavisoRequeridos, diasAnticipacionReal, cumplioPreaviso, diferenciaDiasPreaviso,
       diasTrabajadosPendientes, salarioDiasTrabajadosBruto, afpDiasTrabajados,
       sfsDiasTrabajados, isrDiasTrabajados, salarioDiasTrabajadosNeto,
+      fechaInicioDiasTrabajados: diasPendData?.fechaInicio ?? null,
     }
   })()
 
-  // Aviso de seguridad: si el empleado eligió pagar sus días trabajados "por
-  // nómina" pero todavía no existe ningún período que los cubra, finalizar
-  // la liquidación ahora los dejaría sin pagar — al quedar activo:false ya
-  // no vuelve a aparecer en Nómina para cobrarlos después. Es solo un aviso,
-  // no bloquea (puede que ya se hayan pagado por otra vía).
   const diasSinCubrirPorNomina = (emp?.pagoDiasTrabajadosPendiente === 'nomina' && motivo)
     ? calcularDiasTrabajadosPendientes(emp, periodos, new Date(fechaTerminacion))
     : null
 
-  // Exporta el desglose completo de la liquidación individual seleccionada
-  // (mismos conceptos que se ven en pantalla) a un Excel con estilo, en vez
-  // del CSV plano anterior. La librería (exceljs) se carga bajo demanda.
+  // ── Metadata por concepto: título, colores, fórmula ya formateada ─────────
+  const conceptoMeta: Record<ConceptoLiquidacion, { titulo: string; articulo: string; colores: ColoresConcepto; Icon: typeof UserMinus; montoAuto: number; detalle: string[] }> | null =
+    (resultado && emp) ? {
+      cesantia: {
+        titulo: 'Cesantía', articulo: 'Art. 80 — Código de Trabajo',
+        colores: { border: 'border-rose-200 dark:border-rose-800/40', bgIcon: 'bg-rose-50 dark:bg-rose-950/40', textIcon: 'text-rose-500 dark:text-rose-400', text: 'text-rose-700 dark:text-rose-300' },
+        Icon: UserMinus,
+        montoAuto: resultado.cesantia,
+        detalle: [
+          resultado.cesantiaDetalle.tramo,
+          ...(resultado.cesantiaDetalle.dias > 0 ? [`${formatNum(resultado.cesantiaDetalle.dias, 0)} días × ${formatRD(resultado.cesantiaDetalle.tarifaDiaria, 2)}/día`] : []),
+        ],
+      },
+      preaviso: {
+        titulo: 'Preaviso', articulo: 'Art. 76 — Código de Trabajo',
+        colores: { border: 'border-amber-200 dark:border-amber-800/40', bgIcon: 'bg-amber-50 dark:bg-amber-950/40', textIcon: 'text-amber-500 dark:text-amber-400', text: 'text-amber-700 dark:text-amber-300' },
+        Icon: CalendarDays,
+        montoAuto: resultado.preaviso,
+        detalle: [
+          resultado.preavisoDetalle.tramo,
+          ...(resultado.preavisoDetalle.dias > 0 ? [`${formatNum(resultado.preavisoDetalle.dias, 0)} días × ${formatRD(resultado.preavisoDetalle.tarifaDiaria, 2)}/día`] : []),
+        ],
+      },
+      asistenciaEconomica: {
+        titulo: 'Asistencia Económica', articulo: 'Art. 82 — Código de Trabajo',
+        colores: { border: 'border-violet-200 dark:border-violet-800/40', bgIcon: 'bg-violet-50 dark:bg-violet-950/40', textIcon: 'text-violet-500 dark:text-violet-400', text: 'text-violet-700 dark:text-violet-300' },
+        Icon: HandCoins,
+        montoAuto: resultado.asistenciaEconomica,
+        detalle: [
+          resultado.asistenciaDetalle.tramo,
+          ...(resultado.asistenciaDetalle.dias > 0 ? [`${formatNum(resultado.asistenciaDetalle.dias, 2)} días × ${formatRD(resultado.asistenciaDetalle.tarifaDiaria, 2)}/día`] : []),
+        ],
+      },
+      vacaciones: {
+        titulo: 'Vacaciones No Gozadas', articulo: 'Art. 177 — Código de Trabajo',
+        colores: { border: 'border-sky-200 dark:border-sky-800/40', bgIcon: 'bg-sky-50 dark:bg-sky-950/40', textIcon: 'text-sky-500 dark:text-sky-400', text: 'text-sky-700 dark:text-sky-300' },
+        Icon: CalendarDays,
+        montoAuto: resultado.vacaciones,
+        detalle: [
+          `${resultado.diasVacAnuales} días/año × ${resultado.mesesCicloVac.toFixed(1)} meses de ciclo${(emp.saldoVacacionesInicial ?? 0) > 0 ? ` + ${emp.saldoVacacionesInicial} días de saldo inicial` : ''} = ${resultado.diasVacAcum.toFixed(2)} días`,
+          `${resultado.diasVacAcum.toFixed(2)} días × ${formatRD(resultado.tarifaDiariaVac, 2)}/día`,
+        ],
+      },
+      regalia: {
+        titulo: 'Regalía Proporcional', articulo: 'Art. 219 — Código de Trabajo',
+        colores: { border: 'border-emerald-200 dark:border-emerald-800/40', bgIcon: 'bg-emerald-50 dark:bg-emerald-950/40', textIcon: 'text-emerald-500 dark:text-emerald-400', text: 'text-emerald-700 dark:text-emerald-300' },
+        Icon: Banknote,
+        montoAuto: resultado.regalia,
+        detalle: [
+          `Salario base ÷ 12 × ${resultado.mesesCalendario} mes(es) del año en curso = ${formatRD(resultado.regaliaBruta, 2)}`,
+          ...((emp.regaliaPagadaEsteAnio ?? 0) > 0 ? [`Menos ${formatRD(emp.regaliaPagadaEsteAnio!, 2)} ya pagados antes de la migración a Cielo Cloud`] : []),
+        ],
+      },
+      diasTrabajados: {
+        titulo: 'Días Trabajados Pendientes', articulo: 'Salario ordinario — con AFP/SFS/ISR',
+        colores: { border: 'border-indigo-200 dark:border-indigo-800/40', bgIcon: 'bg-indigo-50 dark:bg-indigo-950/40', textIcon: 'text-indigo-500 dark:text-indigo-400', text: 'text-indigo-700 dark:text-indigo-300' },
+        Icon: Clock,
+        montoAuto: resultado.salarioDiasTrabajadosNeto,
+        detalle: resultado.diasTrabajadosPendientes > 0
+          ? [
+              `Del ${formatDate(resultado.fechaInicioDiasTrabajados!.toISOString().slice(0, 10))} al ${formatDate(fechaTerminacion)} — ${resultado.diasTrabajadosPendientes} días`,
+              `Bruto ${formatRD(resultado.salarioDiasTrabajadosBruto, 2)} − AFP ${formatRD(resultado.afpDiasTrabajados, 2)} − SFS ${formatRD(resultado.sfsDiasTrabajados, 2)} − ISR ${formatRD(resultado.isrDiasTrabajados, 2)}`,
+            ]
+          : [
+              emp.pagoDiasTrabajadosPendiente === 'nomina'
+                ? 'El empleado eligió pagar sus días trabajados por nómina — no se incluyen aquí.'
+                : 'Sin días pendientes detectados entre el último período pagado y la fecha de salida.',
+            ],
+      },
+    } : null
+
+  function valorFinal(concepto: ConceptoLiquidacion): number {
+    if (!conceptoMeta) return 0
+    return overrides[concepto]?.monto ?? conceptoMeta[concepto].montoAuto
+  }
+  const cesantiaFinal = valorFinal('cesantia')
+  const preavisoFinal = valorFinal('preaviso')
+  const asistenciaFinal = valorFinal('asistenciaEconomica')
+  const vacacionesFinal = valorFinal('vacaciones')
+  const regaliaFinal = valorFinal('regalia')
+  const diasTrabajadosFinal = valorFinal('diasTrabajados')
+  const subtotalFinal = cesantiaFinal + preavisoFinal + asistenciaFinal + vacacionesFinal + regaliaFinal + diasTrabajadosFinal
+  const totalPrestamosFinal = resultado?.totalPrestamos ?? 0
+  const saldoISRFinal = resultado?.saldoISR ?? 0
+  const totalFinal = Math.max(0, subtotalFinal + saldoISRFinal - totalPrestamosFinal)
+
+  const desgloseCalculo: DesgloseConceptoLiquidacion[] | null = conceptoMeta
+    ? (Object.keys(conceptoMeta) as ConceptoLiquidacion[]).map(c => {
+        const meta = conceptoMeta[c]
+        const ov = overrides[c]
+        return {
+          concepto: c, label: meta.titulo, articulo: meta.articulo, detalle: meta.detalle,
+          montoAuto: meta.montoAuto, montoFinal: valorFinal(c),
+          ajustado: !!ov, motivoAjuste: ov?.motivo,
+        }
+      })
+    : null
+
+  function handleGuardarOverride(concepto: ConceptoLiquidacion, monto: number, motivoAjuste: string) {
+    setOverrides(prev => ({ ...prev, [concepto]: { monto, motivo: motivoAjuste } }))
+  }
+  function handleQuitarOverride(concepto: ConceptoLiquidacion) {
+    setOverrides(prev => {
+      const next = { ...prev }
+      delete next[concepto]
+      return next
+    })
+  }
+
+  // Exporta a Excel el desglose completo (útil como borrador antes de
+  // finalizar) — usa los mismos montos finales (ya con ajustes aplicados)
+  // que verá la planilla en PDF.
   async function handleExportExcel() {
-    if (!emp || !resultado || !motivo) return
+    if (!emp || !desgloseCalculo || !motivo) return
     const { exportarExcel } = await import('@/lib/excel-export')
-    const { cesantia, preaviso, asistenciaEconomica, vacaciones, regalia, subtotal, totalPrestamos, saldoISR, total } = resultado
-    const filas: (string | number)[][] = [
-      ['Cesantía', cesantia > 0 ? 'Sí' : 'No', cesantia],
-      ['Preaviso', preaviso > 0 ? 'Sí' : 'No', preaviso],
-      ['Asistencia Económica', asistenciaEconomica > 0 ? 'Sí' : 'No', asistenciaEconomica],
-      ['Vacaciones No Gozadas', 'Sí', vacaciones],
-      ['Regalía Proporcional', 'Sí', regalia],
-    ]
-    if (resultado.diasTrabajadosPendientes > 0) {
-      filas.push(
-        [`Días Trabajados Pendientes (${resultado.diasTrabajadosPendientes} días, bruto)`, 'Sí', resultado.salarioDiasTrabajadosBruto],
-        ['  AFP Empleado', '', -resultado.afpDiasTrabajados],
-        ['  SFS Empleado', '', -resultado.sfsDiasTrabajados],
-        ['  ISR Retención', '', -resultado.isrDiasTrabajados],
-        ['  Días Trabajados (neto)', '', resultado.salarioDiasTrabajadosNeto],
-      )
-    }
-    filas.push(['Subtotal Prestaciones', '', subtotal])
-    if (saldoISR > 0) {
-      filas.push(['Saldo ISR a Favor', 'Sí', saldoISR])
-    }
-    if (totalPrestamos > 0) {
-      filas.push(['Descuento Préstamos Pendientes', 'Sí', -totalPrestamos])
-    }
-    if (resultado.cumplioPreaviso !== null) {
-      filas.push([
-        'Cumplimiento Preaviso (Art. 76)',
-        resultado.cumplioPreaviso ? 'Cumplió' : `Incumplió por ${Math.abs(resultado.diferenciaDiasPreaviso ?? 0)} días`,
-        `${resultado.diasAnticipacionReal} de ${resultado.diasPreavisoRequeridos} días requeridos`,
-      ])
-    }
+    const filas: (string | number)[][] = desgloseCalculo.map(d => [
+      d.label, d.articulo, d.detalle.join(' · '), d.montoAuto, d.montoFinal, d.ajustado ? `Sí — ${d.motivoAjuste}` : 'No',
+    ])
+    if (saldoISRFinal > 0) filas.push(['Saldo ISR a Favor', 'Reembolso — ISR retenido de más', '', saldoISRFinal, saldoISRFinal, 'No'])
+    if (totalPrestamosFinal > 0) filas.push(['Descuento Préstamos Pendientes', 'Saldo de préstamos/avances activos', '', -totalPrestamosFinal, -totalPrestamosFinal, 'No'])
     await exportarExcel({
       nombreArchivo: `liquidacion-${fullName(emp).replace(/\s+/g, '-')}-${fechaTerminacion}`,
       empresa: empresa.nombre,
@@ -271,19 +674,16 @@ export default function LiquidacionPage() {
         nombre: 'Liquidación',
         titulo: `Liquidación — ${fullName(emp)}`,
         subtitulo: `${MOTIVO_LABELS[motivo]} · Terminación: ${formatDate(fechaTerminacion)}`,
-        encabezados: ['Concepto', 'Aplica', 'Monto (RD$)'],
+        encabezados: ['Concepto', 'Base Legal', 'Detalle del Cálculo', 'Monto Calculado', 'Monto Final', '¿Ajustado?'],
         filas,
-        totales: ['TOTAL NETO A PAGAR', '', total],
-        anchos: [42, 14, 20],
+        totales: ['TOTAL NETO A PAGAR', '', '', '', totalFinal, ''],
+        anchos: [26, 24, 46, 16, 16, 26],
       }],
     })
-    setToast('Liquidación exportada a Excel')
+    setToast('Borrador exportado a Excel')
     setTimeout(() => setToast(null), 2500)
   }
 
-  // Exporta el historial completo de liquidaciones registradas (todas las
-  // desvinculaciones, no solo la que está seleccionada en el formulario) con
-  // el mismo desglose de conceptos que cada una tuvo al finalizarse.
   async function handleExportHistorial() {
     if (liquidacionesOrdenadas.length === 0) return
     const { exportarExcel } = await import('@/lib/excel-export')
@@ -305,6 +705,7 @@ export default function LiquidacionPage() {
         l.saldoISRReembolsado ?? 0,
         -l.totalPrestamosDescontados,
         l.totalPagado,
+        l.metodoPago ? METODO_PAGO_LABELS[l.metodoPago] : '—',
         formatDate(l.fechaRegistro),
       ]
     })
@@ -322,7 +723,7 @@ export default function LiquidacionPage() {
           'Empleado', 'Cargo', 'Motivo', 'Fecha Terminación', 'Años Servicio',
           'Cesantía', 'Preaviso', 'Asist. Económica', 'Vacaciones', 'Regalía',
           'Días Trab. Pend.', 'Días Trab. (neto)', 'Saldo ISR Reembolsado',
-          'Desc. Préstamos', 'Total Pagado', 'Fecha Registro',
+          'Desc. Préstamos', 'Total Pagado', 'Método de Pago', 'Fecha Registro',
         ],
         filas,
         totales: [
@@ -330,9 +731,9 @@ export default function LiquidacionPage() {
           suma(l => l.cesantia), suma(l => l.preaviso), suma(l => l.asistenciaEconomica),
           suma(l => l.vacaciones), suma(l => l.regalia), '',
           suma(l => l.salarioDiasTrabajadosNeto ?? 0), suma(l => l.saldoISRReembolsado ?? 0),
-          -suma(l => l.totalPrestamosDescontados), suma(l => l.totalPagado), '',
+          -suma(l => l.totalPrestamosDescontados), suma(l => l.totalPagado), '', '',
         ],
-        anchos: [24, 18, 20, 16, 13, 14, 13, 15, 13, 13, 13, 15, 16, 14, 15, 16],
+        anchos: [24, 18, 20, 16, 13, 14, 13, 15, 13, 13, 13, 15, 16, 14, 15, 16, 16],
         columnasEnteras: [10],
       }],
     })
@@ -341,9 +742,8 @@ export default function LiquidacionPage() {
   }
 
   function handleFinalizarLiquidacion() {
-    if (!emp || !resultado || !motivo) return
+    if (!emp || !resultado || !motivo || !desgloseCalculo || !metodoPago) return
 
-    // Register loan payments as liquidation payments
     for (const pid of prestamosADescontar) {
       const p = prestamosActivos.find(x => x.id === pid)
       if (!p) continue
@@ -354,43 +754,37 @@ export default function LiquidacionPage() {
       })
     }
 
-    // Cualquier saldo ISR a favor pendiente se reembolsa completo aquí
-    // (ya está incluido en resultado.total) — se marca 'liquidado' para
-    // que no se vuelva a aplicar ni a mostrar como pendiente.
     for (const s of saldosISRActivos) {
       liquidarSaldoISR(s.id)
     }
 
-    // Persist the liquidation record — this is the source of truth for
-    // the termination details (motivo, montos, fecha)
-    registrar({
+    const nuevaLiquidacion = registrar({
       empleadoId: emp.id,
       motivo,
       fechaTerminacion,
       anosServicio: resultado.anosServicio,
-      cesantia: resultado.cesantia,
-      preaviso: resultado.preaviso,
-      asistenciaEconomica: resultado.asistenciaEconomica,
-      vacaciones: resultado.vacaciones,
-      regalia: resultado.regalia,
-      totalPrestamosDescontados: resultado.totalPrestamos,
-      saldoISRReembolsado: resultado.saldoISR,
-      totalPagado: resultado.total,
+      cesantia: cesantiaFinal,
+      preaviso: preavisoFinal,
+      asistenciaEconomica: asistenciaFinal,
+      vacaciones: vacacionesFinal,
+      regalia: regaliaFinal,
+      totalPrestamosDescontados: totalPrestamosFinal,
+      saldoISRReembolsado: saldoISRFinal,
+      totalPagado: totalFinal,
+      metodoPago,
+      ...(referenciaPago.trim() ? { referenciaPago: referenciaPago.trim() } : {}),
+      desgloseCalculo,
       ...(motivo === 'renuncia' && fechaNotificacionRenuncia ? { fechaNotificacionRenuncia } : {}),
-      ...(resultado.diasTrabajadosPendientes > 0 ? {
+      ...(diasTrabajadosFinal > 0 || resultado.diasTrabajadosPendientes > 0 ? {
         diasTrabajadosPendientes: resultado.diasTrabajadosPendientes,
         salarioDiasTrabajadosBruto: resultado.salarioDiasTrabajadosBruto,
         afpDiasTrabajados: resultado.afpDiasTrabajados,
         sfsDiasTrabajados: resultado.sfsDiasTrabajados,
         isrDiasTrabajados: resultado.isrDiasTrabajados,
-        salarioDiasTrabajadosNeto: resultado.salarioDiasTrabajadosNeto,
+        salarioDiasTrabajadosNeto: diasTrabajadosFinal,
       } : {}),
     })
 
-    // Mark the employee as inactive — this is the only state that needs to
-    // change on Empleado; automatically removes them from empleadosActivos
-    // across nómina, dashboard y reportes. También limpia cualquier "salida
-    // pendiente" — ya se calculó y registró, deja de estar pendiente.
     update(emp.id, {
       activo: false,
       salidaPendiente: false,
@@ -399,19 +793,30 @@ export default function LiquidacionPage() {
       pagoDiasTrabajadosPendiente: undefined,
     })
 
-    void handleExportExcel()
-
-    setToast(`Liquidación registrada — ${fullName(emp)} marcado como inactivo`)
+    // OJO: no se limpia empleadoId/motivo aquí a propósito — el efecto que
+    // reinicia el asistente está atado a [empleadoId], así que vaciarlo en
+    // este mismo momento dispararía ese efecto y pisaría el setPaso('exito')
+    // de abajo (React ejecuta el efecto después de este render, ganando la
+    // carrera). El formulario se limpia recién cuando el usuario confirma
+    // que quiere "Registrar Otra Liquidación" desde la pantalla de éxito.
+    setUltimaLiquidacion({ liquidacion: nuevaLiquidacion, empleado: emp })
     setConfirmFinalizar(false)
+    setPaso('exito')
+  }
 
-    // Reset form — the employee will disappear from empleadosActivos
+  function handleRegistrarOtra() {
     setEmpleadoId('')
     setMotivo('')
     setFechaNotificacionRenuncia('')
     setPrestamosADescontar([])
+    setUltimaLiquidacion(null)
+    setPaso(1)
   }
 
   const legalNote = motivo ? LEGAL_NOTES[motivo] : null
+
+  const pasoNumero = paso === 'exito' ? 3 : paso
+  const puedeAvanzarPaso1 = !!(emp && motivo && fechaTerminacion)
 
   return (
     <div className="flex flex-col overflow-hidden h-full">
@@ -422,8 +827,33 @@ export default function LiquidacionPage() {
 
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
-        {/* ── Pendientes por liquidar ────────────────────────────────────── */}
-        {pendientesLiquidar.length > 0 && (
+        {/* ── Indicador de pasos ────────────────────────────────────────── */}
+        {(paso !== 1 || emp) && (
+          <div className="flex items-center gap-2">
+            {([1, 2, 3] as const).map((n, i) => (
+              <div key={n} className="flex items-center gap-2 flex-1">
+                <div className={`flex items-center gap-2 ${i > 0 ? 'flex-1' : ''}`}>
+                  {i > 0 && <div className={`h-0.5 flex-1 ${pasoNumero > i ? 'bg-[#1B2980] dark:bg-indigo-500' : 'bg-zinc-200 dark:bg-[#252840]'}`} />}
+                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${
+                    pasoNumero === n
+                      ? 'bg-[#1B2980] dark:bg-indigo-500 text-white'
+                      : pasoNumero > n
+                      ? 'bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400 ring-1 ring-inset ring-[#1B2980]/30 dark:ring-indigo-500/30'
+                      : 'bg-zinc-100 dark:bg-[#1a1d2e] text-zinc-400 dark:text-zinc-500'
+                  }`}>
+                    {pasoNumero > n ? <CheckCircle2 className="h-4 w-4" /> : n}
+                  </div>
+                </div>
+                <span className={`text-xs font-medium hidden sm:block ${pasoNumero === n ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                  {n === 1 ? 'Datos de Terminación' : n === 2 ? 'Cálculo de Prestaciones' : 'Confirmación y Pago'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Pendientes por liquidar (solo paso 1) ────────────────────── */}
+        {paso === 1 && pendientesLiquidar.length > 0 && (
           <div className="rounded-xl border border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-950/20 overflow-hidden">
             <div className="px-5 py-3.5 flex items-center gap-2 border-b border-rose-100 dark:border-rose-900/40">
               <Clock className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
@@ -453,203 +883,215 @@ export default function LiquidacionPage() {
           </div>
         )}
 
-        {/* ── Selector card ─────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-          <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-            <div className="flex items-center gap-2">
-              <UserMinus className="h-4 w-4 text-rose-500 dark:text-rose-400 shrink-0" />
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Datos de Terminación</h2>
-            </div>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 ml-6">
-              Seleccione el empleado, motivo y fecha de terminación del contrato
-            </p>
-          </div>
-          <div className="px-5 py-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Employee selector */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Empleado
-                </label>
-                <select
-                  value={empleadoId}
-                  onChange={e => setEmpleadoId(e.target.value)}
-                  className={INPUT_CLASS}
-                >
-                  <option value="">— Seleccionar empleado —</option>
-                  {empleadosActivos.map(e => (
-                    <option key={e.id} value={e.id}>
-                      {fullName(e)} — {e.cargo}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Motivo selector */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Motivo de Terminación
-                </label>
-                <select
-                  value={motivo}
-                  onChange={e => {
-                    const next = e.target.value as Motivo | ''
-                    setMotivo(next)
-                    if (next !== 'renuncia') setFechaNotificacionRenuncia('')
-                  }}
-                  className={INPUT_CLASS}
-                >
-                  <option value="">— Seleccionar motivo —</option>
-                  <option value="renuncia">Renuncia Voluntaria</option>
-                  <option value="despido_sin_causa">Despido Sin Causa (Art. 87)</option>
-                  <option value="despido_con_causa">Despido Con Causa (Art. 88)</option>
-                  <option value="mutuo_acuerdo">Mutuo Acuerdo</option>
-                  <option value="vencimiento_contrato">Vencimiento de Contrato (Art. 74/82)</option>
-                </select>
-              </div>
-
-              {/* Fecha de terminación */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Fecha de Terminación
-                </label>
-                <input
-                  type="date"
-                  value={fechaTerminacion}
-                  onChange={e => setFechaTerminacion(e.target.value)}
-                  className={INPUT_CLASS}
-                />
-              </div>
-            </div>
-
-            {/* Fecha de notificación de renuncia — solo cuando el motivo es renuncia (Art. 76) */}
-            {motivo === 'renuncia' && (
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-zinc-100 dark:border-[#1d2035] pt-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Fecha en que el Empleado Notificó su Renuncia
-                  </label>
-                  <input
-                    type="date"
-                    value={fechaNotificacionRenuncia}
-                    onChange={e => setFechaNotificacionRenuncia(e.target.value)}
-                    className={INPUT_CLASS}
-                  />
+        {/* ══════════════════════ PASO 1 — Datos de Terminación ══════════ */}
+        {paso === 1 && (
+          <>
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+              <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <UserMinus className="h-4 w-4 text-rose-500 dark:text-rose-400 shrink-0" />
+                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Datos de Terminación</h2>
                 </div>
-                {resultado && resultado.diasPreavisoRequeridos !== null && (
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                      Cumplimiento de Preaviso (Art. 76)
-                    </label>
-                    {resultado.cumplioPreaviso === null ? (
-                      <p className="text-xs text-zinc-400 dark:text-zinc-500 pt-1.5">
-                        Captura la fecha de notificación para verificar el cumplimiento —
-                        requiere {resultado.diasPreavisoRequeridos} días de anticipación
-                        según la antigüedad del empleado.
-                      </p>
-                    ) : resultado.cumplioPreaviso ? (
-                      <div className="flex items-center gap-2 pt-1">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-800/50">
-                          <CheckCircle2 className="h-3.5 w-3.5" />
-                          Cumplió
-                        </span>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {resultado.diasAnticipacionReal} días de anticipación (mínimo {resultado.diasPreavisoRequeridos})
-                          {resultado.diferenciaDiasPreaviso! > 0 && ` · +${resultado.diferenciaDiasPreaviso} días de más`}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 pt-1">
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1 text-xs font-medium text-rose-700 dark:text-rose-400 ring-1 ring-inset ring-rose-200 dark:ring-rose-800/50">
-                          <XCircle className="h-3.5 w-3.5" />
-                          Incumplió por {Math.abs(resultado.diferenciaDiasPreaviso!)} días
-                        </span>
-                        <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {resultado.diasAnticipacionReal! < 0 ? 'Fecha de notificación posterior a la terminación' : `${resultado.diasAnticipacionReal} días de anticipación (mínimo ${resultado.diasPreavisoRequeridos})`}
-                        </span>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 ml-6">
+                  Seleccione el empleado, motivo y fecha de terminación del contrato
+                </p>
+              </div>
+              <div className="px-5 py-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</label>
+                    <select value={empleadoId} onChange={e => setEmpleadoId(e.target.value)} className={INPUT_CLASS}>
+                      <option value="">— Seleccionar empleado —</option>
+                      {empleadosActivos.map(e => (
+                        <option key={e.id} value={e.id}>{fullName(e)} — {e.cargo}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Motivo de Terminación</label>
+                    <select
+                      value={motivo}
+                      onChange={e => {
+                        const next = e.target.value as Motivo | ''
+                        setMotivo(next)
+                        if (next !== 'renuncia') setFechaNotificacionRenuncia('')
+                      }}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">— Seleccionar motivo —</option>
+                      <option value="renuncia">Renuncia Voluntaria</option>
+                      <option value="despido_sin_causa">Despido Sin Causa (Art. 87)</option>
+                      <option value="despido_con_causa">Despido Con Causa (Art. 88)</option>
+                      <option value="mutuo_acuerdo">Mutuo Acuerdo</option>
+                      <option value="vencimiento_contrato">Vencimiento de Contrato (Art. 74/82)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fecha de Terminación</label>
+                    <input type="date" value={fechaTerminacion} onChange={e => setFechaTerminacion(e.target.value)} className={INPUT_CLASS} />
+                  </div>
+                </div>
+
+                {motivo === 'renuncia' && (
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 border-t border-zinc-100 dark:border-[#1d2035] pt-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        Fecha en que el Empleado Notificó su Renuncia
+                      </label>
+                      <input type="date" value={fechaNotificacionRenuncia} onChange={e => setFechaNotificacionRenuncia(e.target.value)} className={INPUT_CLASS} />
+                    </div>
+                    {resultado && resultado.diasPreavisoRequeridos !== null && (
+                      <div className="space-y-1.5 md:col-span-2">
+                        <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                          Cumplimiento de Preaviso (Art. 76)
+                        </label>
+                        {resultado.cumplioPreaviso === null ? (
+                          <p className="text-xs text-zinc-400 dark:text-zinc-500 pt-1.5">
+                            Captura la fecha de notificación para verificar el cumplimiento —
+                            requiere {resultado.diasPreavisoRequeridos} días de anticipación según la antigüedad del empleado.
+                          </p>
+                        ) : resultado.cumplioPreaviso ? (
+                          <div className="flex items-center gap-2 pt-1">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-400 ring-1 ring-inset ring-emerald-200 dark:ring-emerald-800/50">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Cumplió
+                            </span>
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {resultado.diasAnticipacionReal} días de anticipación (mínimo {resultado.diasPreavisoRequeridos})
+                              {resultado.diferenciaDiasPreaviso! > 0 && ` · +${resultado.diferenciaDiasPreaviso} días de más`}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 pt-1">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-50 dark:bg-rose-950/30 px-2.5 py-1 text-xs font-medium text-rose-700 dark:text-rose-400 ring-1 ring-inset ring-rose-200 dark:ring-rose-800/50">
+                              <XCircle className="h-3.5 w-3.5" /> Incumplió por {Math.abs(resultado.diferenciaDiasPreaviso!)} días
+                            </span>
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {resultado.diasAnticipacionReal! < 0 ? 'Fecha de notificación posterior a la terminación' : `${resultado.diasAnticipacionReal} días de anticipación (mínimo ${resultado.diasPreavisoRequeridos})`}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* ── Employee summary card ──────────────────────────────────────── */}
-        {emp && (
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-            <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Datos del Empleado</h2>
-            </div>
-            <div className="px-5 py-4">
-              <div className="flex items-start gap-4">
-                {/* Avatar */}
-                <div
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white"
-                  style={{ backgroundColor: '#1B2980' }}
-                >
-                  {emp.nombre[0]}{emp.apellido[0]}
+            {emp && (
+              <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+                <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Datos del Empleado</h2>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{fullName(emp)}</p>
-                  <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Cargo</p>
-                        <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{emp.cargo}</p>
+                <div className="px-5 py-4">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#1B2980' }}>
+                      {emp.nombre[0]}{emp.apellido[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{fullName(emp)}</p>
+                      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                          <div>
+                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Cargo</p>
+                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{emp.cargo}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                          <div>
+                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Departamento</p>
+                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{emp.departamento}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                          <div>
+                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Fecha Ingreso</p>
+                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{formatDate(emp.fechaIngreso)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Banknote className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
+                          <div>
+                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Salario Base</p>
+                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{formatRD(emp.salarioBase)}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Building2 className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Departamento</p>
-                        <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{emp.departamento}</p>
+                    {resultado && (
+                      <div className="shrink-0 rounded-lg bg-[#eef0fb] dark:bg-indigo-950/40 px-3 py-2 text-center">
+                        <p className="text-xs font-semibold text-[#1B2980] dark:text-indigo-400">Antigüedad</p>
+                        <p className="text-sm font-bold text-[#1B2980] dark:text-indigo-300 mt-0.5 whitespace-nowrap">
+                          {formatAnosServicio(resultado.anosServicio)}
+                        </p>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Fecha Ingreso</p>
-                        <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{formatDate(emp.fechaIngreso)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Banknote className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                      <div>
-                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Salario Base</p>
-                        <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{formatRD(emp.salarioBase)}</p>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
-                {/* Seniority badge */}
-                {resultado && (
-                  <div className="shrink-0 rounded-lg bg-[#eef0fb] dark:bg-indigo-950/40 px-3 py-2 text-center">
-                    <p className="text-xs font-semibold text-[#1B2980] dark:text-indigo-400">Antigüedad</p>
-                    <p className="text-sm font-bold text-[#1B2980] dark:text-indigo-300 mt-0.5 whitespace-nowrap">
-                      {formatAnosServicio(resultado.anosServicio)}
-                    </p>
-                  </div>
-                )}
               </div>
+            )}
+
+            {legalNote && (
+              <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50 dark:bg-indigo-950/30 px-5 py-4">
+                <div className="flex items-start gap-3">
+                  <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-xs font-semibold text-indigo-800 dark:text-indigo-300 mb-1">{legalNote.title}</p>
+                    <p className="text-xs text-indigo-700 dark:text-indigo-400 leading-relaxed">{legalNote.text}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!emp && (
+              <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-6 py-12 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-[#1a1d2e]">
+                  <UserMinus className="h-7 w-7 text-zinc-400 dark:text-zinc-500" />
+                </div>
+                <p className="mt-4 text-sm font-medium text-zinc-600 dark:text-zinc-400">Seleccione un empleado para calcular su liquidación</p>
+                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">Cesantía · Preaviso · Vacaciones no gozadas · Regalía proporcional</p>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setPaso(2)}
+                disabled={!puedeAvanzarPaso1}
+                className={`${BTN_PRIMARY} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-sm`}
+              >
+                Continuar al Cálculo <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
-          </div>
+          </>
         )}
 
-        {/* ── Results section ───────────────────────────────────────────── */}
-        {emp && motivo && resultado && (
+        {/* ══════════════════ PASO 2 — Cálculo de Prestaciones ═══════════ */}
+        {paso === 2 && emp && motivo && resultado && conceptoMeta && (
           <>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Cálculo de Prestaciones — {fullName(emp)}</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Cada tarjeta muestra la fórmula aplicada. Puedes ajustar cualquier monto manualmente si corresponde.
+                </p>
+              </div>
+              <button onClick={() => setPaso(1)} className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                <ArrowLeft className="h-3.5 w-3.5" /> Atrás
+              </button>
+            </div>
+
             {resultado.salarioOrdinario > emp.salarioBase + 0.01 && (
               <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-3.5 flex items-start gap-3">
                 <Info className="h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0 mt-0.5" />
                 <p className="text-xs text-[#151f66] dark:text-indigo-200">
                   Cesantía, Preaviso y Asistencia Económica se calculan sobre{' '}
-                  <strong>{formatRD(resultado.salarioOrdinario, 2)}</strong> (salario ordinario —
-                  promedio real de los últimos 12 meses de nómina procesada, incluyendo comisiones
-                  y horas extra habituales), en vez del salario base de {formatRD(emp.salarioBase, 2)},
-                  según el criterio de "salario ordinario" para prestaciones laborales.
+                  <strong>{formatRD(resultado.salarioOrdinario, 2)}</strong> (salario ordinario — promedio real de los
+                  últimos 12 meses de nómina procesada, incluyendo comisiones y horas extra habituales), en vez del
+                  salario base de {formatRD(emp.salarioBase, 2)}, según el criterio de "salario ordinario" para prestaciones laborales.
                 </p>
               </div>
             )}
@@ -665,161 +1107,42 @@ export default function LiquidacionPage() {
               </div>
             )}
 
-            {/* Concept grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(Object.keys(conceptoMeta) as ConceptoLiquidacion[]).map(c => {
+                const meta = conceptoMeta[c]
+                return (
+                  <ConceptoLiquidacionCard
+                    key={c}
+                    titulo={meta.titulo}
+                    articulo={meta.articulo}
+                    colores={meta.colores}
+                    Icon={meta.Icon}
+                    montoAuto={meta.montoAuto}
+                    montoFinal={valorFinal(c)}
+                    detalle={meta.detalle}
+                    override={overrides[c]}
+                    onGuardar={(monto, motivoAjuste) => handleGuardarOverride(c, monto, motivoAjuste)}
+                    onQuitar={() => handleQuitarOverride(c)}
+                  />
+                )
+              })}
 
-              {/* Cesantía */}
-              <div className="rounded-xl border border-rose-200 dark:border-rose-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-rose-600 dark:text-rose-400">Cesantía</p>
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">Art. 80 — Código de Trabajo</p>
-                  </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 dark:bg-rose-950/40 text-rose-500 dark:text-rose-400">
-                    <UserMinus className="h-4 w-4" />
-                  </div>
-                </div>
-                {resultado.cesantia > 0 ? (
-                  <p className="mt-3 text-2xl font-bold tabular-nums text-rose-700 dark:text-rose-300">
-                    {formatRD(resultado.cesantia, 2)}
-                  </p>
-                ) : (
-                  <div className="mt-3">
-                    <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                      No aplica
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Preaviso */}
-              <div className="rounded-xl border border-amber-200 dark:border-amber-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">Preaviso</p>
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">Art. 76 — Código de Trabajo</p>
-                  </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-500 dark:text-amber-400">
-                    <CalendarDays className="h-4 w-4" />
-                  </div>
-                </div>
-                {resultado.preaviso > 0 ? (
-                  <p className="mt-3 text-2xl font-bold tabular-nums text-amber-700 dark:text-amber-300">
-                    {formatRD(resultado.preaviso, 2)}
-                  </p>
-                ) : (
-                  <div className="mt-3">
-                    <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                      No aplica
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Asistencia Económica */}
-              <div className="rounded-xl border border-violet-200 dark:border-violet-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-400">Asistencia Económica</p>
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">Art. 82 — Código de Trabajo</p>
-                  </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-950/40 text-violet-500 dark:text-violet-400">
-                    <HandCoins className="h-4 w-4" />
-                  </div>
-                </div>
-                {resultado.asistenciaEconomica > 0 ? (
-                  <p className="mt-3 text-2xl font-bold tabular-nums text-violet-700 dark:text-violet-300">
-                    {formatRD(resultado.asistenciaEconomica, 2)}
-                  </p>
-                ) : (
-                  <div className="mt-3">
-                    <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                      No aplica
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Vacaciones no gozadas */}
-              <div className="rounded-xl border border-sky-200 dark:border-sky-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-sky-600 dark:text-sky-400">Vacaciones No Gozadas</p>
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                      Art. 177 — {resultado.mesesCicloVac.toFixed(1)} meses × tarifa diaria
-                    </p>
-                  </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-500 dark:text-sky-400">
-                    <CalendarDays className="h-4 w-4" />
-                  </div>
-                </div>
-                <p className="mt-3 text-2xl font-bold tabular-nums text-sky-700 dark:text-sky-300">
-                  {formatRD(resultado.vacaciones, 2)}
-                </p>
-              </div>
-
-              {/* Regalía proporcional */}
-              <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">Regalía Proporcional</p>
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                      Art. 219 — {resultado.mesesCalendario}/12 del salario
-                    </p>
-                  </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 dark:text-emerald-400">
-                    <Banknote className="h-4 w-4" />
-                  </div>
-                </div>
-                <p className="mt-3 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                  {formatRD(resultado.regalia, 2)}
-                </p>
-              </div>
-
-              {/* Días Trabajados Pendientes */}
-              {resultado.diasTrabajadosPendientes > 0 && (
-                <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600 dark:text-indigo-400">Días Trabajados Pendientes</p>
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                        {resultado.diasTrabajadosPendientes} días — salario ordinario, con AFP/SFS/ISR
-                      </p>
-                    </div>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-500 dark:text-indigo-400">
-                      <Clock className="h-4 w-4" />
-                    </div>
-                  </div>
-                  <p className="mt-3 text-2xl font-bold tabular-nums text-indigo-700 dark:text-indigo-300">
-                    {formatRD(resultado.salarioDiasTrabajadosNeto, 2)}
-                  </p>
-                  <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                    Bruto {formatRD(resultado.salarioDiasTrabajadosBruto, 2)} − AFP {formatRD(resultado.afpDiasTrabajados, 2)}
-                    {' '}− SFS {formatRD(resultado.sfsDiasTrabajados, 2)} − ISR {formatRD(resultado.isrDiasTrabajados, 2)}
-                  </p>
-                </div>
-              )}
-
-              {/* Saldo ISR a Favor */}
               {resultado.saldoISR > 0 && (
                 <div className="rounded-xl border border-teal-200 dark:border-teal-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">Saldo ISR a Favor</p>
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">ISR retenido de más — se reembolsa</p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">ISR retenido de más — se reembolsa, no es editable</p>
                     </div>
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-500 dark:text-teal-400">
                       <Banknote className="h-4 w-4" />
                     </div>
                   </div>
-                  <p className="mt-3 text-2xl font-bold tabular-nums text-teal-700 dark:text-teal-300">
-                    {formatRD(resultado.saldoISR, 2)}
-                  </p>
+                  <p className="mt-3 text-2xl font-bold tabular-nums text-teal-700 dark:text-teal-300">{formatRD(resultado.saldoISR, 2)}</p>
                 </div>
               )}
             </div>
 
-            {/* Préstamos pendientes */}
             {prestamosActivos.length > 0 && (
               <div className="rounded-xl border border-rose-200 dark:border-rose-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
                 <div className="border-b border-rose-100 dark:border-rose-900/40 px-5 py-4 flex items-center gap-2">
@@ -831,16 +1154,11 @@ export default function LiquidacionPage() {
                 </div>
                 <div className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {prestamosActivos.map(p => (
-                    <label
-                      key={p.id}
-                      className="flex items-center gap-4 px-5 py-3.5 cursor-pointer hover:bg-rose-50/40 dark:hover:bg-rose-950/10 transition-colors"
-                    >
+                    <label key={p.id} className="flex items-center gap-4 px-5 py-3.5 cursor-pointer hover:bg-rose-50/40 dark:hover:bg-rose-950/10 transition-colors">
                       <input
                         type="checkbox"
                         checked={prestamosADescontar.includes(p.id)}
-                        onChange={e => setPrestamosADescontar(prev =>
-                          e.target.checked ? [...prev, p.id] : prev.filter(id => id !== p.id)
-                        )}
+                        onChange={e => setPrestamosADescontar(prev => e.target.checked ? [...prev, p.id] : prev.filter(id => id !== p.id))}
                         className="h-4 w-4 rounded border-zinc-300 dark:border-[#252840] text-[#1B2980] focus:ring-[#1B2980]/30"
                       />
                       <div className="flex-1 min-w-0">
@@ -848,14 +1166,11 @@ export default function LiquidacionPage() {
                           {p.notas || (p.tipo === 'avance' ? 'Avance de salario' : 'Préstamo')}
                         </p>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          Original: {formatRD(p.monto)} · {p.cuotas} cuotas
-                          {p.tasaInteres > 0 && ` · ${p.tasaInteres}% mensual`}
+                          Original: {formatRD(p.monto)} · {p.cuotas} cuotas{p.tasaInteres > 0 && ` · ${p.tasaInteres}% mensual`}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">
-                          {formatRD(p.saldoPendiente, 2)}
-                        </p>
+                        <p className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">{formatRD(p.saldoPendiente, 2)}</p>
                         <p className="text-[10px] text-zinc-400 dark:text-zinc-500">saldo pendiente</p>
                       </div>
                     </label>
@@ -863,138 +1178,194 @@ export default function LiquidacionPage() {
                 </div>
                 {prestamosADescontar.length > 0 && (
                   <div className="border-t border-rose-100 dark:border-rose-900/40 px-5 py-3 flex items-center justify-between bg-rose-50/50 dark:bg-rose-950/20">
-                    <span className="text-xs text-rose-700 dark:text-rose-400 font-medium">
-                      Total a descontar del finiquito
-                    </span>
-                    <span className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">
-                      ({formatRD(resultado.totalPrestamos, 2)})
-                    </span>
+                    <span className="text-xs text-rose-700 dark:text-rose-400 font-medium">Total a descontar del finiquito</span>
+                    <span className="text-sm font-bold text-rose-700 dark:text-rose-400 tabular-nums">({formatRD(totalPrestamosFinal, 2)})</span>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Total a Pagar */}
-            <div className="rounded-xl bg-zinc-950 dark:bg-[#080a12] text-white shadow-sm dark:shadow-none overflow-hidden">
-              <div className="px-6 py-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                      {MOTIVO_LABELS[motivo]}
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-400">Total Neto a Pagar al Empleado</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-3xl font-bold tabular-nums tracking-tight text-white">
-                      {formatRD(resultado.total, 2)}
-                    </p>
-                    <p className="text-xs text-zinc-400 mt-0.5">Pesos Dominicanos</p>
-                  </div>
-                </div>
-                <div className="mt-4 border-t border-zinc-800 pt-4 grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
-                  <div>
-                    <p className="text-zinc-500 uppercase tracking-wide">Cesantía</p>
-                    <p className={`font-semibold mt-0.5 ${resultado.cesantia > 0 ? 'text-rose-300' : 'text-zinc-600'}`}>
-                      {resultado.cesantia > 0 ? formatRD(resultado.cesantia) : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500 uppercase tracking-wide">Preaviso</p>
-                    <p className={`font-semibold mt-0.5 ${resultado.preaviso > 0 ? 'text-amber-300' : 'text-zinc-600'}`}>
-                      {resultado.preaviso > 0 ? formatRD(resultado.preaviso) : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500 uppercase tracking-wide">Asist. Económica</p>
-                    <p className={`font-semibold mt-0.5 ${resultado.asistenciaEconomica > 0 ? 'text-violet-300' : 'text-zinc-600'}`}>
-                      {resultado.asistenciaEconomica > 0 ? formatRD(resultado.asistenciaEconomica) : '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500 uppercase tracking-wide">Vacaciones</p>
-                    <p className="font-semibold mt-0.5 text-sky-300">{formatRD(resultado.vacaciones)}</p>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500 uppercase tracking-wide">Regalía</p>
-                    <p className="font-semibold mt-0.5 text-emerald-300">{formatRD(resultado.regalia)}</p>
-                  </div>
-                  {resultado.diasTrabajadosPendientes > 0 && (
-                    <div className="col-span-2 md:col-span-5 border-t border-zinc-800 pt-3">
-                      <p className="text-zinc-500 uppercase tracking-wide">Días Trabajados Pendientes (neto)</p>
-                      <p className="font-semibold mt-0.5 text-indigo-300">
-                        +{formatRD(resultado.salarioDiasTrabajadosNeto)}
-                      </p>
-                    </div>
-                  )}
-                  {resultado.saldoISR > 0 && (
-                    <div className="col-span-2 md:col-span-5 border-t border-zinc-800 pt-3">
-                      <p className="text-zinc-500 uppercase tracking-wide">Saldo ISR a Favor</p>
-                      <p className="font-semibold mt-0.5 text-teal-300">
-                        +{formatRD(resultado.saldoISR)}
-                      </p>
-                    </div>
-                  )}
-                  {resultado.totalPrestamos > 0 && (
-                    <div className="col-span-2 md:col-span-5 border-t border-zinc-800 pt-3">
-                      <p className="text-zinc-500 uppercase tracking-wide">Desc. Préstamos</p>
-                      <p className="font-semibold mt-0.5 text-rose-400">
-                        ({formatRD(resultado.totalPrestamos)})
-                      </p>
-                    </div>
-                  )}
-                </div>
+            <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-5 py-4">
+              <div>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Subtotal prestaciones</p>
+                <p className="text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(totalFinal, 2)}</p>
               </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={handleExportExcel}
-                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors"
-              >
-                <Download className="h-4 w-4" />
-                Exportar Excel
-              </button>
-              <button
-                onClick={() => setConfirmFinalizar(true)}
-                className={BTN_PRIMARY}
-              >
-                <Download className="h-4 w-4" />
-                Finalizar y Exportar
+              <button onClick={() => setPaso(3)} className={BTN_PRIMARY}>
+                Continuar a Confirmación y Pago <ArrowRight className="h-4 w-4" />
               </button>
             </div>
           </>
         )}
 
-        {/* ── Legal note ─────────────────────────────────────────────────── */}
-        {legalNote && (
-          <div className="rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50 dark:bg-indigo-950/30 px-5 py-4">
-            <div className="flex items-start gap-3">
-              <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+        {/* ══════════════ PASO 3 — Confirmación y Pago ═══════════════════ */}
+        {paso === 3 && emp && motivo && resultado && desgloseCalculo && (
+          <>
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-indigo-800 dark:text-indigo-300 mb-1">
-                  {legalNote.title}
-                </p>
-                <p className="text-xs text-indigo-700 dark:text-indigo-400 leading-relaxed">
-                  {legalNote.text}
-                </p>
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Confirmación y Pago — {fullName(emp)}</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Revisa el resumen, indica el método de pago y confirma para registrar la salida.</p>
+              </div>
+              <button onClick={() => setPaso(2)} className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                <ArrowLeft className="h-3.5 w-3.5" /> Atrás
+              </button>
+            </div>
+
+            {/* Resumen — tarjeta navy de marca, reemplaza la barra negra */}
+            <div className="rounded-xl bg-gradient-to-br from-[#1B2980] to-[#151f66] dark:from-[#151f66] dark:to-[#0d1240] text-white shadow-lg shadow-[#1B2980]/20 overflow-hidden">
+              <div className="px-6 py-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-indigo-200">{MOTIVO_LABELS[motivo]}</p>
+                    <p className="mt-1 text-sm text-indigo-200">Total Neto a Pagar al Empleado</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-3xl font-bold tabular-nums tracking-tight text-white">{formatRD(totalFinal, 2)}</p>
+                    <p className="text-xs text-indigo-200 mt-0.5">Pesos Dominicanos</p>
+                  </div>
+                </div>
+                <div className="mt-4 border-t border-white/15 pt-4 grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                  {desgloseCalculo.map(d => (
+                    <div key={d.concepto}>
+                      <p className="text-indigo-200 uppercase tracking-wide flex items-center gap-1">
+                        {d.label}{d.ajustado && <Pencil className="h-2.5 w-2.5" />}
+                      </p>
+                      <p className="font-semibold mt-0.5 text-white">{d.montoFinal > 0 ? formatRD(d.montoFinal) : '—'}</p>
+                    </div>
+                  ))}
+                  {saldoISRFinal > 0 && (
+                    <div className="col-span-2 md:col-span-3 border-t border-white/15 pt-3">
+                      <p className="text-indigo-200 uppercase tracking-wide">Saldo ISR a Favor</p>
+                      <p className="font-semibold mt-0.5 text-teal-300">+{formatRD(saldoISRFinal)}</p>
+                    </div>
+                  )}
+                  {totalPrestamosFinal > 0 && (
+                    <div className="col-span-2 md:col-span-3 border-t border-white/15 pt-3">
+                      <p className="text-indigo-200 uppercase tracking-wide">Desc. Préstamos</p>
+                      <p className="font-semibold mt-0.5 text-rose-300">({formatRD(totalPrestamosFinal)})</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
+
+            {/* Método de pago */}
+            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+              <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Método de Pago</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Quedará impreso en la planilla de firma</p>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {(['cheque', 'efectivo', 'transferencia'] as const).map(m => {
+                    const Icon = METODO_PAGO_ICONS[m]
+                    const activo = metodoPago === m
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => setMetodoPago(m)}
+                        className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                          activo
+                            ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30 ring-1 ring-[#1B2980] dark:ring-indigo-500'
+                            : 'border-zinc-200 dark:border-[#252840] hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                        }`}
+                      >
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${activo ? 'bg-[#1B2980] dark:bg-indigo-500 text-white' : 'bg-zinc-100 dark:bg-[#1a1d2e] text-zinc-500 dark:text-zinc-400'}`}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <span className={`text-sm font-medium ${activo ? 'text-[#1B2980] dark:text-indigo-300' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                          {METODO_PAGO_LABELS[m]}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {metodoPago && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      {METODO_PAGO_REF_LABEL[metodoPago]}
+                    </label>
+                    <input
+                      type="text" value={referenciaPago} onChange={e => setReferenciaPago(e.target.value)}
+                      placeholder={metodoPago === 'cheque' ? 'Ej. 001234' : metodoPago === 'transferencia' ? 'Ej. TRX-88213' : 'Ej. Recibo #45'}
+                      className={INPUT_CLASS}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Confirmación explícita */}
+            <label className={`flex items-start gap-3 rounded-xl border px-5 py-4 cursor-pointer transition-colors ${
+              confirmoRevision
+                ? 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-950/20'
+                : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+            }`}>
+              <input
+                type="checkbox" checked={confirmoRevision} onChange={e => setConfirmoRevision(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-zinc-300 dark:border-[#252840] text-emerald-600 focus:ring-emerald-500/30"
+              />
+              <div>
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                  <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  He revisado y confirmo que estos montos son correctos
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Al registrar la salida, el empleado pasará a inactivo en todo el sistema y se generará la planilla de liquidación para firma.
+                </p>
+              </div>
+            </label>
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors"
+              >
+                <Download className="h-4 w-4" /> Exportar Borrador (Excel)
+              </button>
+              <button
+                onClick={() => setConfirmFinalizar(true)}
+                disabled={!metodoPago || !confirmoRevision}
+                className={`${BTN_PRIMARY} disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-sm`}
+              >
+                <CheckCircle2 className="h-4 w-4" /> Registrar Salida Definitiva
+              </button>
+            </div>
+          </>
         )}
 
-        {/* ── Placeholder when nothing selected ────────────────────────── */}
-        {!emp && (
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-6 py-12 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-zinc-100 dark:bg-[#1a1d2e]">
-              <UserMinus className="h-7 w-7 text-zinc-400 dark:text-zinc-500" />
+        {/* ══════════════════════ ÉXITO ══════════════════════════════════ */}
+        {paso === 'exito' && ultimaLiquidacion && (
+          <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
+            <div className="bg-emerald-50 dark:bg-emerald-950/20 px-6 py-8 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/40">
+                <PartyPopper className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <p className="mt-4 text-lg font-bold text-zinc-900 dark:text-zinc-100">Liquidación registrada exitosamente</p>
+              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                {fullName(ultimaLiquidacion.empleado)} fue marcado(a) como inactivo(a) — total pagado{' '}
+                <strong className="text-zinc-700 dark:text-zinc-300">{formatRD(ultimaLiquidacion.liquidacion.totalPagado, 2)}</strong>
+              </p>
             </div>
-            <p className="mt-4 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-              Seleccione un empleado para calcular su liquidación
-            </p>
-            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-              Cesantía · Preaviso · Vacaciones no gozadas · Regalía proporcional
-            </p>
+            <div className="px-6 py-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => descargarPlanillaLiquidacionPDF(ultimaLiquidacion.liquidacion, ultimaLiquidacion.empleado, empresa)}
+                className={BTN_PRIMARY}
+              >
+                <Printer className="h-4 w-4" /> Descargar Planilla de Liquidación (PDF)
+              </button>
+              <button
+                onClick={handleRegistrarOtra}
+                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-4 py-2.5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                Registrar Otra Liquidación
+              </button>
+            </div>
+            <div className="border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4 text-center">
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                La planilla incluye el desglose completo del cálculo, el método de pago y las líneas de firma para
+                empleado y empleador.
+              </p>
+            </div>
           </div>
         )}
 
@@ -1010,8 +1381,7 @@ export default function LiquidacionPage() {
                 onClick={handleExportHistorial}
                 className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] hover:border-[#1B2980] dark:hover:border-indigo-500 transition-colors"
               >
-                <Download className="h-3.5 w-3.5" />
-                Exportar Excel
+                <Download className="h-3.5 w-3.5" /> Exportar Excel
               </button>
             )}
           </div>
@@ -1023,12 +1393,13 @@ export default function LiquidacionPage() {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fecha Terminación</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Motivo</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Pagado</th>
+                  <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {liquidacionesOrdenadas.length === 0 && (
                   <tr>
-                    <td colSpan={4}>
+                    <td colSpan={5}>
                       <div className="flex flex-col items-center justify-center py-16 text-center">
                         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
                           <History className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" />
@@ -1055,16 +1426,23 @@ export default function LiquidacionPage() {
                           <span className="text-zinc-400 dark:text-zinc-500 text-xs">Empleado eliminado</span>
                         )}
                       </td>
-                      <td className="px-4 py-3.5 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">
-                        {formatDate(l.fechaTerminacion)}
-                      </td>
+                      <td className="px-4 py-3.5 text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">{formatDate(l.fechaTerminacion)}</td>
                       <td className="px-4 py-3.5">
                         <span className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
                           {MOTIVO_LABELS[l.motivo]}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
-                        {formatRD(l.totalPagado, 2)}
+                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(l.totalPagado, 2)}</td>
+                      <td className="px-4 py-3.5 text-right">
+                        {empL && l.desgloseCalculo && (
+                          <button
+                            onClick={() => descargarPlanillaLiquidacionPDF(l, empL, empresa)}
+                            title="Descargar planilla de liquidación (PDF)"
+                            className="rounded-lg p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-[#1B2980] dark:hover:text-indigo-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] transition-colors"
+                          >
+                            <Printer className="h-4 w-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )
@@ -1076,9 +1454,8 @@ export default function LiquidacionPage() {
                     <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">
                       TOTAL — {liquidacionesOrdenadas.length} liquidación(es)
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
-                      {formatRD(totalPagadoGeneral, 2)}
-                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">{formatRD(totalPagadoGeneral, 2)}</td>
+                    <td />
                   </tr>
                 </tfoot>
               )}
@@ -1089,17 +1466,17 @@ export default function LiquidacionPage() {
       </div>
 
       {/* ── Confirm finalizar dialog ───────────────────────────────────── */}
-      {confirmFinalizar && emp && resultado && (
+      {confirmFinalizar && emp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-backdrop-in">
           <div className="mx-4 w-full max-w-sm rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 shadow-2xl animate-modal-in">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">¿Finalizar liquidación?</p>
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">¿Registrar salida definitiva?</p>
                 <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                   Esto registrará la liquidación de <span className="font-medium text-zinc-700 dark:text-zinc-300">{fullName(emp)}</span> por
-                  {' '}{formatRD(resultado.total, 2)} y marcará al empleado como inactivo en todo el sistema
-                  (nómina, dashboard y reportes). Esta acción no se puede deshacer.
+                  {' '}{formatRD(totalFinal, 2)} (pago vía {metodoPago && METODO_PAGO_LABELS[metodoPago]}) y marcará al empleado como
+                  inactivo en todo el sistema (nómina, dashboard y reportes). Esta acción no se puede deshacer.
                 </p>
               </div>
             </div>
@@ -1110,11 +1487,8 @@ export default function LiquidacionPage() {
               >
                 Cancelar
               </button>
-              <button
-                onClick={handleFinalizarLiquidacion}
-                className="rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors"
-              >
-                Sí, finalizar
+              <button onClick={handleFinalizarLiquidacion} className="rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-medium text-white hover:bg-[#151f66] transition-colors">
+                Sí, registrar salida
               </button>
             </div>
           </div>

@@ -376,25 +376,49 @@ export function aplicarSaldoISRFavor(
   }
 }
 
+// ─── Desglose del cálculo de una prestación (días × tarifa = total) ─────────
+// Expone el detalle intermedio del cálculo (no solo el monto final) para que
+// la UI de Liquidación pueda mostrarle al usuario de dónde salió cada cifra
+// — el mismo principio que ya se documenta en cada tramo legal de abajo,
+// ahora como datos estructurados en vez de solo comentarios.
+export interface DetalleTramoPrestacion {
+  dias: number
+  tarifaDiaria: number
+  total: number
+  tramo: string   // descripción legible del tramo aplicado, ej. "5+ años — 23 días × 5 año(s) completo(s)"
+}
+
 // ─── Cesantía (Art. 80, Código de Trabajo Ley 16-92) ─────────────────────────
 // Salario diario = salario mensual ÷ divisor laboral (23.83 ordinario, 26
 // régimen intermitente) — NO ÷30 días calendario. Usa getDivisorSalarioDiario().
+export function calcularCesantiaDetalle(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): DetalleTramoPrestacion {
+  const tarifaDiaria = salarioMensual / divisor
+  if (anosServicio < 0.25) return { dias: 0, tarifaDiaria, total: 0, tramo: 'Menos de 3 meses de servicio — no genera cesantía' }
+  if (anosServicio < 0.5)  return { dias: 6, tarifaDiaria, total: tarifaDiaria * 6, tramo: '3–6 meses de servicio — 6 días' }
+  if (anosServicio < 1)    return { dias: 13, tarifaDiaria, total: tarifaDiaria * 13, tramo: '6–12 meses de servicio — 13 días' }
+  if (anosServicio < 5) {
+    const anios = Math.floor(anosServicio)
+    return { dias: 21 * anios, tarifaDiaria, total: tarifaDiaria * 21 * anios, tramo: `1–5 años — 21 días × ${anios} año(s) completo(s)` }
+  }
+  const anios = Math.floor(anosServicio)
+  return { dias: 23 * anios, tarifaDiaria, total: tarifaDiaria * 23 * anios, tramo: `5+ años — 23 días × ${anios} año(s) completo(s)` }
+}
+
 export function calcularCesantia(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): number {
-  const salarioDiario = salarioMensual / divisor
-  if (anosServicio < 0.25) return 0
-  if (anosServicio < 0.5)  return salarioDiario * 6                          // 3–6 meses: 6 días
-  if (anosServicio < 1)    return salarioDiario * 13                         // 6–12 meses: 13 días
-  if (anosServicio < 5)    return salarioDiario * 21 * Math.floor(anosServicio) // 1–5 años: 21 días/año
-  return salarioDiario * 23 * Math.floor(anosServicio)                      // 5+ años: 23 días/año
+  return calcularCesantiaDetalle(salarioMensual, anosServicio, divisor).total
 }
 
 // ─── Preaviso (Art. 76, Código de Trabajo) ───────────────────────────────────
+export function calcularPreavisoDetalle(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): DetalleTramoPrestacion {
+  const tarifaDiaria = salarioMensual / divisor
+  if (anosServicio < 0.25) return { dias: 0, tarifaDiaria, total: 0, tramo: 'Menos de 3 meses de servicio — no genera preaviso' }
+  if (anosServicio < 0.5)  return { dias: 7, tarifaDiaria, total: tarifaDiaria * 7, tramo: '3–6 meses de servicio — 7 días' }
+  if (anosServicio < 1)    return { dias: 14, tarifaDiaria, total: tarifaDiaria * 14, tramo: '6–12 meses de servicio — 14 días' }
+  return { dias: 28, tarifaDiaria, total: tarifaDiaria * 28, tramo: '12+ meses de servicio — 28 días fijo' }
+}
+
 export function calcularPreaviso(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): number {
-  const salarioDiario = salarioMensual / divisor
-  if (anosServicio < 0.25) return 0
-  if (anosServicio < 0.5)  return salarioDiario * 7   // 3–6 meses: 7 días
-  if (anosServicio < 1)    return salarioDiario * 14  // 6–12 meses: 14 días
-  return salarioDiario * 28                           // 12+ meses: 28 días fijo
+  return calcularPreavisoDetalle(salarioMensual, anosServicio, divisor).total
 }
 
 // Mismos tramos de calcularPreaviso, pero como días exigidos (no monto en
@@ -495,11 +519,11 @@ export function getMesesServicio(fechaIngreso: string): number {
 // Distinta de la cesantía: aplica en terminación de contratos por tiempo
 // determinado/obra, o en casos de terminación sin responsabilidad de las partes.
 // Salario diario = salario mensual ÷ divisor laboral (23.83/26), no ÷30.
-export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): number {
-  const salarioDiario = salarioMensual / divisor
-  if (anosServicio < 0.25) return 0                              // < 3 meses: no aplica
-  if (anosServicio < 0.5)  return salarioDiario * 5              // 3–6 meses: 5 días
-  if (anosServicio < 1)    return salarioDiario * 10             // 6–12 meses: 10 días
+export function calcularAsistenciaEconomicaDetalle(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): DetalleTramoPrestacion {
+  const tarifaDiaria = salarioMensual / divisor
+  if (anosServicio < 0.25) return { dias: 0, tarifaDiaria, total: 0, tramo: 'Menos de 3 meses de servicio — no aplica' }
+  if (anosServicio < 0.5)  return { dias: 5, tarifaDiaria, total: tarifaDiaria * 5, tramo: '3–6 meses de servicio — 5 días' }
+  if (anosServicio < 1)    return { dias: 10, tarifaDiaria, total: tarifaDiaria * 10, tramo: '6–12 meses de servicio — 10 días' }
 
   // 12+ meses: 15 días por cada año cumplido, más los días proporcionales
   // de los meses del año en curso al momento de otorgarla (acumulativo).
@@ -507,7 +531,15 @@ export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio
   const mesesAnioEnCurso    = Math.floor((anosServicio - aniosCompletos) * 12)
   const diasPorAniosCompletos = aniosCompletos * 15
   const diasProporcionales    = (15 / 12) * mesesAnioEnCurso
-  return salarioDiario * (diasPorAniosCompletos + diasProporcionales)
+  const dias = diasPorAniosCompletos + diasProporcionales
+  return {
+    dias, tarifaDiaria, total: tarifaDiaria * dias,
+    tramo: `12+ meses — 15 días × ${aniosCompletos} año(s) completo(s) + proporcional de ${mesesAnioEnCurso} mes(es) del año en curso`,
+  }
+}
+
+export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio: number, divisor: number = DIVISOR_DIA_ORDINARIO): number {
+  return calcularAsistenciaEconomicaDetalle(salarioMensual, anosServicio, divisor).total
 }
 
 // ─── Helpers de agregación de períodos (compartidos entre Reportería y Liquidación) ─
