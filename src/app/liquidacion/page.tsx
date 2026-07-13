@@ -18,9 +18,9 @@ import {
 import { formatRD, formatNum, formatDate, formatAnosServicio, formatCedula, fullName, BTN_PRIMARY } from '@/lib/utils'
 import type { Empleado, Empresa, MotivoLiquidacion, ConceptoLiquidacion, DesgloseConceptoLiquidacion, RegistroLiquidacion } from '@/types'
 import {
-  Download, FileText, UserMinus, Briefcase, Building2, CalendarDays, Banknote, HandCoins,
-  AlertTriangle, History, Info, CheckCircle2, XCircle, Clock, Pencil, RotateCcw,
-  ArrowRight, ArrowLeft, Wallet, Landmark, ShieldCheck, PartyPopper, Printer,
+  Download, FileText, UserMinus, CalendarDays, Banknote, HandCoins,
+  AlertTriangle, History, Info, CheckCircle2, XCircle, Clock, Pencil,
+  ArrowRight, ArrowLeft, Wallet, Landmark, ShieldCheck, PartyPopper, Printer, Calculator,
 } from 'lucide-react'
 
 type Motivo = MotivoLiquidacion
@@ -276,12 +276,19 @@ function descargarPlanillaLiquidacionPDF(liquidacion: RegistroLiquidacion, emple
 // Cada concepto (Cesantía, Preaviso, etc.) muestra su fórmula completa y
 // permite sobrescribir el monto a mano — el sistema sigue mostrando el valor
 // calculado como referencia, pero el usuario decide el monto final, con un
-// motivo obligatorio que queda impreso en la planilla de firma.
+// motivo obligatorio que queda impreso en la planilla de firma. Lenguaje
+// visual propio de este módulo (no imitado de Préstamos/Reportería):
+// insignia con degradado + halo por concepto, tarjeta con lift al hover y
+// sombra teñida, y la fórmula presentada como panel con tinte de color en
+// vez de texto gris suelto.
 interface ColoresConcepto {
   border: string
-  bgIcon: string
-  textIcon: string
   text: string
+  panelBg: string
+  gradFrom: string
+  gradTo: string
+  halo: string
+  hoverShadow: string
 }
 
 function ConceptoLiquidacionCard({
@@ -315,46 +322,55 @@ function ConceptoLiquidacionCard({
   }
 
   return (
-    <div className={`rounded-xl border ${colores.border} bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden`}>
+    <div className={`group relative rounded-2xl border ${colores.border} bg-white dark:bg-[#141722] shadow-sm dark:shadow-none ${colores.hoverShadow} hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 overflow-hidden`}>
       <div className="p-5">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className={`text-xs font-semibold uppercase tracking-wide ${colores.text}`}>{titulo}</p>
-            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">{articulo}</p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative shrink-0">
+              <div className={`absolute inset-0 rounded-2xl ${colores.halo} blur-md opacity-30 group-hover:opacity-50 transition-opacity`} />
+              <div
+                className="relative flex h-10 w-10 items-center justify-center rounded-2xl text-white shadow-md"
+                style={{ backgroundImage: `linear-gradient(135deg, ${colores.gradFrom}, ${colores.gradTo})` }}
+              >
+                <Icon className="h-4.5 w-4.5" />
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className={`text-xs font-bold uppercase tracking-wide ${colores.text}`}>{titulo}</p>
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">{articulo}</p>
+            </div>
           </div>
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${colores.bgIcon} ${colores.textIcon}`}>
-            <Icon className="h-4 w-4" />
-          </div>
+          {!editando && (
+            <button
+              onClick={iniciarEdicion}
+              title={override ? 'Editar ajuste' : 'Ajustar manualmente'}
+              className="shrink-0 rounded-lg p-1.5 text-zinc-300 dark:text-zinc-600 opacity-0 group-hover:opacity-100 hover:!text-[#1B2980] dark:hover:!text-indigo-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] transition-all"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
         {!editando ? (
           <>
             <p className={`mt-3 text-2xl font-bold tabular-nums ${colores.text}`}>{formatRD(montoFinal, 2)}</p>
             {detalle.length > 0 && (
-              <div className="mt-2 space-y-0.5">
+              <div className={`mt-3 rounded-lg ${colores.panelBg} px-3 py-2 space-y-0.5`}>
                 {detalle.map((linea, i) => (
-                  <p key={i} className="text-[10.5px] leading-snug text-zinc-400 dark:text-zinc-500">{linea}</p>
+                  <p key={i} className="text-[10.5px] leading-snug text-zinc-600 dark:text-zinc-400 tabular-nums">{linea}</p>
                 ))}
               </div>
             )}
             {override && (
-              <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 px-2 py-1.5">
-                <Pencil className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <p className="text-[10.5px] leading-snug text-amber-700 dark:text-amber-400">
-                  Ajustado de {formatRD(montoAuto, 2)} — {override.motivo}
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-amber-50 dark:bg-amber-950/20 px-2.5 py-1.5">
+                <p className="flex items-start gap-1.5 text-[10.5px] leading-snug text-amber-700 dark:text-amber-400">
+                  <Pencil className="h-3 w-3 shrink-0 mt-0.5" /> Ajustado de {formatRD(montoAuto, 2)} — {override.motivo}
                 </p>
+                <button onClick={onQuitar} className="shrink-0 text-[10.5px] font-semibold text-amber-700 dark:text-amber-400 hover:underline">
+                  Restaurar
+                </button>
               </div>
             )}
-            <div className="mt-3 flex items-center gap-3">
-              <button onClick={iniciarEdicion} className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-[#1B2980] dark:hover:text-indigo-400 transition-colors">
-                <Pencil className="h-3 w-3" /> {override ? 'Editar ajuste' : 'Ajustar manualmente'}
-              </button>
-              {override && (
-                <button onClick={onQuitar} className="flex items-center gap-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors">
-                  <RotateCcw className="h-3 w-3" /> Restaurar cálculo
-                </button>
-              )}
-            </div>
           </>
         ) : (
           <div className="mt-3 space-y-2.5">
@@ -551,7 +567,11 @@ export default function LiquidacionPage() {
     (resultado && emp) ? {
       cesantia: {
         titulo: 'Cesantía', articulo: 'Art. 80 — Código de Trabajo',
-        colores: { border: 'border-rose-200 dark:border-rose-800/40', bgIcon: 'bg-rose-50 dark:bg-rose-950/40', textIcon: 'text-rose-500 dark:text-rose-400', text: 'text-rose-700 dark:text-rose-300' },
+        colores: {
+          border: 'border-rose-200 dark:border-rose-800/40', text: 'text-rose-700 dark:text-rose-300',
+          panelBg: 'bg-rose-50/70 dark:bg-rose-950/20', gradFrom: '#e11d48', gradTo: '#fb7185',
+          halo: 'bg-rose-500', hoverShadow: 'hover:shadow-rose-500/10',
+        },
         Icon: UserMinus,
         montoAuto: resultado.cesantia,
         detalle: [
@@ -561,7 +581,11 @@ export default function LiquidacionPage() {
       },
       preaviso: {
         titulo: 'Preaviso', articulo: 'Art. 76 — Código de Trabajo',
-        colores: { border: 'border-amber-200 dark:border-amber-800/40', bgIcon: 'bg-amber-50 dark:bg-amber-950/40', textIcon: 'text-amber-500 dark:text-amber-400', text: 'text-amber-700 dark:text-amber-300' },
+        colores: {
+          border: 'border-amber-200 dark:border-amber-800/40', text: 'text-amber-700 dark:text-amber-300',
+          panelBg: 'bg-amber-50/70 dark:bg-amber-950/20', gradFrom: '#d97706', gradTo: '#fbbf24',
+          halo: 'bg-amber-500', hoverShadow: 'hover:shadow-amber-500/10',
+        },
         Icon: CalendarDays,
         montoAuto: resultado.preaviso,
         detalle: [
@@ -571,7 +595,11 @@ export default function LiquidacionPage() {
       },
       asistenciaEconomica: {
         titulo: 'Asistencia Económica', articulo: 'Art. 82 — Código de Trabajo',
-        colores: { border: 'border-violet-200 dark:border-violet-800/40', bgIcon: 'bg-violet-50 dark:bg-violet-950/40', textIcon: 'text-violet-500 dark:text-violet-400', text: 'text-violet-700 dark:text-violet-300' },
+        colores: {
+          border: 'border-violet-200 dark:border-violet-800/40', text: 'text-violet-700 dark:text-violet-300',
+          panelBg: 'bg-violet-50/70 dark:bg-violet-950/20', gradFrom: '#7c3aed', gradTo: '#a78bfa',
+          halo: 'bg-violet-500', hoverShadow: 'hover:shadow-violet-500/10',
+        },
         Icon: HandCoins,
         montoAuto: resultado.asistenciaEconomica,
         detalle: [
@@ -581,7 +609,11 @@ export default function LiquidacionPage() {
       },
       vacaciones: {
         titulo: 'Vacaciones No Gozadas', articulo: 'Art. 177 — Código de Trabajo',
-        colores: { border: 'border-sky-200 dark:border-sky-800/40', bgIcon: 'bg-sky-50 dark:bg-sky-950/40', textIcon: 'text-sky-500 dark:text-sky-400', text: 'text-sky-700 dark:text-sky-300' },
+        colores: {
+          border: 'border-sky-200 dark:border-sky-800/40', text: 'text-sky-700 dark:text-sky-300',
+          panelBg: 'bg-sky-50/70 dark:bg-sky-950/20', gradFrom: '#0284c7', gradTo: '#38bdf8',
+          halo: 'bg-sky-500', hoverShadow: 'hover:shadow-sky-500/10',
+        },
         Icon: CalendarDays,
         montoAuto: resultado.vacaciones,
         detalle: [
@@ -591,7 +623,11 @@ export default function LiquidacionPage() {
       },
       regalia: {
         titulo: 'Regalía Proporcional', articulo: 'Art. 219 — Código de Trabajo',
-        colores: { border: 'border-emerald-200 dark:border-emerald-800/40', bgIcon: 'bg-emerald-50 dark:bg-emerald-950/40', textIcon: 'text-emerald-500 dark:text-emerald-400', text: 'text-emerald-700 dark:text-emerald-300' },
+        colores: {
+          border: 'border-emerald-200 dark:border-emerald-800/40', text: 'text-emerald-700 dark:text-emerald-300',
+          panelBg: 'bg-emerald-50/70 dark:bg-emerald-950/20', gradFrom: '#059669', gradTo: '#34d399',
+          halo: 'bg-emerald-500', hoverShadow: 'hover:shadow-emerald-500/10',
+        },
         Icon: Banknote,
         montoAuto: resultado.regalia,
         detalle: [
@@ -601,7 +637,11 @@ export default function LiquidacionPage() {
       },
       diasTrabajados: {
         titulo: 'Días Trabajados Pendientes', articulo: 'Salario ordinario — con AFP/SFS/ISR',
-        colores: { border: 'border-indigo-200 dark:border-indigo-800/40', bgIcon: 'bg-indigo-50 dark:bg-indigo-950/40', textIcon: 'text-indigo-500 dark:text-indigo-400', text: 'text-indigo-700 dark:text-indigo-300' },
+        colores: {
+          border: 'border-indigo-200 dark:border-indigo-800/40', text: 'text-indigo-700 dark:text-indigo-300',
+          panelBg: 'bg-indigo-50/70 dark:bg-indigo-950/20', gradFrom: '#4338ca', gradTo: '#818cf8',
+          halo: 'bg-indigo-500', hoverShadow: 'hover:shadow-indigo-500/10',
+        },
         Icon: Clock,
         montoAuto: resultado.salarioDiasTrabajadosNeto,
         detalle: resultado.diasTrabajadosPendientes > 0
@@ -829,26 +869,35 @@ export default function LiquidacionPage() {
 
         {/* ── Indicador de pasos ────────────────────────────────────────── */}
         {(paso !== 1 || emp) && (
-          <div className="flex items-center gap-2">
-            {([1, 2, 3] as const).map((n, i) => (
-              <div key={n} className="flex items-center gap-2 flex-1">
-                <div className={`flex items-center gap-2 ${i > 0 ? 'flex-1' : ''}`}>
-                  {i > 0 && <div className={`h-0.5 flex-1 ${pasoNumero > i ? 'bg-[#1B2980] dark:bg-indigo-500' : 'bg-zinc-200 dark:bg-[#252840]'}`} />}
-                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors ${
-                    pasoNumero === n
-                      ? 'bg-[#1B2980] dark:bg-indigo-500 text-white'
-                      : pasoNumero > n
-                      ? 'bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400 ring-1 ring-inset ring-[#1B2980]/30 dark:ring-indigo-500/30'
-                      : 'bg-zinc-100 dark:bg-[#1a1d2e] text-zinc-400 dark:text-zinc-500'
-                  }`}>
-                    {pasoNumero > n ? <CheckCircle2 className="h-4 w-4" /> : n}
+          <div className="rounded-2xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none px-5 py-4">
+            <div className="flex items-center gap-2">
+              {([1, 2, 3] as const).map((n, i) => {
+                const StepIcon = n === 1 ? UserMinus : n === 2 ? Calculator : Wallet
+                return (
+                  <div key={n} className="flex items-center gap-2 flex-1">
+                    <div className={`flex items-center gap-2 ${i > 0 ? 'flex-1' : ''}`}>
+                      {i > 0 && (
+                        <div className="relative h-0.5 flex-1 rounded-full bg-zinc-200 dark:bg-[#252840] overflow-hidden">
+                          <div className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#1B2980] to-[#2f3fa8] dark:from-indigo-500 dark:to-indigo-400 transition-all duration-500 ${pasoNumero > i ? 'w-full' : 'w-0'}`} />
+                        </div>
+                      )}
+                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all duration-200 ${
+                        pasoNumero === n
+                          ? 'bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] dark:from-indigo-500 dark:to-indigo-400 text-white shadow-md shadow-[#1B2980]/30 scale-105'
+                          : pasoNumero > n
+                          ? 'bg-[#eef0fb] dark:bg-indigo-950/40 text-[#1B2980] dark:text-indigo-400 ring-1 ring-inset ring-[#1B2980]/30 dark:ring-indigo-500/30'
+                          : 'bg-zinc-100 dark:bg-[#1a1d2e] text-zinc-400 dark:text-zinc-500'
+                      }`}>
+                        {pasoNumero > n ? <CheckCircle2 className="h-4 w-4" /> : <StepIcon className="h-4 w-4" />}
+                      </div>
+                    </div>
+                    <span className={`text-xs font-medium hidden sm:block ${pasoNumero === n ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                      {n === 1 ? 'Datos de Terminación' : n === 2 ? 'Cálculo de Prestaciones' : 'Confirmación y Pago'}
+                    </span>
                   </div>
-                </div>
-                <span className={`text-xs font-medium hidden sm:block ${pasoNumero === n ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-400 dark:text-zinc-500'}`}>
-                  {n === 1 ? 'Datos de Terminación' : n === 2 ? 'Cálculo de Prestaciones' : 'Confirmación y Pago'}
-                </span>
-              </div>
-            ))}
+                )
+              })}
+            </div>
           </div>
         )}
 
@@ -979,57 +1028,54 @@ export default function LiquidacionPage() {
               </div>
             </div>
 
+            {/* Tarjeta "timeline" — la relación laboral como recorrido, no
+                como una simple grilla de datos. Único en este módulo: dado
+                que Liquidación trata literalmente del fin de un recorrido
+                (ingreso → salida), visualizarlo como línea de tiempo es más
+                elocuente que otro grid de estadísticas como en el resto de
+                la app. */}
             {emp && (
-              <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-                <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Datos del Empleado</h2>
-                </div>
-                <div className="px-5 py-4">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold text-white" style={{ backgroundColor: '#1B2980' }}>
-                      {emp.nombre[0]}{emp.apellido[0]}
+              <div className="relative rounded-2xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
+                <div className="px-6 py-6">
+                  <div className="flex items-center gap-4">
+                    <div className="relative shrink-0">
+                      <div className="absolute inset-0 rounded-2xl bg-[#1B2980] blur-lg opacity-30" />
+                      <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#1B2980] to-[#2f3fa8] text-base font-bold text-white shadow-lg shadow-[#1B2980]/30">
+                        {emp.nombre[0]}{emp.apellido[0]}
+                      </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{fullName(emp)}</p>
-                      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div className="flex items-center gap-2">
-                          <Briefcase className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                          <div>
-                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Cargo</p>
-                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{emp.cargo}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Building2 className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                          <div>
-                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Departamento</p>
-                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{emp.departamento}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <CalendarDays className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                          <div>
-                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Fecha Ingreso</p>
-                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{formatDate(emp.fechaIngreso)}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Banknote className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500 shrink-0" />
-                          <div>
-                            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Salario Base</p>
-                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{formatRD(emp.salarioBase)}</p>
-                          </div>
-                        </div>
+                      <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 truncate">{fullName(emp)}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">{emp.cargo} · {emp.departamento}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Salario Base</p>
+                      <p className="text-lg font-bold tabular-nums text-zinc-900 dark:text-zinc-100">{formatRD(emp.salarioBase)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-7">
+                    <div className="flex items-center gap-3">
+                      <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#1B2980] dark:bg-indigo-400 ring-4 ring-[#eef0fb] dark:ring-indigo-950/40" />
+                      <div className="relative h-1 flex-1 rounded-full bg-gradient-to-r from-[#1B2980] to-rose-400 dark:from-indigo-500 dark:to-rose-500">
+                        {resultado && (
+                          <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#eef0fb] dark:bg-indigo-950/40 px-3 py-1 text-xs font-bold text-[#1B2980] dark:text-indigo-300 ring-1 ring-inset ring-[#1B2980]/20 dark:ring-indigo-500/30">
+                            {formatAnosServicio(resultado.anosServicio)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-rose-500 ring-4 ring-rose-50 dark:ring-rose-950/30" />
+                    </div>
+                    <div className="mt-2.5 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">{formatDate(emp.fechaIngreso)}</p>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Ingreso</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-rose-600 dark:text-rose-400">{formatDate(fechaTerminacion)}</p>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500 uppercase tracking-wide">Salida</p>
                       </div>
                     </div>
-                    {resultado && (
-                      <div className="shrink-0 rounded-lg bg-[#eef0fb] dark:bg-indigo-950/40 px-3 py-2 text-center">
-                        <p className="text-xs font-semibold text-[#1B2980] dark:text-indigo-400">Antigüedad</p>
-                        <p className="text-sm font-bold text-[#1B2980] dark:text-indigo-300 mt-0.5 whitespace-nowrap">
-                          {formatAnosServicio(resultado.anosServicio)}
-                        </p>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -1128,14 +1174,17 @@ export default function LiquidacionPage() {
               })}
 
               {resultado.saldoISR > 0 && (
-                <div className="rounded-xl border border-teal-200 dark:border-teal-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none p-5">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">Saldo ISR a Favor</p>
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">ISR retenido de más — se reembolsa, no es editable</p>
+                <div className="group relative rounded-2xl border border-teal-200 dark:border-teal-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none hover:shadow-lg hover:shadow-teal-500/10 hover:-translate-y-0.5 transition-all duration-200 overflow-hidden p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="relative shrink-0">
+                      <div className="absolute inset-0 rounded-2xl bg-teal-500 blur-md opacity-30 group-hover:opacity-50 transition-opacity" />
+                      <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl text-white shadow-md" style={{ backgroundImage: 'linear-gradient(135deg, #0d9488, #5eead4)' }}>
+                        <Banknote className="h-4.5 w-4.5" />
+                      </div>
                     </div>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/40 text-teal-500 dark:text-teal-400">
-                      <Banknote className="h-4 w-4" />
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wide text-teal-700 dark:text-teal-300">Saldo ISR a Favor</p>
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5">ISR retenido de más — se reembolsa, no es editable</p>
                     </div>
                   </div>
                   <p className="mt-3 text-2xl font-bold tabular-nums text-teal-700 dark:text-teal-300">{formatRD(resultado.saldoISR, 2)}</p>
@@ -1210,8 +1259,11 @@ export default function LiquidacionPage() {
               </button>
             </div>
 
-            {/* Resumen — tarjeta navy de marca, reemplaza la barra negra */}
-            <div className="rounded-xl bg-gradient-to-br from-[#1B2980] to-[#151f66] dark:from-[#151f66] dark:to-[#0d1240] text-white shadow-lg shadow-[#1B2980]/20 overflow-hidden">
+            {/* Resumen — tarjeta navy de marca con look de "recibo": una vez
+                confirmado, esto se vuelve un documento de papel real, así
+                que el corte perforado entre el total y el desglose es una
+                referencia deliberada a eso, no un capricho decorativo. */}
+            <div className="rounded-2xl bg-gradient-to-br from-[#1B2980] to-[#151f66] dark:from-[#151f66] dark:to-[#0d1240] text-white shadow-lg shadow-[#1B2980]/20 overflow-hidden">
               <div className="px-6 py-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1223,7 +1275,15 @@ export default function LiquidacionPage() {
                     <p className="text-xs text-indigo-200 mt-0.5">Pesos Dominicanos</p>
                   </div>
                 </div>
-                <div className="mt-4 border-t border-white/15 pt-4 grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+
+                {/* Perforación tipo recibo desprendible */}
+                <div className="relative -mx-6 mt-4">
+                  <div className="border-t border-dashed border-white/25" />
+                  <div className="absolute left-0 top-0 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-50 dark:bg-[#0d0f1a]" />
+                  <div className="absolute right-0 top-0 h-4 w-4 translate-x-1/2 -translate-y-1/2 rounded-full bg-zinc-50 dark:bg-[#0d0f1a]" />
+                </div>
+
+                <div className="pt-4 grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
                   {desgloseCalculo.map(d => (
                     <div key={d.concepto}>
                       <p className="text-indigo-200 uppercase tracking-wide flex items-center gap-1">
@@ -1335,10 +1395,13 @@ export default function LiquidacionPage() {
 
         {/* ══════════════════════ ÉXITO ══════════════════════════════════ */}
         {paso === 'exito' && ultimaLiquidacion && (
-          <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
+          <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800/40 bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden">
             <div className="bg-emerald-50 dark:bg-emerald-950/20 px-6 py-8 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 dark:bg-emerald-900/40">
-                <PartyPopper className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+              <div className="relative mx-auto h-16 w-16">
+                <div className="absolute inset-0 rounded-2xl bg-emerald-500 blur-lg opacity-40" />
+                <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-400 shadow-lg shadow-emerald-500/30">
+                  <PartyPopper className="h-8 w-8 text-white" />
+                </div>
               </div>
               <p className="mt-4 text-lg font-bold text-zinc-900 dark:text-zinc-100">Liquidación registrada exitosamente</p>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
