@@ -496,16 +496,18 @@ export default function NominaPage() {
     if (empresa.modalidadNomina) setNuevoTipo(empresa.modalidadNomina)
   }, [empresa.modalidadNomina])
 
-  // "Período sugerido": sigue la serie existente (o el mes/quincena actual
-  // si es el primer período) — se recalcula cada vez que cambia el tipo
-  // seleccionado o la lista de períodos (ej. tras crear uno nuevo).
+  // Pre-llena Mes/Año/Quincena con una sugerencia razonable (sigue la serie
+  // existente, o el mes actual si es el primer período) solo al cambiar la
+  // frecuencia — el usuario elige libremente el período desde ahí, así que
+  // esto NO debe recalcularse cada vez que cambia `periodos` (le pisaría la
+  // selección manual con cualquier actualización de fondo).
   useEffect(() => {
     const sugerido = sugerirProximoPeriodo(periodos, nuevoTipo)
     setNuevoMes(sugerido.mes)
     setNuevoAnio(sugerido.anio)
     setNuevaQuincena(sugerido.quincena)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodos, nuevoTipo])
+  }, [nuevoTipo])
 
   const periodoActual = periodos.find(p => p.id === periodoAbierto) ?? null
   const periodoActualLabel = periodoActual ? labelPeriodo(periodoActual) : ''
@@ -993,9 +995,6 @@ export default function NominaPage() {
       .sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime())
     const aniosPeriodos = Array.from(new Set(periodos.map(p => p.anio))).sort((a, b) => b - a)
     const hayFiltrosPeriodo = busquedaPeriodo.trim() !== '' || filtroEstadoPeriodo !== 'todos' || filtroAnioPeriodo !== 'todos'
-    const proximoLabel = nuevoTipo === 'quincenal'
-      ? `${nuevaQuincena === 1 ? '1-15' : '16-fin'} ${MESES[nuevoMes - 1]} ${nuevoAnio}`
-      : `${MESES[nuevoMes - 1]} ${nuevoAnio}`
 
     return (
       <div className="flex flex-col overflow-hidden h-full">
@@ -1003,23 +1002,17 @@ export default function NominaPage() {
 
         <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
-          {/* Período sugerido */}
+          {/* Selección de período a calcular */}
           <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none px-5 py-4">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-zinc-500 dark:text-zinc-400">Período sugerido</span>
-                <span className="rounded-full bg-[#eef0fb] dark:bg-indigo-950/40 px-3 py-1 text-xs font-semibold text-[#1B2980] dark:text-indigo-300">
-                  {proximoLabel}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-zinc-500 dark:text-zinc-400">Frecuencia de pago</span>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Frecuencia</label>
                 <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
                   {(['mensual', 'quincenal'] as TipoPeriodo[]).map(t => (
                     <button
                       key={t}
                       onClick={() => setNuevoTipo(t)}
-                      className={`px-3 py-1 text-xs font-medium transition-colors ${
+                      className={`px-4 py-1.5 text-sm font-medium transition-colors ${
                         nuevoTipo === t
                           ? 'bg-[#1B2980] text-white'
                           : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
@@ -1030,19 +1023,57 @@ export default function NominaPage() {
                   ))}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Mes</label>
+                <select
+                  value={nuevoMes}
+                  onChange={e => setNuevoMes(Number(e.target.value))}
+                  className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                >
+                  {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Año</label>
+                <select
+                  value={nuevoAnio}
+                  onChange={e => setNuevoAnio(Number(e.target.value))}
+                  className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                >
+                  {anios.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+
+              {nuevoTipo === 'quincenal' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Quincena</label>
+                  <select
+                    value={nuevaQuincena}
+                    onChange={e => setNuevaQuincena(Number(e.target.value) as 1 | 2)}
+                    className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
+                  >
+                    <option value={1}>1ª Quincena (1–15)</option>
+                    <option value={2}>2ª Quincena (16–fin)</option>
+                  </select>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pb-2">
                 <span className="text-sm text-zinc-500 dark:text-zinc-400">Empleados</span>
                 <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                   {empleadosEnNomina.length}
                 </span>
               </div>
+
               <button
                 onClick={handleCrearPeriodo}
                 disabled={empleadosEnNomina.length === 0}
-                className={cn(BTN_PRIMARY, 'ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:shadow-none')}
+                className={cn(BTN_PRIMARY, 'ml-auto self-end disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:shadow-none')}
               >
                 <Plus className="h-4 w-4" />
-                Nuevo Período de Nómina
+                Calcular Período
               </button>
             </div>
             {empleadosEnNomina.length === 0 && (
