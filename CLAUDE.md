@@ -2335,6 +2335,27 @@ año adelante del año calendario real (fijo — no se mueve si el usuario
 cambia el año seleccionado en el propio formulario, para evitar que el
 rango de opciones "se corra" cada vez que se elige un año distinto).
 
+## Favicon
+
+Pedido explícito del usuario: "hazle el Favicon al sistema". Nuevo
+`src/app/icon.svg` — usa la convención de archivo estático de Next.js App
+Router (`icon.svg` en `src/app/` se detecta automáticamente y genera el
+`<link rel="icon">` correcto con el `basePath` ya aplicado, sin tocar
+`metadata` en `layout.tsx`). Diseño: mismo isotipo del wordmark del Sidebar
+(arco de 300° + punto interior) pero con la paleta invertida — trazo/punto
+blancos sobre un cuadrado redondeado `#1B2980` (brand navy) en vez de trazo
+navy sobre fondo transparente — para que se lea bien como ícono pequeño de
+pestaña de navegador sin depender de si el fondo del navegador es claro u
+oscuro (el trazo transparente del sidebar original solo funciona porque ahí
+vive sobre el fondo blanco/oscuro ya controlado de la propia app).
+Verificado: `next build` incluye `/icon.svg` como ruta estática (0 B, sin
+JS), el HTML servido en dev trae
+`<link rel="icon" href="/tyui/icon.svg?..." type="image/svg+xml" sizes="any"/>`
+con el `basePath` correcto, y `out/icon.svg` existe en el export estático
+con el markup esperado. `tsc --noEmit` y `npm run build` limpios (19 rutas,
+sin cambio de conteo — `/icon.svg` es una ruta de asset estático, no una
+página).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
