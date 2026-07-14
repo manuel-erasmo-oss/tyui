@@ -2225,6 +2225,75 @@ las dos pantallas regresa al selector sin recargar el módulo. Sin
 historial (primer año de la empresa), se salta la prepantalla y va directo
 a la acumulación — no hay nada que elegir todavía.
 
+## Nómina dividida en Cálculo de Nómina y Gestión de Envíos
+
+Pedido del usuario, con Alegra como referencia visual explícita pero "no es
+hacerlo imitando a Alegra haciendo un copy paste, es tener una referencia":
+en Alegra, el historial de nóminas procesadas no vive en la misma pantalla
+que el período actual (tabla densa con período sugerido arriba), y "Nómina"
+se compone de "Cálculo de nómina" y "Gestión de envíos" (donde se marca el
+pago y se envían los comprobantes) como dos secciones separadas.
+
+Antes de implementar se acordaron 3 decisiones con el usuario: (1) dos
+accesos independientes en el sidebar, no un grupo desplegable; (2) reparto
+de funciones = Cálculo (crear/procesar/cerrar) vs. Envíos (marcar pagada +
+enviar comprobantes); (3) reemplazar las tarjetas de período por la tabla
+densa.
+
+- **`/nomina` → "Cálculo de Nómina"** — las tarjetas de período se
+  reemplazan por un banner de "Período sugerido" (calculado con
+  `sugerirProximoPeriodo()`, que continúa la serie existente de ese
+  tipo/quincena o usa el mes actual si es el primero) + una tabla con
+  buscador, filtro de estado y de año (columnas Período/S. Bruto/Total
+  Neto/Costo Total/Estado/acciones). Ya no tiene ninguna acción de pago o
+  envío de comprobantes.
+- **`/nomina/envios` → "Gestión de Envíos"** (ruta nueva) — lista solo los
+  períodos `cerrada`, con badge de estado de pago (Pendiente/Pagada) y la
+  acción correspondiente: "Marcar como Pagada" abre automáticamente el
+  modal de comprobantes; si ya está pagada, un botón "Comprobantes" lo
+  reabre para reenviar.
+
+**Infraestructura para soportar la separación:**
+- `src/lib/nomina-shared.ts` (nuevo) — `labelPeriodo`/`resultadoRegalia`/
+  `descargarComprobantePDF` se movieron aquí desde `nomina/page.tsx`.
+  Motivo: Next.js prohíbe exports adicionales en un archivo `page.tsx`
+  ("X is not a valid Page export field") — error que solo aparece en
+  `next build`, no en `tsc --noEmit` — y ahora tres archivos distintos
+  (Cálculo, Envíos, el modal) necesitan estas funciones.
+- `src/components/nomina/EnvioComprobantesModal.tsx` (nuevo) — el modal de
+  envío de comprobantes (plantilla editable + envío individual/masivo) se
+  extrajo del bloque que antes vivía inline en `nomina/page.tsx`, para
+  poder reutilizarlo desde Gestión de Envíos. Bug encontrado y corregido
+  durante la extracción: la primera versión solo confiaba en
+  `resultadosPorEmpleado` (el snapshot congelado al procesar); para
+  períodos que no lo tienen (datos demo sembrados directo en localStorage,
+  o períodos anteriores a la existencia de ese campo) la tabla de
+  empleados salía completamente vacía. Fix: fallback que recalcula en vivo
+  con `calcularConPeriodo` (dominican-labor.ts), usando
+  `empleadosProcesados` como membresía si existe o `empleadosEnNomina`
+  como respaldo — mismo criterio ya usado en
+  `calcularSalarioPromedioUltimos12Meses`.
+- `src/components/layout/Sidebar.tsx` — `isActive()` ahora elige el href
+  MÁS ESPECÍFICO (más largo) que hace match con la ruta actual, en vez de
+  simplemente `pathname.startsWith(href)`. Sin este fix, "Cálculo de
+  Nómina" (`/nomina`) quedaba resaltado también estando en
+  `/nomina/envios`, por compartir el mismo prefijo de ruta.
+- `src/lib/nav-items.ts` — "Procesar Nómina" se divide en "Cálculo de
+  Nómina" y "Gestión de Envíos" como dos entradas planas del mismo array
+  (no un grupo anidado) — se propaga solo con este cambio a Sidebar,
+  BottomNav (que tiene su propia lista curada y no se vio afectado) y
+  CommandPalette (Cmd+K), sin tocar esos archivos.
+
+Verificado en navegador con Playwright: cada ítem del sidebar resalta
+únicamente su propia página (antes ambos se resaltaban a la vez estando en
+Envíos); crear un período desde "Período sugerido" sigue abriendo
+directo el detalle con los 7 empleados y las cuotas de préstamos
+pre-cargadas; Gestión de Envíos lista los 4 períodos cerrados de la demo,
+"Marcar como Pagada" mueve el badge a "Pagada" y abre el modal con los 7
+empleados y sus montos netos reales (RD$49,189.83 para María González,
+etc.) — confirmando que el fix del fallback funciona con datos demo
+sembrados sin `resultadosPorEmpleado`.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -2233,6 +2302,7 @@ a la acumulación — no hay nada que elegir todavía.
 
 | Hash | Descripción |
 |---|---|
+| `de3e2c4` | redesign: separar Nómina en Cálculo de Nómina y Gestión de Envíos |
 | `86bf00a` | fix: períodos de Regalía Pascual contaminaban Reportería/Liquidación + rediseño premium con prepantalla |
 | `252b78a` | docs: registrar en CLAUDE.md las fases pendientes y las 3 features más recientes |
 | `4c8bbab` | fix: Regalía Pascual — banner de ciclo pendiente no distinguía período cerrado |
