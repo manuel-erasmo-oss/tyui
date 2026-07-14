@@ -23,6 +23,8 @@ import {
   Filter,
   FileSpreadsheet,
   Gift,
+  Search,
+  Eye,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -37,19 +39,16 @@ import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { useFeriados } from '@/lib/feriados-context'
 import { useAuth } from '@/lib/auth-context'
-import {
-  enviarComprobante, plantillaComprobanteDeEmpresa, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
-} from '@/lib/comprobante-email'
-import type { PlantillaComprobante } from '@/lib/comprobante-email'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams, getAnosServicio } from '@/lib/dominican-labor'
 import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
-import { formatRD, fullName, formatCedula, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
-import jsPDF from 'jspdf'
+import { formatRD, fullName, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
+import { labelPeriodo, resultadoRegalia, descargarComprobantePDF } from '@/lib/nomina-shared'
 import type {
   Empleado,
   ResultadoNomina,
   PeriodoNomina,
   TipoPeriodo,
+  EstadoPeriodo,
   ParametrosNomina,
   ConceptoAjuste,
   AjusteLinea,
@@ -81,40 +80,6 @@ function formatMoneda(amountRD: number, empresa: Empresa, mostrarUSD: boolean, d
     }).format(amountRD / empresa.tasaCambioUSD)
   }
   return formatRD(amountRD, decimals)
-}
-
-function labelPeriodo(p: PeriodoNomina): string {
-  if (p.tipo === 'regalia') return `Regalía Pascual ${p.anio}`
-  const mes = MESES[p.mes - 1]
-  if (p.tipo === 'quincenal') {
-    return `${p.quincena === 1 ? '1ª' : '2ª'} Quincena · ${mes} ${p.anio}`
-  }
-  return `${mes} ${p.anio}`
-}
-
-// ── Resultado sintético para el período de Regalía Pascual ────────────────────
-// El pago de Regalía Pascual es bruto — sin AFP/SFS/ISR, igual tratamiento que
-// Vacaciones/Regalía dentro de Liquidación (no es salario cotizable) — así que
-// se representa como un ResultadoNomina con todo en cero salvo lo pagado, para
-// poder reutilizar tal cual el modal de comprobante, el PDF y el flujo de
-// envío por correo que ya existen para la nómina normal.
-function resultadoRegalia(empleadoId: string, monto: number, anosServicio: number): ResultadoNomina {
-  return {
-    empleadoId,
-    salarioBruto: monto, importeHE35: 0, importeHE100: 0, totalHorasExtras: 0, importeNocturno: 0,
-    bonificaciones: 0, comisiones: 0, ingresosPersonalizados: 0, totalBruto: monto,
-    salarioCotizable: 0,
-    afpEmpleado: 0, sfsEmpleado: 0, isrMensual: 0, sfsDependientes: 0, otrosDescuentos: 0,
-    aporteVoluntarioAFPEmpleado: 0, totalDescuentos: 0,
-    grossingUpEmpresa: 0,
-    saldoISRAplicado: 0,
-    salarioNeto: monto,
-    afpEmpleador: 0, sfsEmpleador: 0, srlEmpleador: 0, infotepEmpleador: 0,
-    aporteVoluntarioAFPEmpresa: 0, totalAportesEmpleador: 0,
-    totalCostoEmpleador: monto,
-    regaliaPascual: monto, vacacionesMensualesDias: 0, vacacionesMensualesValor: 0,
-    anosServicio,
-  }
 }
 
 function labelConcepto(concepto: ConceptoAjuste): string {
@@ -236,6 +201,25 @@ function empleadosDelPeriodo(
   return extra.length ? [...normales, ...extra] : normales
 }
 
+// Sugiere el próximo período mensual/quincenal a crear, continuando la serie
+// existente de ese tipo (ignora Regalía Pascual — es un ciclo aparte). Sin
+// períodos previos de ese tipo, sugiere el mes/quincena calendario actual.
+function sugerirProximoPeriodo(
+  periodos: PeriodoNomina[], tipo: TipoPeriodo,
+): { mes: number; anio: number; quincena: 1 | 2 } {
+  const serie = periodos
+    .filter(p => p.tipo === tipo)
+    .sort((a, b) => (b.anio * 12 + b.mes) - (a.anio * 12 + a.mes) || ((b.quincena ?? 1) - (a.quincena ?? 1)))
+  const ultimo = serie[0]
+  if (!ultimo) return { mes: hoy.getMonth() + 1, anio: hoy.getFullYear(), quincena: 1 }
+  if (tipo === 'quincenal' && ultimo.quincena === 1) {
+    return { mes: ultimo.mes, anio: ultimo.anio, quincena: 2 }
+  }
+  const mes  = ultimo.mes === 12 ? 1 : ultimo.mes + 1
+  const anio = ultimo.mes === 12 ? ultimo.anio + 1 : ultimo.anio
+  return { mes, anio, quincena: 1 }
+}
+
 // Envoltorio de conveniencia: calcula la nómina de un empleado para un
 // período específico, aplicando automáticamente el prorrateo por suspensión
 // o salida pendiente si corresponde — evita tener que acordarse de calcular
@@ -248,241 +232,6 @@ function calcularParaPeriodo(
   const dias = diasSuspensionEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasSalidaEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
   return calcularConAjustes(empleado, ajustes, periodo.tipo, quincena, dias)
-}
-
-// ── Comprobante PDF ───────────────────────────────────────────────────────────
-function descargarComprobantePDF(
-  empleado: Empleado,
-  nomina: ResultadoNomina,
-  label: string,
-  empresa: Empresa,
-) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const W = 210
-  const NR = 27, NG = 41, NB = 128
-  const LINE_GRAY: [number, number, number] = [228, 228, 231]
-
-  // Header bar — navy con un filo más claro para dar profundidad de marca
-  doc.setFillColor(NR, NG, NB)
-  doc.rect(0, 0, W, 28, 'F')
-  doc.setFillColor(47, 63, 168)
-  doc.rect(0, 27, W, 1, 'F')
-
-  let tX = 14
-  if (empresa.logo) {
-    try {
-      const fmt = empresa.logo.startsWith('data:image/png') ? 'PNG' : 'JPEG'
-      doc.addImage(empresa.logo, fmt, 14, 5, 18, 18)
-      tX = 36
-    } catch {}
-  }
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(12)
-  doc.setFont('helvetica', 'bold')
-  doc.text(empresa.nombre || 'Empresa', tX, 12)
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(210, 214, 240)
-  doc.text(`RNC: ${empresa.rnc || '—'}  ·  ${empresa.ciudad || 'República Dominicana'}`, tX, 18)
-  doc.setTextColor(255, 255, 255)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.text('COMPROBANTE DE NÓMINA', W - 14, 12, { align: 'right' })
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(210, 214, 240)
-  doc.text(label, W - 14, 18, { align: 'right' })
-  doc.text(`Emitido: ${new Date().toLocaleDateString('es-DO')}`, W - 14, 23, { align: 'right' })
-
-  // Employee info — tarjeta con fondo tenue en vez de texto suelto
-  let y = 36
-  doc.setFillColor(250, 250, 251)
-  doc.setDrawColor(...LINE_GRAY)
-  doc.roundedRect(14, y, W - 28, 22, 2, 2, 'FD')
-  y += 8
-  doc.setTextColor(NR, NG, NB)
-  doc.setFontSize(12.5)
-  doc.setFont('helvetica', 'bold')
-  doc.text(fullName(empleado), 20, y)
-  y += 5.5
-  doc.setFontSize(7.8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(110, 110, 116)
-  doc.text(`${empleado.cargo}  ·  ${empleado.departamento}  ·  Cédula: ${formatCedula(empleado.cedula)}`, 20, y)
-  y += 4.5
-  doc.text(`Ingreso: ${formatDate(empleado.fechaIngreso)}  ·  Salario base: ${formatRD(empleado.salarioBase)}`, 20, y)
-  y += 10
-
-  // Two columns
-  const colW = (W - 32) / 2
-  const c2 = 14 + colW + 4
-
-  const chip = (rgb: [number, number, number], text: string, x: number) => {
-    doc.setFillColor(...rgb)
-    doc.roundedRect(x, y - 3.2, 2.4, 2.4, 0.6, 0.6, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    doc.setTextColor(...rgb)
-    doc.text(text, x + 4, y)
-  }
-  chip([16, 185, 129], 'DEVENGOS', 14)
-  chip([220, 38, 38], 'DESCUENTOS', c2)
-  y += 5
-
-  const devengos = [
-    { label: 'Salario Básico', v: nomina.salarioBruto },
-    ...(nomina.importeHE35   > 0 ? [{ label: 'H.E. 35% Recargo',  v: nomina.importeHE35 }]   : []),
-    ...(nomina.importeHE100  > 0 ? [{ label: 'H.E. 100% Recargo', v: nomina.importeHE100 }]  : []),
-    ...(nomina.importeNocturno > 0 ? [{ label: 'Recargo Nocturno (15%)', v: nomina.importeNocturno }] : []),
-    ...(nomina.bonificaciones > 0 ? [{ label: 'Bonificaciones',    v: nomina.bonificaciones }] : []),
-    ...(nomina.comisiones     > 0 ? [{ label: 'Comisiones',        v: nomina.comisiones }]     : []),
-    ...(nomina.ingresosPersonalizados > 0 ? [{ label: 'Otros Ingresos', v: nomina.ingresosPersonalizados }] : []),
-  ]
-  const descuentos = [
-    { label: 'AFP Empleado (2.87%)', v: nomina.afpEmpleado },
-    { label: 'SFS Empleado (3.04%)', v: nomina.sfsEmpleado },
-    ...(nomina.isrMensual      > 0 ? [{ label: 'ISR Retención',       v: nomina.isrMensual }]      : []),
-    ...(nomina.sfsDependientes > 0 ? [{ label: 'SFS Dep. Adicionales',v: nomina.sfsDependientes }] : []),
-    ...(nomina.otrosDescuentos > 0 ? [{ label: 'Otros Descuentos',    v: nomina.otrosDescuentos }] : []),
-    ...(nomina.aporteVoluntarioAFPEmpleado > 0 ? [{ label: 'Aporte Voluntario AFP', v: nomina.aporteVoluntarioAFPEmpleado }] : []),
-  ]
-
-  const rH = 5.2
-  const rows = Math.max(devengos.length, descuentos.length)
-  for (let i = 0; i < rows; i++) {
-    const ry = y + i * rH
-    if (i % 2 === 1) {
-      doc.setFillColor(250, 250, 251)
-      doc.rect(12, ry - 3.7, W - 24, rH, 'F')
-    }
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(80, 80, 80)
-    if (devengos[i]) {
-      doc.text(devengos[i].label, 14, ry)
-      doc.setTextColor(40, 40, 40)
-      doc.setFont('helvetica', 'bold')
-      doc.text(formatRD(devengos[i].v), 14 + colW, ry, { align: 'right' })
-    }
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(80, 80, 80)
-    if (descuentos[i]) {
-      doc.text(descuentos[i].label, c2, ry)
-      doc.setTextColor(40, 40, 40)
-      doc.setFont('helvetica', 'bold')
-      doc.text(`(${formatRD(descuentos[i].v)})`, W - 14, ry, { align: 'right' })
-    }
-  }
-
-  y += rows * rH + 2
-  doc.setDrawColor(...LINE_GRAY)
-  doc.line(14, y, 14 + colW, y)
-  doc.line(c2, y, W - 14, y)
-  y += 4
-
-  doc.setFontSize(8.5)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(16, 185, 129)
-  doc.text('Total Bruto', 14, y)
-  doc.text(formatRD(nomina.totalBruto), 14 + colW, y, { align: 'right' })
-  doc.setTextColor(220, 38, 38)
-  doc.text('Total Descuentos', c2, y)
-  doc.text(`(${formatRD(nomina.totalDescuentos)})`, W - 14, y, { align: 'right' })
-
-  // Neto box — con un filo superior más claro para dar sensación de volumen
-  y += 9
-  doc.setFillColor(NR, NG, NB)
-  doc.roundedRect(14, y, W - 28, 15, 2.5, 2.5, 'F')
-  doc.setFillColor(47, 63, 168)
-  doc.roundedRect(14, y, W - 28, 4, 2.5, 2.5, 'F')
-  doc.setFillColor(NR, NG, NB)
-  doc.rect(14, y + 3, W - 28, 12, 'F')
-  doc.setTextColor(255, 255, 255)
-  doc.setFontSize(8)
-  doc.setFont('helvetica', 'normal')
-  doc.text('SALARIO NETO A PAGAR', 22, y + 5.5)
-  doc.setFontSize(13)
-  doc.setFont('helvetica', 'bold')
-  doc.text(formatRD(nomina.salarioNeto), W - 22, y + 10, { align: 'right' })
-
-  // Aportes empresa — tarjeta tenue para agruparlo como bloque propio
-  y += 21
-  const aportes = [
-    { label: 'AFP Empleador (7.10%)', v: nomina.afpEmpleador },
-    { label: 'SFS Empleador (7.09%)', v: nomina.sfsEmpleador },
-    { label: 'SRL Empleador',         v: nomina.srlEmpleador },
-    { label: 'Infotep (1.00%)',       v: nomina.infotepEmpleador },
-    ...(nomina.aporteVoluntarioAFPEmpresa > 0 ? [{ label: 'Aporte Voluntario AFP', v: nomina.aporteVoluntarioAFPEmpresa }] : []),
-    ...(nomina.grossingUpEmpresa           > 0 ? [{ label: 'Grossing-up (ISR/TSS empleado)', v: nomina.grossingUpEmpresa }] : []),
-  ]
-  const cardH = 9 + aportes.length * 4.5 + 4
-  doc.setFillColor(247, 248, 252)
-  doc.setDrawColor(...LINE_GRAY)
-  doc.roundedRect(14, y, W - 28, cardH, 2, 2, 'FD')
-  y += 6.5
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(NR, NG, NB)
-  doc.text('APORTES EMPRESA (TSS)', 20, y)
-  y += 5
-  aportes.forEach(a => {
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(90, 90, 90)
-    doc.text(a.label, 20, y)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(40, 40, 40)
-    doc.text(formatRD(a.v), W - 20, y, { align: 'right' })
-    y += 4.5
-  })
-  doc.setDrawColor(...LINE_GRAY)
-  doc.line(20, y - 1.5, W - 20, y - 1.5)
-  y += 2.5
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(NR, NG, NB)
-  doc.text('Costo Total Empresa', 20, y)
-  doc.text(formatRD(nomina.totalCostoEmpleador), W - 20, y, { align: 'right' })
-
-  // Footer
-  y += 9
-  doc.setDrawColor(...LINE_GRAY)
-  doc.line(14, y, W - 14, y)
-  y += 5
-  if (nomina.saldoISRAplicado > 0) {
-    doc.setFontSize(6.5)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(16, 150, 100)
-    doc.text(`Crédito ISR a favor aplicado: -${formatRD(nomina.saldoISRAplicado)}`, 14, y)
-    y += 4
-  }
-  if ((empleado.ingresoOtroEmpleadorMensual ?? 0) > 0) {
-    doc.setFontSize(6.5)
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(150, 150, 150)
-    doc.text(`ISR consolidado con ingreso de otro empleador (${formatRD(empleado.ingresoOtroEmpleadorMensual!)}/mes)`, 14, y)
-    y += 4
-  }
-
-  doc.setFontSize(6.5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(170, 170, 170)
-  doc.text(`Regalía/período: ${formatRD(nomina.regaliaPascual)}`, 14, y)
-  doc.text(`Vacaciones: ${nomina.vacacionesMensualesDias.toFixed(2)} días`, 90, y)
-  doc.text('Ley 16-92  ·  Ley 87-01  ·  Ley 11-92', W - 14, y, { align: 'right' })
-
-  // Pie de página fijo — marca + fecha de generación, siempre al fondo
-  const pageH = doc.internal.pageSize.getHeight()
-  doc.setDrawColor(NR, NG, NB)
-  doc.setLineWidth(0.6)
-  doc.line(14, pageH - 12, W - 14, pageH - 12)
-  doc.setLineWidth(0.2)
-  doc.setFontSize(6.5)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(NR, NG, NB)
-  doc.text('Cielo Cloud · Nómina', 14, pageH - 8)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(170, 170, 170)
-  doc.text(`Generado el ${new Date().toLocaleDateString('es-DO')} — documento de uso interno`, W - 14, pageH - 8, { align: 'right' })
-
-  doc.save(`comprobante-${empleado.cedula}-${label.replace(/\s+/g, '-')}.pdf`)
 }
 
 // ── Detalle modal ─────────────────────────────────────────────────────────────
@@ -658,7 +407,7 @@ function DetalleNomina({
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function NominaPage() {
   const { empleados, empleadosEnNomina, update: actualizarEmpleado } = useEmpleados()
-  const { periodos, generar, cerrar, eliminar, actualizarAjustes, actualizarTotales, marcarProcesados, reabrir, marcarPagada } = usePeriodos()
+  const { periodos, generar, cerrar, eliminar, actualizarAjustes, actualizarTotales, marcarProcesados, reabrir } = usePeriodos()
   const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago, registrarOmisionCuota } = usePrestamos()
   const { liquidaciones } = useLiquidaciones()
@@ -707,6 +456,11 @@ export default function NominaPage() {
   const [nuevoAnio, setNuevoAnio]         = useState(hoy.getFullYear())
   const [nuevaQuincena, setNuevaQuincena] = useState<1 | 2>(1)
 
+  // Lista de períodos ("Cálculo de Nómina") — búsqueda + filtros de estado/año
+  const [busquedaPeriodo, setBusquedaPeriodo]       = useState('')
+  const [filtroEstadoPeriodo, setFiltroEstadoPeriodo] = useState<'todos' | EstadoPeriodo>('todos')
+  const [filtroAnioPeriodo, setFiltroAnioPeriodo]   = useState<'todos' | number>('todos')
+
   // Ajuste inline form
   const [expandedEmpId, setExpandedEmpId] = useState<string | null>(null)
   const [newTipo, setNewTipo]             = useState<'ingreso' | 'deduccion'>('ingreso')
@@ -730,12 +484,6 @@ export default function NominaPage() {
   // el período (pasar de en_proceso a procesada)
   const [auditoriaIds, setAuditoriaIds] = useState<string[] | null>(null)
 
-  // Envío de comprobantes de pago por correo — se abre justo después de
-  // marcar un período como pagado (o manualmente después, vía "Comprobantes")
-  const [envioPeriodoId, setEnvioPeriodoId] = useState<string | null>(null)
-  const [plantillaComprobante, setPlantillaComprobante] = useState<PlantillaComprobante>(plantillaComprobanteDeEmpresa(empresa))
-  const [enviadosComprobante, setEnviadosComprobante] = useState<Set<string>>(new Set())
-
   // Importador de horas trabajadas (Excel/CSV) — solo tiene sentido con el
   // período en_proceso, ya que anexa AjusteLinea nuevas a los empleados.
   const [importarHorasAbierto, setImportarHorasAbierto] = useState(false)
@@ -747,6 +495,17 @@ export default function NominaPage() {
   useEffect(() => {
     if (empresa.modalidadNomina) setNuevoTipo(empresa.modalidadNomina)
   }, [empresa.modalidadNomina])
+
+  // "Período sugerido": sigue la serie existente (o el mes/quincena actual
+  // si es el primer período) — se recalcula cada vez que cambia el tipo
+  // seleccionado o la lista de períodos (ej. tras crear uno nuevo).
+  useEffect(() => {
+    const sugerido = sugerirProximoPeriodo(periodos, nuevoTipo)
+    setNuevoMes(sugerido.mes)
+    setNuevoAnio(sugerido.anio)
+    setNuevaQuincena(sugerido.quincena)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodos, nuevoTipo])
 
   const periodoActual = periodos.find(p => p.id === periodoAbierto) ?? null
   const periodoActualLabel = periodoActual ? labelPeriodo(periodoActual) : ''
@@ -1227,96 +986,117 @@ export default function NominaPage() {
 
   // ── VISTA: LISTA ─────────────────────────────────────────────────────────────
   if (!periodoAbierto) {
+    const periodosFiltrados = periodos
+      .filter(p => filtroEstadoPeriodo === 'todos' || p.estado === filtroEstadoPeriodo)
+      .filter(p => filtroAnioPeriodo === 'todos' || p.anio === filtroAnioPeriodo)
+      .filter(p => !busquedaPeriodo.trim() || labelPeriodo(p).toLowerCase().includes(busquedaPeriodo.trim().toLowerCase()))
+      .sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime())
+    const aniosPeriodos = Array.from(new Set(periodos.map(p => p.anio))).sort((a, b) => b - a)
+    const hayFiltrosPeriodo = busquedaPeriodo.trim() !== '' || filtroEstadoPeriodo !== 'todos' || filtroAnioPeriodo !== 'todos'
+    const proximoLabel = nuevoTipo === 'quincenal'
+      ? `${nuevaQuincena === 1 ? '1-15' : '16-fin'} ${MESES[nuevoMes - 1]} ${nuevoAnio}`
+      : `${MESES[nuevoMes - 1]} ${nuevoAnio}`
+
     return (
       <div className="flex flex-col overflow-hidden h-full">
-        <Header title="Nómina" subtitle="Gestión de períodos de pago" />
+        <Header title="Cálculo de Nómina" subtitle="Calcula los devengados y deducciones de tu equipo de trabajo" />
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-zinc-50 dark:bg-[#0d0f1a]">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
-          {/* Crear período */}
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-            <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Crear Período</h2>
-            </div>
-            <div className="px-5 py-4">
-              <div className="flex flex-wrap items-end gap-3">
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Tipo</label>
-                  <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
-                    {(['mensual', 'quincenal'] as TipoPeriodo[]).map(t => (
-                      <button
-                        key={t}
-                        onClick={() => setNuevoTipo(t)}
-                        className={`px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-                          nuevoTipo === t
-                            ? 'bg-[#1B2980] text-white'
-                            : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
-                        }`}
-                      >
-                        {t === 'mensual' ? 'Mensual' : 'Quincenal'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Mes</label>
-                  <select
-                    value={nuevoMes}
-                    onChange={e => setNuevoMes(Number(e.target.value))}
-                    className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
-                  >
-                    {MESES.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-                  </select>
-                </div>
-
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Año</label>
-                  <select
-                    value={nuevoAnio}
-                    onChange={e => setNuevoAnio(Number(e.target.value))}
-                    className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
-                  >
-                    {anios.map(a => <option key={a} value={a}>{a}</option>)}
-                  </select>
-                </div>
-
-                {nuevoTipo === 'quincenal' && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Quincena</label>
-                    <select
-                      value={nuevaQuincena}
-                      onChange={e => setNuevaQuincena(Number(e.target.value) as 1 | 2)}
-                      className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-1.5 text-sm focus:border-[#1B2980] focus:outline-none"
-                    >
-                      <option value={1}>1ª Quincena (1–15)</option>
-                      <option value={2}>2ª Quincena (16–fin)</option>
-                    </select>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleCrearPeriodo}
-                  disabled={empleadosEnNomina.length === 0}
-                  className={cn(BTN_PRIMARY, 'self-end')}
-                >
-                  <Plus className="h-4 w-4" />
-                  Crear Período
-                </button>
+          {/* Período sugerido */}
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none px-5 py-4">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">Período sugerido</span>
+                <span className="rounded-full bg-[#eef0fb] dark:bg-indigo-950/40 px-3 py-1 text-xs font-semibold text-[#1B2980] dark:text-indigo-300">
+                  {proximoLabel}
+                </span>
               </div>
-
-              {empleadosEnNomina.length === 0 && (
-                <p className="mt-2.5 text-xs text-amber-600 dark:text-amber-400">
-                  Debes registrar al menos un empleado activo para crear un período de nómina.
-                </p>
-              )}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">Frecuencia de pago</span>
+                <div className="flex overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                  {(['mensual', 'quincenal'] as TipoPeriodo[]).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setNuevoTipo(t)}
+                      className={`px-3 py-1 text-xs font-medium transition-colors ${
+                        nuevoTipo === t
+                          ? 'bg-[#1B2980] text-white'
+                          : 'bg-white dark:bg-[#141722] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e]'
+                      }`}
+                    >
+                      {t === 'mensual' ? 'Mensual' : 'Quincenal'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">Empleados</span>
+                <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  {empleadosEnNomina.length}
+                </span>
+              </div>
+              <button
+                onClick={handleCrearPeriodo}
+                disabled={empleadosEnNomina.length === 0}
+                className={cn(BTN_PRIMARY, 'ml-auto disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:shadow-none')}
+              >
+                <Plus className="h-4 w-4" />
+                Nuevo Período de Nómina
+              </button>
             </div>
+            {empleadosEnNomina.length === 0 && (
+              <p className="mt-2.5 text-xs text-amber-600 dark:text-amber-400">
+                Debes registrar al menos un empleado activo para crear un período de nómina.
+              </p>
+            )}
           </div>
 
-          {/* Period cards */}
-          {periodos.length === 0 ? (
-            <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+          {/* Historial de períodos */}
+          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+            <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 dark:border-[#1d2035] px-5 py-3">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+                <input
+                  type="text"
+                  value={busquedaPeriodo}
+                  onChange={e => setBusquedaPeriodo(e.target.value)}
+                  placeholder="Buscar período…"
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 pl-8 pr-3 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+                />
+              </div>
+              <select
+                value={filtroEstadoPeriodo}
+                onChange={e => setFiltroEstadoPeriodo(e.target.value as 'todos' | EstadoPeriodo)}
+                className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+              >
+                <option value="todos">Todos los estados</option>
+                <option value="en_proceso">En Proceso</option>
+                <option value="procesada">Procesada</option>
+                <option value="cerrada">Cerrada</option>
+              </select>
+              <select
+                value={filtroAnioPeriodo}
+                onChange={e => setFiltroAnioPeriodo(e.target.value === 'todos' ? 'todos' : Number(e.target.value))}
+                className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+              >
+                <option value="todos">Todos los años</option>
+                {aniosPeriodos.map(a => <option key={a} value={a}>{a}</option>)}
+              </select>
+              {hayFiltrosPeriodo && (
+                <button
+                  onClick={() => { setBusquedaPeriodo(''); setFiltroEstadoPeriodo('todos'); setFiltroAnioPeriodo('todos') }}
+                  className="text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:underline"
+                >
+                  Ver todos
+                </button>
+              )}
+              <span className="ml-auto text-xs text-zinc-400 dark:text-zinc-500">
+                {periodosFiltrados.length} de {periodos.length} período(s)
+              </span>
+            </div>
+
+            {periodos.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -1327,334 +1107,125 @@ export default function NominaPage() {
                 </div>
                 <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">Sin períodos de nómina</p>
                 <p className="mt-1 max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-                  Crea tu primer período usando el formulario de arriba para comenzar a procesar pagos.
+                  Crea tu primer período usando el panel de arriba para comenzar a procesar pagos.
                 </p>
               </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {periodos.map(p => (
-                <div
-                  key={p.id}
-                  className="flex flex-col rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none overflow-hidden"
-                >
-                  <div className="flex items-start justify-between px-5 py-4 border-b border-zinc-100 dark:border-[#1d2035]">
-                    <div>
-                      <p className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">{labelPeriodo(p)}</p>
-                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-                        {p.totalEmpleados} empleado{p.totalEmpleados !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      {(p.bitacoraDesposteos?.length ?? 0) > 0 && (
-                        <span
-                          title={p.bitacoraDesposteos!.map(b =>
-                            `Reabierto el ${formatDate(b.fecha.slice(0, 10))} por ${b.usuarioEmail} (estaba ${b.estadoAnterior})`
-                          ).join('\n')}
-                        >
-                          <History className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />
-                        </span>
-                      )}
-                      {p.estado === 'cerrada' ? (
-                        <Badge variant="neutral"><Lock className="mr-1 h-3 w-3" />Cerrada</Badge>
-                      ) : p.estado === 'procesada' ? (
-                        <Badge variant="success">Procesada</Badge>
-                      ) : (
-                        <Badge variant="warning">En Proceso</Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex-1 px-5 py-4 space-y-2">
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">Neto Total</span>
-                      <span className="text-lg font-bold text-[#151f66] dark:text-indigo-300 tabular-nums">
-                        {fmt(p.totales.neto)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-baseline">
-                      <span className="text-xs text-zinc-500 dark:text-zinc-400">Costo Empresa</span>
-                      <span className="text-sm font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
-                        {fmt(p.totales.costoTotal)}
-                      </span>
-                    </div>
-                    {p.estado === 'cerrada' && (
-                      p.pagada ? (
-                        <div className="flex items-center justify-between gap-2 pt-1">
-                          <div className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                            <Wallet className="h-3.5 w-3.5" />
-                            Pagada el {formatDate(p.fechaPago!)}
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                      <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Período de Nómina</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">S. Bruto</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Neto</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Costo Total</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
+                    {periodosFiltrados.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-10 text-center text-sm text-zinc-400 dark:text-zinc-500">
+                          Ningún período coincide con el filtro.
+                        </td>
+                      </tr>
+                    )}
+                    {periodosFiltrados.map(p => (
+                      <tr
+                        key={p.id}
+                        onClick={() => setPeriodoAbierto(p.id)}
+                        className="cursor-pointer hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors"
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <div>
+                              <p className="font-medium text-[#1B2980] dark:text-indigo-400">{labelPeriodo(p)}</p>
+                              <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                                {p.totalEmpleados} empleado{p.totalEmpleados !== 1 ? 's' : ''}
+                                {p.pagada && ` · Pagada el ${formatDate(p.fechaPago!)}`}
+                              </p>
+                            </div>
+                            {(p.bitacoraDesposteos?.length ?? 0) > 0 && (
+                              <span
+                                title={p.bitacoraDesposteos!.map(b =>
+                                  `Reabierto el ${formatDate(b.fecha.slice(0, 10))} por ${b.usuarioEmail} (estaba ${b.estadoAnterior})`
+                                ).join('\n')}
+                              >
+                                <History className="h-3.5 w-3.5 text-zinc-400 dark:text-zinc-500" />
+                              </span>
+                            )}
                           </div>
-                          <button
-                            onClick={() => {
-                              setEnvioPeriodoId(p.id)
-                              setPlantillaComprobante(plantillaComprobanteDeEmpresa(empresa))
-                              setEnviadosComprobante(new Set())
-                            }}
-                            className="flex items-center gap-1 text-[11px] font-medium text-[#1B2980] dark:text-indigo-400 hover:underline"
-                          >
-                            <Mail className="h-3.5 w-3.5" /> Comprobantes
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => {
-                            const hoy = new Date().toISOString().slice(0, 10)
-                            if (!confirm(`¿Confirmar que "${labelPeriodo(p)}" ya fue pagado (transferencia ACH enviada) el ${formatDate(hoy)}?`)) return
-                            marcarPagada(p.id, hoy)
-                            setEnvioPeriodoId(p.id)
-                            setPlantillaComprobante(plantillaComprobanteDeEmpresa(empresa))
-                            setEnviadosComprobante(new Set())
-                          }}
-                          className="flex items-center gap-1.5 pt-1 text-[11px] font-medium text-zinc-400 dark:text-zinc-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
-                        >
-                          <Wallet className="h-3.5 w-3.5" />
-                          Marcar como pagada
-                        </button>
-                      )
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 px-5 py-3 border-t border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
-                    <button
-                      onClick={() => setPeriodoAbierto(p.id)}
-                      className="flex-1 rounded-lg bg-[#1B2980] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#151f66] transition-colors text-center"
-                    >
-                      Abrir
-                    </button>
-                    {p.estado === 'procesada' && (
-                      <button
-                        onClick={() => cerrar(p.id)}
-                        title="Cerrar período"
-                        className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
-                      >
-                        <Lock className="h-4 w-4" />
-                      </button>
-                    )}
-                    {p.estado !== 'en_proceso' && esPeriodoMasReciente(p, periodos) && (
-                      <button
-                        onClick={() => {
-                          if (!confirm(
-                            `¿Reabrir "${labelPeriodo(p)}"? Los empleados procesados volverán a marcarse como pendientes y deberás reprocesarlos. Esta acción queda registrada con tu usuario y fecha.`
-                          )) return
-                          const ok = reabrir(p.id, user?.email ?? 'desconocido')
-                          setToast(ok ? 'Período reabierto — vuelve a En Proceso' : 'No se pudo reabrir el período')
-                        }}
-                        title="Reabrir período (desposteo)"
-                        className="rounded-lg border border-amber-200 dark:border-amber-800/50 p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                      >
-                        <Unlock className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        if (!confirm(`¿Eliminar el período "${labelPeriodo(p)}"?`)) return
-                        eliminar(p.id)
-                      }}
-                      title="Eliminar período"
-                      className="rounded-lg border border-rose-200 dark:border-rose-800/50 p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(p.totales.bruto)}</td>
+                        <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#151f66] dark:text-indigo-300">{fmt(p.totales.neto)}</td>
+                        <td className="px-4 py-3.5 text-right tabular-nums text-amber-700 dark:text-amber-400">{fmt(p.totales.costoTotal)}</td>
+                        <td className="px-4 py-3.5">
+                          {p.estado === 'cerrada' ? (
+                            <Badge variant="neutral"><Lock className="mr-1 h-3 w-3" />Cerrada</Badge>
+                          ) : p.estado === 'procesada' ? (
+                            <Badge variant="success">Procesada</Badge>
+                          ) : (
+                            <Badge variant="warning">En Proceso</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={e => { e.stopPropagation(); setPeriodoAbierto(p.id) }}
+                              title="Ver período"
+                              className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            {p.estado === 'procesada' && (
+                              <button
+                                onClick={e => { e.stopPropagation(); cerrar(p.id) }}
+                                title="Cerrar período"
+                                className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+                              >
+                                <Lock className="h-4 w-4" />
+                              </button>
+                            )}
+                            {p.estado !== 'en_proceso' && esPeriodoMasReciente(p, periodos) && (
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  if (!confirm(
+                                    `¿Reabrir "${labelPeriodo(p)}"? Los empleados procesados volverán a marcarse como pendientes y deberás reprocesarlos. Esta acción queda registrada con tu usuario y fecha.`
+                                  )) return
+                                  const ok = reabrir(p.id, user?.email ?? 'desconocido')
+                                  setToast(ok ? 'Período reabierto — vuelve a En Proceso' : 'No se pudo reabrir el período')
+                                }}
+                                title="Reabrir período (desposteo)"
+                                className="rounded-lg border border-amber-200 dark:border-amber-800/50 p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                              >
+                                <Unlock className="h-4 w-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={e => {
+                                e.stopPropagation()
+                                if (!confirm(`¿Eliminar el período "${labelPeriodo(p)}"?`)) return
+                                eliminar(p.id)
+                              }}
+                              title="Eliminar período"
+                              className="rounded-lg border border-rose-200 dark:border-rose-800/50 p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         {toast && <Toast message={toast} onClose={() => setToast(null)} />}
-
-        {envioPeriodoId && (() => {
-          const periodoEnvio = periodos.find(p => p.id === envioPeriodoId)
-          if (!periodoEnvio) return null
-          const periodoEnvioLabel = labelPeriodo(periodoEnvio)
-          const concepto = periodoEnvio.tipo === 'regalia'
-            ? 'Regalía Pascual'
-            : periodoEnvio.tipo === 'quincenal'
-              ? `Nómina Quincenal (${periodoEnvio.quincena}ª quincena)`
-              : 'Nómina Mensual'
-          const ajustesEnvio = periodoEnvio.ajustesPorEmpleado ?? {}
-
-          const filas = periodoEnvio.tipo === 'regalia'
-            ? Object.entries(periodoEnvio.montosRegalia ?? {}).flatMap(([empId, monto]) => {
-                const e = empleados.find(x => x.id === empId)
-                if (!e) return []
-                return [{ empleado: e, resultado: resultadoRegalia(empId, monto, getAnosServicio(e.fechaIngreso)) }]
-              })
-            : empleadosDelPeriodo(empleados, empleadosEnNomina, periodoEnvio.mes, periodoEnvio.anio, periodoEnvio.tipo, periodoEnvio.quincena ?? 1)
-                .map(e => ({ empleado: e, resultado: resultadoDePeriodo(e, ajustesEnvio[e.id] ?? [], periodoEnvio) }))
-
-          const fechaPagoTexto = periodoEnvio.fechaPago ? formatDate(periodoEnvio.fechaPago) : ''
-
-          // Intenta abrir la ventana de correo para un empleado; devuelve si se logró.
-          // No asume éxito: el navegador puede bloquear la ventana (ver enviarComprobante).
-          function intentarEnviar(emp: Empleado, resultado: ResultadoNomina): boolean {
-            if (!emp.email) return false
-            const { asunto, cuerpo } = resolverPlantilla(plantillaComprobante, {
-              '{nombre}':    fullName(emp),
-              '{periodo}':   periodoEnvioLabel,
-              '{concepto}':  concepto,
-              '{neto}':      formatRD(resultado.salarioNeto),
-              '{fechaPago}': fechaPagoTexto,
-              '{empresa}':   empresa.nombre || 'la empresa',
-            })
-            const abierto = enviarComprobante({ destinatarioEmail: emp.email, destinatarioNombre: fullName(emp), asunto, cuerpo })
-            if (abierto) setEnviadosComprobante(prev => new Set(prev).add(emp.id))
-            return abierto
-          }
-
-          function handleEnviar(emp: Empleado, resultado: ResultadoNomina) {
-            if (!intentarEnviar(emp, resultado)) {
-              setToast(`El navegador bloqueó la ventana de correo para ${fullName(emp)} — permite ventanas emergentes o envíalo individualmente`)
-            }
-          }
-
-          function handleEnviarTodos() {
-            const pendientes = filas.filter(f => f.empleado.email && !enviadosComprobante.has(f.empleado.id))
-            const bloqueados = pendientes.filter(({ empleado: emp, resultado }) => !intentarEnviar(emp, resultado)).length
-            if (bloqueados > 0) {
-              setToast(`Tu navegador bloqueó ${bloqueados} de ${pendientes.length} ventanas — envíalas individualmente o permite ventanas emergentes para este sitio`)
-            }
-          }
-
-          const pendientesEnvio = filas.filter(f => f.empleado.email && !enviadosComprobante.has(f.empleado.id)).length
-          const sinCorreo = filas.filter(f => !f.empleado.email).length
-
-          return (
-            <>
-              <div
-                className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in"
-                onClick={() => setEnvioPeriodoId(null)}
-              />
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl bg-white dark:bg-[#141722] shadow-2xl animate-modal-in flex flex-col">
-                  <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-[#1d2035]">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-5 w-5 text-[#1B2980] dark:text-indigo-400" />
-                      <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        Enviar Comprobantes de Pago — {periodoEnvioLabel}
-                      </h2>
-                    </div>
-                    <button onClick={() => setEnvioPeriodoId(null)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 px-4 py-3 text-[11px] text-amber-800 dark:text-amber-300">
-                      Cielo Cloud no tiene servidor de correo propio todavía: cada "Enviar" abre tu propio
-                      cliente de correo con el mensaje listo. Descarga el PDF de cada empleado y adjúntalo
-                      antes de dar clic en enviar desde tu correo.
-                    </div>
-
-                    {/* Plantilla editable */}
-                    <div className="space-y-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Asunto</label>
-                        <input
-                          className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-2 text-sm focus:border-[#1B2980] focus:outline-none"
-                          value={plantillaComprobante.asunto}
-                          onChange={e => setPlantillaComprobante(prev => ({ ...prev, asunto: e.target.value }))}
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400">Cuerpo del correo</label>
-                        <textarea
-                          className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] dark:text-zinc-200 px-3 py-2 text-xs font-mono focus:border-[#1B2980] focus:outline-none"
-                          rows={7}
-                          value={plantillaComprobante.cuerpo}
-                          onChange={e => setPlantillaComprobante(prev => ({ ...prev, cuerpo: e.target.value }))}
-                        />
-                      </div>
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500 leading-relaxed">
-                        Variables disponibles (se reemplazan por cada empleado):{' '}
-                        {PLACEHOLDERS_COMPROBANTE.map(p => p.token).join(', ')}
-                      </p>
-                    </div>
-
-                    {/* Lista de empleados */}
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {pendientesEnvio > 0 ? `${pendientesEnvio} pendiente${pendientesEnvio === 1 ? '' : 's'}` : 'Todos enviados'}
-                        {sinCorreo > 0 && ` · ${sinCorreo} sin correo registrado`}
-                      </p>
-                      <button
-                        onClick={handleEnviarTodos}
-                        disabled={pendientesEnvio === 0}
-                        className="flex items-center gap-1.5 rounded-lg bg-[#1B2980] hover:bg-[#151f66] disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 text-xs font-semibold text-white transition-colors"
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                        Enviar a Todos ({pendientesEnvio})
-                      </button>
-                    </div>
-                    <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="bg-zinc-50 dark:bg-[#1a1d2e] text-left text-zinc-500 dark:text-zinc-400">
-                            <th className="px-3 py-2 font-medium">Empleado</th>
-                            <th className="px-3 py-2 font-medium">Correo</th>
-                            <th className="px-3 py-2 font-medium text-right">Neto</th>
-                            <th className="px-3 py-2 font-medium text-right">Acciones</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
-                          {filas.map(({ empleado: emp, resultado }) => (
-                            <tr key={emp.id}>
-                              <td className="px-3 py-2 font-medium text-zinc-800 dark:text-zinc-200">{fullName(emp)}</td>
-                              <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">
-                                {emp.email || <span className="text-rose-500 dark:text-rose-400">Sin correo registrado</span>}
-                              </td>
-                              <td className="px-3 py-2 text-right tabular-nums text-zinc-600 dark:text-zinc-300">
-                                {formatRD(resultado.salarioNeto)}
-                              </td>
-                              <td className="px-3 py-2">
-                                <div className="flex items-center justify-end gap-2">
-                                  <button
-                                    onClick={() => descargarComprobantePDF(emp, resultado, periodoEnvioLabel, empresa)}
-                                    title="Descargar PDF"
-                                    className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] transition-colors"
-                                  >
-                                    <Download className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleEnviar(emp, resultado)}
-                                    disabled={!emp.email}
-                                    title={emp.email ? 'Enviar por correo' : 'Empleado sin correo registrado'}
-                                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-colors ${
-                                      enviadosComprobante.has(emp.id)
-                                        ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
-                                        : 'bg-[#1B2980] hover:bg-[#151f66] text-white disabled:opacity-40 disabled:cursor-not-allowed'
-                                    }`}
-                                  >
-                                    {enviadosComprobante.has(emp.id) ? (
-                                      <><CheckCircle2 className="h-3.5 w-3.5" /> Abierto</>
-                                    ) : (
-                                      <><Send className="h-3.5 w-3.5" /> Enviar</>
-                                    )}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4">
-                    <button
-                      onClick={() => setEnvioPeriodoId(null)}
-                      className={BTN_PRIMARY}
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </>
-          )
-        })()}
       </div>
     )
   }

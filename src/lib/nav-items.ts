@@ -13,6 +13,7 @@ import {
   FileClock,
   BarChart2,
   Landmark,
+  Send,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -27,7 +28,8 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: '/',                icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/empleados',       icon: Users,           label: 'Empleados' },
-  { href: '/nomina',          icon: Calculator,      label: 'Procesar Nómina', keywords: 'periodo payroll' },
+  { href: '/nomina',          icon: Calculator,      label: 'Cálculo de Nómina', keywords: 'periodo payroll procesar' },
+  { href: '/nomina/envios',   icon: Send,            label: 'Gestión de Envíos', keywords: 'comprobantes pagar envio boucher marcar pagada' },
   { href: '/regalia-pascual', icon: Gift,            label: 'Regalía Pascual' },
   { href: '/vacaciones',      icon: CalendarDays,    label: 'Vacaciones' },
   { href: '/prestamos',       icon: HandCoins,       label: 'Préstamos', keywords: 'avance de salario' },

@@ -171,8 +171,15 @@ export function Sidebar() {
       return !v
     })
 
-  const isActive = (href: string) =>
-    href === '/' ? pathname === '/' : pathname.startsWith(href)
+  // El ítem activo es el href MÁS ESPECÍFICO (más largo) que hace match con
+  // la ruta actual — sin esto, "/nomina" (Cálculo de Nómina) quedaba activo
+  // también al estar en "/nomina/envios" (Gestión de Envíos), ya que ambos
+  // comparten el mismo prefijo de ruta.
+  const activeHref = [...NAV_ITEMS, CONFIGURACION_ITEM]
+    .map(item => item.href)
+    .filter(href => href === '/' ? pathname === '/' : (pathname === href || pathname.startsWith(`${href}/`)))
+    .sort((a, b) => b.length - a.length)[0]
+  const isActive = (href: string) => href === activeHref
 
   // Avoid hydration flash — render expanded until client mounts
   const c = mounted && collapsed
