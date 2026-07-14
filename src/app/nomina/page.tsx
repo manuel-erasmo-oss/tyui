@@ -982,7 +982,12 @@ export default function NominaPage() {
     setSelectedEmps(new Set(coincidencias.map(e => e.id)))
   }
 
-  const anios = [nuevoAnio - 1, nuevoAnio, nuevoAnio + 1]
+  // 10 años atrás hasta 1 año adelante del año calendario real (no del año
+  // seleccionado en el form — anclarlo a `nuevoAnio` movería el rango cada
+  // vez que se elige un año distinto). Permite registrar retroactivamente
+  // un período de una empresa con historial previo a Cielo Cloud, sin
+  // limitarse a "año actual ± 1".
+  const anios = Array.from({ length: 12 }, (_, i) => hoy.getFullYear() - 10 + i)
   const conceptosIngreso: ConceptoAjuste[]   = ['horas_extras_35', 'horas_extras_100', 'recargo_nocturno', 'comision', 'bono', 'otro_ingreso']
   const conceptosDeduccion: ConceptoAjuste[] = ['prestamo', 'dependiente_sfs', 'otro_descuento']
 
