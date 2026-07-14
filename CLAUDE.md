@@ -2294,6 +2294,26 @@ empleados y sus montos netos reales (RD$49,189.83 para María González,
 etc.) — confirmando que el fix del fallback funciona con datos demo
 sembrados sin `resultadosPorEmpleado`.
 
+## Fix — Cálculo de Nómina necesitaba selección manual de período
+
+El rediseño anterior había reemplazado los selects de Mes/Año/Quincena por
+un badge de "Período sugerido" de solo lectura — el usuario señaló
+explícitamente que no quería una sugerencia fija, sino poder **seleccionar**
+el período a calcular. Se restauraron los selects editables (Mes/Año/
+Quincena), pre-llenados con `sugerirProximoPeriodo()` como punto de partida
+cómodo pero totalmente editables.
+
+De paso se corrigió un bug relacionado: el `useEffect` que aplica la
+sugerencia dependía de `periodos` — cualquier actualización de fondo a la
+lista de períodos (ej. otro efecto recalculando totales) le pisaba la
+selección manual del usuario a mitad de edición. Ahora solo se recalcula al
+cambiar la frecuencia (Mensual/Quincenal), nunca mientras el usuario ya está
+eligiendo un período.
+
+Verificado en navegador: cambiar a Quincenal muestra el selector de
+Quincena; seleccionar manualmente "Diciembre" se mantiene sin que ningún
+efecto en segundo plano lo revierta.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -2302,6 +2322,7 @@ sembrados sin `resultadosPorEmpleado`.
 
 | Hash | Descripción |
 |---|---|
+| `320390a` | fix: Cálculo de Nómina — permitir seleccionar el período libremente |
 | `de3e2c4` | redesign: separar Nómina en Cálculo de Nómina y Gestión de Envíos |
 | `86bf00a` | fix: períodos de Regalía Pascual contaminaban Reportería/Liquidación + rediseño premium con prepantalla |
 | `252b78a` | docs: registrar en CLAUDE.md las fases pendientes y las 3 features más recientes |
