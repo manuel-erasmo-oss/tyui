@@ -12,7 +12,7 @@ import { getMesesServicio, regaliaPagadaVigente } from '@/lib/dominican-labor'
 import { formatRD, formatDate, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
 import {
   Gift, Calendar, AlertTriangle, Download, Send, Pencil, Check, X, ArrowRight,
-  CheckCircle2, Search, History, RotateCcw,
+  CheckCircle2, Search, History, RotateCcw, ExternalLink, Layers,
 } from 'lucide-react'
 import { EmpleadoInfoReadOnly } from '@/components/empleados/EmpleadoInfoReadOnly'
 import type { Empleado, PeriodoNomina } from '@/types'
@@ -83,6 +83,16 @@ export default function RegaliaPage() {
 
   // ── Ficha de empleado de solo lectura ──────────────────────────────────────
   const [empleadoInfo, setEmpleadoInfo] = useState<Empleado | null>(null)
+
+  // ── Prepantalla: elegir acumulación actual vs. historial ──────────────────
+  // Con historial existente, la primera vez que se abre el módulo se
+  // pregunta explícitamente qué se quiere ver (patrón de "Calcular Nómina"
+  // de herramientas premium como Alegra) en vez de amontonar ambas cosas en
+  // la misma pantalla. Sin historial (empresa nueva/primer año) se salta la
+  // elección y se va directo a la acumulación — no hay nada que elegir.
+  const tieneHistorial = historialRegalia.length > 0
+  const [pantalla, setPantalla] = useState<'elegir' | 'actual' | 'historial'>('elegir')
+  const vistaActual: 'elegir' | 'actual' | 'historial' = tieneHistorial ? pantalla : 'actual'
 
   // ── Solicitar Liquidación de Regalía ──────────────────────────────────────
   const [solicitudAbierta, setSolicitudAbierta] = useState(false)
@@ -180,6 +190,133 @@ export default function RegaliaPage() {
     })
   }
 
+  // ── Prepantalla: elegir acumulación actual vs. historial ──────────────────
+  if (vistaActual === 'elegir') {
+    const masReciente = historialRegalia[0]
+    return (
+      <div className="flex flex-col overflow-hidden h-full">
+        <Header title="Regalía Pascual" subtitle="Art. 219 · Código de Trabajo · Ley 16-92" />
+        <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-[#0d0f1a] p-6 md:p-10">
+          <div className="mx-auto max-w-3xl">
+            <div className="mb-8 text-center">
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">¿Qué quieres ver?</h1>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+                Elige si quieres consultar la acumulación del ciclo en curso o revisar liquidaciones ya pagadas.
+              </p>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setPantalla('actual')}
+                className="group relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 text-left shadow-sm dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#1B2980]/10"
+              >
+                <div className="relative mb-4 h-12 w-12">
+                  <div className="absolute inset-0 rounded-2xl bg-[#1B2980] blur-lg opacity-30 group-hover:opacity-50 transition-opacity" />
+                  <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md" style={{ backgroundImage: 'linear-gradient(135deg, #1B2980, #2f3fa8)' }}>
+                    <Gift className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">Acumulación Actual</p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Ciclo {anioActual} en progreso</p>
+                <div className="mt-4 flex items-baseline justify-between rounded-lg bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2.5">
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">Acumulado a hoy</span>
+                  <span className="text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">{formatRD(totalAcumulado)}</span>
+                </div>
+                <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-[#1B2980] dark:text-indigo-400">
+                  Ver acumulación <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPantalla('historial')}
+                className="group relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 text-left shadow-sm dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/10"
+              >
+                <div className="relative mb-4 h-12 w-12">
+                  <div className="absolute inset-0 rounded-2xl bg-emerald-600 blur-lg opacity-30 group-hover:opacity-50 transition-opacity" />
+                  <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md" style={{ backgroundImage: 'linear-gradient(135deg, #059669, #34d399)' }}>
+                    <History className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">Historial de Liquidaciones</p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {historialRegalia.length} ciclo{historialRegalia.length !== 1 ? 's' : ''} ya pagado{historialRegalia.length !== 1 ? 's' : ''}
+                </p>
+                {masReciente && (
+                  <div className="mt-4 flex items-baseline justify-between rounded-lg bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2.5">
+                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500">Último ciclo — {masReciente.anio}</span>
+                    <span className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{formatRD(masReciente.totales.bruto)}</span>
+                  </div>
+                )}
+                <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                  Ver historial <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Pantalla: Historial de Liquidaciones ───────────────────────────────────
+  if (vistaActual === 'historial') {
+    return (
+      <div className="flex flex-col overflow-hidden h-full">
+        <Header
+          title="Historial de Liquidaciones"
+          subtitle="Regalía Pascual · Ciclos ya liquidados y pagados"
+          actions={
+            <button
+              onClick={() => setPantalla('elegir')}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+            >
+              <Layers className="h-4 w-4" />
+              Cambiar de vista
+            </button>
+          }
+        />
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
+          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Ciclo</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleados</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Pagado</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fecha de Pago</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
+                  {historialRegalia.map(p => (
+                    <tr key={p.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
+                      <td className="px-5 py-3.5 font-semibold text-zinc-900 dark:text-zinc-100">Regalía Pascual {p.anio}</td>
+                      <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400">{p.totalEmpleados}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{formatRD(p.totales.bruto)}</td>
+                      <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{p.fechaPago ? formatDate(p.fechaPago) : '—'}</td>
+                      <td className="px-4 py-3.5"><Badge variant="success">Pagada</Badge></td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Link
+                          href="/nomina"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" /> Ver en Nómina
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
@@ -187,6 +324,15 @@ export default function RegaliaPage() {
         subtitle={`Art. 219 · Código de Trabajo · Ley 16-92 · Ciclo en acumulación: ${anioActual}`}
         actions={
           <div className="flex items-center gap-2">
+            {tieneHistorial && (
+              <button
+                onClick={() => setPantalla('elegir')}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                <Layers className="h-4 w-4" />
+                Cambiar de vista
+              </button>
+            )}
             <button
               onClick={handleExportar}
               className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
@@ -226,32 +372,6 @@ export default function RegaliaPage() {
             <Link href="/nomina" className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">
               Ir a Nómina <ArrowRight className="h-3.5 w-3.5" />
             </Link>
-          </div>
-        )}
-
-        {historialRegalia.length > 0 && (
-          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-            <div className="flex items-center gap-2 border-b border-zinc-100 dark:border-[#1d2035] px-5 py-3">
-              <History className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                Ciclos Liquidados y Pagados
-              </h2>
-            </div>
-            <div className="divide-y divide-zinc-100 dark:divide-[#1d2035]">
-              {historialRegalia.map(p => (
-                <div key={p.id} className="flex items-center justify-between px-5 py-2.5 text-sm">
-                  <div className="flex items-center gap-2.5">
-                    <Badge variant="success">{p.anio}</Badge>
-                    <span className="text-zinc-600 dark:text-zinc-400">
-                      {p.totalEmpleados} empleado(s) · pagada{p.fechaPago ? ` el ${formatDate(p.fechaPago)}` : ''}
-                    </span>
-                  </div>
-                  <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-200">
-                    {formatRD(p.totales.bruto)}
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
         )}
 

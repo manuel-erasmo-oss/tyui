@@ -612,7 +612,31 @@ export const CONCEPTOS_LEY: ConceptoLeyInfo[] = [
   { concepto: 'otro_descuento',   nombre: 'Otro Descuento',      tipo: 'deduccion', afectaISR: false, afectaTSS: false, nota: 'Descuento post-impuesto, no reduce ISR ni TSS' },
 ]
 
+// Resultado en cero — usado cuando un período de Regalía Pascual no tiene
+// snapshot para un empleado (nunca formó parte del pago, ej. acumulado en
+// 0 al momento de liquidar). Evita que calcularConPeriodo caiga al motor
+// normal de nómina, que fabricaría un salario mensual completo inexistente
+// bajo la etiqueta de ese período.
+function resultadoVacio(empleadoId: string): ResultadoNomina {
+  return {
+    empleadoId,
+    salarioBruto: 0, importeHE35: 0, importeHE100: 0, totalHorasExtras: 0, importeNocturno: 0,
+    bonificaciones: 0, comisiones: 0, ingresosPersonalizados: 0, totalBruto: 0,
+    salarioCotizable: 0,
+    afpEmpleado: 0, sfsEmpleado: 0, isrMensual: 0, sfsDependientes: 0, otrosDescuentos: 0,
+    aporteVoluntarioAFPEmpleado: 0, totalDescuentos: 0,
+    grossingUpEmpresa: 0, saldoISRAplicado: 0,
+    salarioNeto: 0,
+    afpEmpleador: 0, sfsEmpleador: 0, srlEmpleador: 0, infotepEmpleador: 0,
+    aporteVoluntarioAFPEmpresa: 0, totalAportesEmpleador: 0,
+    totalCostoEmpleador: 0,
+    regaliaPascual: 0, vacacionesMensualesDias: 0, vacacionesMensualesValor: 0,
+    anosServicio: 0,
+  }
+}
+
 export function calcularConPeriodo(emp: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
+  if (periodo.tipo === 'regalia') return resultadoVacio(emp.id)
   const params = ajustesToParams(ajustes)
   return periodo.tipo === 'quincenal'
     ? calcularNominaQuincenal(emp, periodo.quincena ?? 1, params)
@@ -636,6 +660,11 @@ export function calcularSalarioPromedioUltimos12Meses(
   haceUnAnio.setFullYear(haceUnAnio.getFullYear() - 1)
 
   const relevantes = periodos.filter(p =>
+    // La Regalía Pascual (Art. 219, 100% exenta) NUNCA es "salario ordinario"
+    // — incluirla aquí inflaría artificialmente el promedio usado para
+    // Cesantía/Preaviso/Asistencia Económica, sumando el pago anual de
+    // diciembre como si fuera salario adicional de ese mes.
+    p.tipo !== 'regalia' &&
     (p.estado === 'procesada' || p.estado === 'cerrada') &&
     new Date(p.fechaGeneracion) >= haceUnAnio &&
     new Date(p.fechaGeneracion) <= fechaReferencia
