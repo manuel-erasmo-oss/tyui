@@ -1913,6 +1913,252 @@ método de video cuadro a cuadro: ya no hay envoltura de texto ni reflow
 visible en ningún punto de la transición, en ninguna de las dos
 direcciones (entrada y salida).
 
+## QA de consistencia numérica — decimales y bordes de tabla
+
+Auditoría dirigida por el usuario: varias tablas del sistema mostraban montos
+como números enteros (`formatRD(x, 0)`, override puntual sobre el default de
+2 decimales) en vez de los centavos reales, inconsistente entre módulos —
+222+ call-sites afectados en 16 archivos. Se eliminaron todos los overrides a
+0 decimales, dejando el default de `formatRD`/`formatNum` (2 decimales,
+`tabular-nums`) como única fuente de verdad salvo casos genuinamente enteros
+(días, meses, conteos). De paso, los bordes entre filas de tabla
+(`divide-zinc-50`, casi invisibles en la práctica) se oscurecieron a
+`divide-zinc-200 dark:divide-[#252840]` de forma sistemática en todas las
+tablas de negocio, mejorando la legibilidad de escaneo horizontal sin tocar
+la regla de mínimo color. `tsc --noEmit`/`npm run build` limpios.
+
+## Salida pendiente de empleados + pago de días trabajados al terminar
+
+Hallazgo del usuario: "Dar de baja" en Empleados desactivaba (`activo:
+false`) al empleado de inmediato, ANTES de calcular sus prestaciones en
+Liquidación — un empleado dado de baja por error de flujo quedaba huérfano,
+imposible de liquidar correctamente porque ya no aparecía como candidato
+activo. Fix arquitectónico: nuevo estado intermedio `Empleado.salidaPendiente`
+(`fechaSalidaPendiente`, `motivoSalidaPendiente`) — "Dar de baja" ahora solo
+marca esta bandera; `activo` se mantiene `true` hasta que Liquidación
+finalice el cálculo real. Mientras `salidaPendiente` es `true`, el empleado
+sigue en `empleadosActivos` (visible/seleccionable en Liquidación, conserva
+roster e historial) pero sale de `empleadosEnNomina` (ya no acumula nómina
+nueva).
+
+Como la mayoría de las salidas ocurren a mitad de período (no justo al
+cierre de una quincena/mes), se agregó `Empleado.pagoDiasTrabajadosPendiente:
+'nomina' | 'liquidacion'` — capturado al marcar la baja, decide cómo se paga
+el tramo de días ya trabajados que ningún período cerrado cubre todavía:
+`'nomina'` los prorratea en el próximo período de Nómina que cubra la fecha
+de salida (mismo mecanismo de prorrateo ya usado para suspensiones);
+`'liquidacion'` los agrega como línea aparte en Liquidación, **con AFP/SFS/
+ISR calculados** (confirmado explícitamente por el usuario: "debe de tener
+las deducciones de lugar esos días trabajados") vía el motor real de
+`calcularNomina`, a diferencia de las indemnizaciones exentas. `Empleados`
+gana `cancelarSalidaPendiente` para deshacer una baja marcada por error antes
+de liquidar.
+
+## Exportación a Excel con estilo real (exceljs) en todos los módulos
+
+Pedido explícito del usuario: "es muy importante que el contenido que llegue
+a excel tenga todo el detalle de las transacciones... y deben de contener
+los encabezados con su nombre correcto", con exigencia adicional de que se
+vea "moderno y entendible y fidedigno". El sistema exportaba CSV plano
+(`xlsx`/SheetJS, sin estilos reales) — se migró `src/lib/excel-export.ts` a
+`exceljs`, con encabezados en negrita/fondo de marca, anchos de columna por
+hoja, fila de totales resaltada, y formato numérico real (no texto) para que
+Excel reconozca los montos como números. API pública sin cambios
+(`exportarExcel(opciones)`), así que la migración fue transparente para los
+12 módulos de negocio + Reportería que ya la consumían — cada uno se
+revisó individualmente para asegurar que el detalle transaccional completo
+(no solo totales agregados) llegara a una hoja separada donde aplicara (ej.
+"Detalle de Ajustes" en Nómina, separado del "Resumen por Empleado").
+
+## Rediseño de Liquidación — asistente de 3 pasos, cálculo transparente
+
+Feedback directo del usuario sobre el módulo de Liquidación (desvinculación
+de empleados): "lo primero es que ciertamente uno a simple vista ve lo que
+hay que pagar de liquidación al empleado pero no se puede ver el proceso del
+calculo... tampoco se ve el desgloce de donde vino el calculo de los días
+trabajados... es necesario que exista la posibilidad que sea editable...
+seria bueno agregar el medio de pago antes de disparar el documento... esa
+barra negra está horrible". Reescritura completa como asistente de 3 pasos
+(Datos de Terminación → Cálculo de Prestaciones → Confirmación y Pago):
+
+- **Paso 2** — una `ConceptoLiquidacionCard` por concepto (Cesantía,
+  Preaviso, Asistencia Económica, Vacaciones, Regalía, Días Trabajados
+  Pendientes), cada una mostrando la fórmula exacta aplicada (tramo legal,
+  días × tarifa) y un ícono de lápiz que permite **editar manualmente el
+  monto final** con motivo obligatorio — el cálculo automático
+  (`montoAuto`) nunca se pierde, queda como referencia junto al ajuste.
+- **Paso 3** — captura de método de pago (cheque/efectivo/transferencia) +
+  referencia, antes de finalizar — impreso luego en el documento formal.
+- **Planilla en PDF** (`descargarPlanillaLiquidacionPDF`) — el "Recibo de
+  Descargo" que empleado y empleador firman, con el desglose completo por
+  concepto y línea de firma, generado a partir de
+  `RegistroLiquidacion.desgloseCalculo` (snapshot inmutable al finalizar,
+  nunca recalculado después — mismo principio que
+  `PeriodoNomina.resultadosPorEmpleado`).
+- Nuevos tipos: `ConceptoLiquidacion`, `DesgloseConceptoLiquidacion`,
+  `RegistroLiquidacion.metodoPago/referenciaPago/desgloseCalculo`.
+
+Bug encontrado y corregido durante la construcción: el `useEffect` de reseteo
+de formulario (atado a `[empleadoId]`) pisaba `setPaso('exito')` porque
+`handleFinalizarLiquidacion` limpiaba `empleadoId` en el mismo ciclo — se
+resolvió separando el reseteo a una función `handleRegistrarOtra()` explícita,
+invocada solo desde el botón correspondiente de la pantalla de éxito.
+
+## Identidad visual propia para Liquidación
+
+El usuario probó el rediseño anterior y pidió más: "El estilo visual de las
+tarjetas no se siente premium, se siente como un formulario cualquiera...
+puedes hacer el mejor entorno de salidas de empleados y cálculo de
+prestaciones más hermoso que exista" — explícitamente sin imitar Préstamos
+ni Reportería, que ya le gustaban visualmente pero no quería replicados.
+Segunda pasada centrada en las `ConceptoLiquidacionCard`: gradiente de marca
+propio por concepto (rosa/cesantía, ámbar/preaviso, violeta/asistencia,
+cielo/vacaciones, esmeralda/regalía, índigo/días trabajados) con halo
+`blur-md` detrás del ícono, `hover:-translate-y-0.5` + sombra tintada del
+color del concepto, y transiciones de paso con el mismo lenguaje ya
+establecido en el resto de la app. Usuario confirmó satisfacción: "Wao
+realmente se ve mucho mejor ahora".
+
+## Regalía Pascual — liquidación vía período especial en Nómina
+
+Pedido del usuario: que Regalía Pascual deje de ser solo un visor de
+acumulación y permita "solicitar liquidación de regalía", viajando el
+acumulado a un período especial en Nómina para el pago, con reinicio a cero
+tras procesarlo y acumulación continua hacia el siguiente diciembre —
+planteado explícitamente como pregunta de factibilidad ("¿Consideras que es
+factible? ¿Tiene sentido?"), confirmada antes de implementar.
+
+**Arquitectura:**
+- Nuevo valor `TipoPeriodo = 'regalia'` (además de `'mensual'`/`'quincenal'`) y
+  `PeriodoNomina.montosRegalia`/`motivosAjusteRegalia` — el período nace con
+  el monto de cada empleado ya congelado, no con `ajustesPorEmpleado` ni el
+  motor normal de `calcularNomina`.
+- **Tratamiento fiscal — decisión propia justificada**: el pago de Regalía
+  Pascual vía este período es **bruto, sin AFP/SFS/ISR**, replicando el
+  precedente ya existente para Vacaciones/Regalía dentro de Liquidación (no
+  es salario cotizable). `resultadoRegalia()` en `nomina/page.tsx` construye
+  un `ResultadoNomina` sintético con todo en cero salvo lo pagado, para
+  reutilizar tal cual el modal de comprobante, el PDF y el envío por correo
+  ya existentes.
+- **Reset del acumulado**: `Empleado.regaliaPagadaAnio` (nuevo) ancla
+  `regaliaPagadaEsteAnio` a un año fiscal específico —
+  `regaliaPagadaVigente(empleado, año)` en `dominican-labor.ts` solo lo
+  aplica si el año coincide; sin este campo (registros previos) se asume
+  vigente solo para el año calendario actual, así el descuento deja de
+  aplicar por sí solo al año siguiente sin necesidad de migrar datos. Esto
+  corrige de paso un bug latente: el offset de migración se restaba
+  indefinidamente en vez de solo el año en que se capturó. Al procesar cada
+  empleado en el período de regalía (`handleProcesarRegalia`), se estampan
+  `regaliaPagadaEsteAnio`/`regaliaPagadaAnio`, "reiniciando" su acumulado.
+- **`regalia-pascual/page.tsx`** — botón "Solicitar Liquidación de Regalía"
+  abre un modal con el acumulado de cada empleado, editable manualmente
+  (lápiz + motivo obligatorio) antes de confirmar — cubre el pedido de
+  "editar la acumulación... por si hay que hacer un ajuste manual". Guard
+  contra floating-point: el acumulado se redondea a centavos antes de
+  compararlo contra 0, sin esto un empleado recién liquidado en su totalidad
+  arrastraba un residuo de fracciones de centavo que lo colaba de vuelta a
+  la siguiente solicitud.
+- **`nomina/page.tsx`** — vista de detalle dedicada y más simple para
+  períodos tipo `'regalia'` (sin ajustes editables, préstamos, filtros ni
+  auditoría pre-cierre), reutilizando `Cerrar`/`Reabrir`/`Marcar Pagada`/
+  `Comprobantes` genéricos de la lista de períodos sin cambios.
+
+Verificado en navegador con Playwright: solicitud con ajuste manual → período
+"Regalía Pascual 2026" creado en Nómina con 4 empleados por RD$101,500.00 →
+procesado → acumulado exacto en RD$0.00 tras el pago para los 4 empleados,
+botón de solicitud correctamente deshabilitado hasta que vuelva a acumularse.
+
+## Vacaciones no gozadas llevan AFP/SFS/ISR — no son indemnización exenta
+
+Corrección de ley señalada por el usuario, quien inicialmente había
+confirmado el tratamiento contrario y luego se corrigió explícitamente:
+"las vacaciones pagadas tanto en la liquidación como en nómina están
+sujetas a TSS e ISR, y deben de ser deducidas... si hay que pagarle 40,000
+pesos a un empleado por concepto de vacaciones, hay que retener tanto TSS
+como ISR porque el salario excedía la exención del ISR". A diferencia de
+cesantía/preaviso/asistencia económica (indemnizaciones exentas por Ley
+16-92) y de la Regalía Pascual (100% exenta, confirmado explícitamente),
+las vacaciones son salario ordinario continuado (Art. 178, Código de
+Trabajo) — llevan retención normal cuando el monto, evaluado como si fuera
+el salario del mes, supera la exención del ISR al anualizarlo.
+
+Implementación: reutiliza exactamente el mecanismo ya validado para "días
+trabajados pendientes" en Liquidación — `calcularNomina({ ...empleado,
+salarioBase: montoVacaciones })` trata el bruto como si fuera el salario
+del mes, topando AFP/SFS en sus respectivos topes cotizables y evaluando
+ISR contra los tramos anuales normales sobre el monto anualizado ×12.
+
+- **Liquidación**: "Vacaciones No Gozadas" pasa de pagar el bruto a pagar
+  el neto (bruto − AFP − SFS − ISR), con el desglose visible en la tarjeta
+  (mismo patrón que "Días Trabajados Pendientes"), el PDF y el Excel.
+  Nuevos campos `RegistroLiquidacion.vacacionesBruto/afpVacaciones/
+  sfsVacaciones/isrVacaciones` (auditoría; `vacaciones` sigue siendo el
+  neto que entra a `totalPagado`).
+- **Vacaciones** (provisión, sin pago real todavía en el sistema): nueva
+  columna/stat "Neto Estimado" junto al "Valor Bruto", para que la
+  provisión muestre honestamente lo que el empleado recibiría si se pagara
+  hoy — usa el mismo `calcularNomina({...empleado, salarioBase: valor})`.
+- Reportería (Proyección Anual) y el comprobante de Nómina se revisaron y
+  se dejaron sin cambios — solo muestran provisión/días informativos (el
+  costo proyectado de la empresa sí debe seguir siendo el bruto, ya que la
+  porción retenida igual la desembolsa el empleador, solo que a TSS/DGII en
+  vez de al empleado).
+
+Verificado en navegador: María González (bruto RD$13,734.35 en vacaciones)
+→ neto exacto RD$12,922.65 (AFP RD$394.18, SFS RD$417.52, ISR RD$0.00 por no
+cruzar el tramo anualizado); Regalía Proporcional en la misma liquidación
+sin cambios, confirmando que su exención total no se tocó.
+
+## Regalía Pascual — banner de ciclo pendiente no distinguía período cerrado
+
+Reporte del usuario tras probar el flujo completo: pagó el período de
+Regalía Pascual 2026 en Nómina, pero el módulo de Regalía Pascual seguía
+mostrando "ya se solicitó la liquidación, continúa el pago desde Nómina"
+como si nada hubiera cambiado — además pidió un indicador explícito de
+sobre qué año/ciclo está trabajando el módulo, filtros por nombre/cédula/
+departamento, y una ficha de empleado de solo lectura al hacer clic en su
+nombre.
+
+**Investigación**: se reprodujo el flujo completo con Playwright (navegación
+por sidebar, procesar empleados uno a uno, cerrar el período, volver a
+Regalía Pascual) — el acumulado sí volvía a RD$0.00 correctamente en todos
+los casos. El bug real: `periodoRegaliaExistente = periodos.find(p => p.tipo
+=== 'regalia' && p.anio === anioActual)` no distinguía un período todavía
+`en_proceso`/`procesada` de uno ya `cerrada` (pagado) — el banner y el botón
+"Liquidación {año} en Nómina" se quedaban visibles todo el año aunque el
+acumulado ya estuviera en cero por debajo, dando la falsa impresión de que
+nada había cambiado.
+
+- **Fix**: el banner/botón de "pendiente" ahora solo se muestra mientras el
+  período del año en curso NO está `cerrada`. Una vez cerrado, se reemplaza
+  por una sección "Ciclos Liquidados y Pagados" (`historialRegalia` —
+  períodos `regalia` con `estado === 'cerrada'`, más recientes primero) que
+  deja constancia de qué años ya se pagaron.
+- **Indicador de ciclo**: el subtítulo del header ahora dice explícitamente
+  "Ciclo en acumulación: {año}" — como `anioActual` se deriva de la fecha
+  real, apenas empiece 2027 el módulo lo reflejará solo, sin código nuevo.
+- **Filtros**: buscador por nombre/cédula + `<select>` de departamento sobre
+  la tabla de empleados, con botón "Ver todos" para limpiar ambos y un
+  contador "X de Y empleado(s)"; el TOTAL del pie de tabla refleja el
+  subconjunto filtrado (rotulado "TOTAL (filtrado)"), mientras las stat
+  cards del encabezado se mantienen a nivel de toda la empresa.
+- **Ficha de solo lectura** — nuevo componente compartido
+  `src/components/empleados/EmpleadoInfoReadOnly.tsx`: mismas secciones
+  informativas que el tab "Información" del drawer de Empleados (Datos
+  Personales, Documentos, Datos Laborales, Derechos estimados), pero sin
+  ninguna de las acciones que mutan datos (suspender, dar de baja, saldo
+  ISR, dependientes) — se construyó como componente nuevo en vez de
+  parametrizar el drawer existente, que mezcla visualización con mutación
+  en el mismo árbol de JSX. Se abre al hacer clic en el nombre de cualquier
+  empleado en la tabla de Regalía Pascual.
+
+Verificado en navegador con Playwright: tras cerrar el período 2026, el
+banner desaparece y el historial muestra "2026 · 7 empleado(s) · pagada ·
+RD$187,541.66"; filtro por departamento "Administración" reduce la tabla a
+1 fila con el total recalculado; búsqueda "María" aísla correctamente a
+María González Pérez; clic en su nombre abre la ficha de solo lectura con
+sus datos reales y ningún control de edición visible.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -1921,6 +2167,25 @@ direcciones (entrada y salida).
 
 | Hash | Descripción |
 |---|---|
+| `4c8bbab` | fix: Regalía Pascual — banner de ciclo pendiente no distinguía período cerrado |
+| `5ffe5b5` | fix: vacaciones no gozadas llevan AFP/SFS/ISR — no son indemnización exenta |
+| `fe92d70` | feat: liquidación de Regalía Pascual vía período especial en Nómina |
+| `0fdac97` | polish: identidad visual propia para Liquidación — no imita Préstamos/Reportería |
+| `9020d43` | redesign: Liquidación en asistente de 3 pasos, cálculo transparente y editable, PDF de firma |
+| `4c465cc` | feat: exportación a Excel en Empleados y Préstamos |
+| `732f04c` | feat: exportación a Excel con estilo real en todos los módulos de negocio |
+| `7d0fdcf` | fix: key duplicada en fila de nómina — pertenecía al Fragment, no al `<tr>` |
+| `add67a2` | feat: salida pendiente de empleados + pago de días trabajados al terminar |
+| `aa8b459` | fix: dos decimales consistentes en montos + bordes visibles en tablas |
+| `7b54e8b` | fix: el salto real era texto envolviéndose a 2 líneas durante el flyout |
+| `5d0e386` | fix: salto residual del layout interno al abrir el flyout de la sidebar |
+| `4160d79` | fix: eliminar jank al pasar el mouse por la sidebar (flyout + prefetch) |
+| `1555027` | feat: catálogo configurable de ingresos y deducciones en Configuración |
+| `57be0a8` | feat: sidebar colapsado se expande temporalmente al pasar el mouse (flyout) |
+| `e1f0ef1` | feat: filas de tabla clickeables — corrige desajuste de affordance de hover |
+| `f44a6f5` | feat: estados vacíos con personalidad, PDF de comprobante rediseñado, botón primario compartido |
+| `7613918` | feat: paletazo de comandos (Cmd+K) + skeletons con forma en Dashboard |
+| `8a34dde` | docs: registrar rediseño premium de login/registro en CLAUDE.md |
 | `fc96104` | redesign: pantallas de login y registro con estética cinematográfica premium |
 | `4f9a905` | fix: multiempresa con cuentas reales de Firebase, no perfiles compartidos |
 | `503b167` | feat: multiempresa — una cuenta puede tener varias empresas |
