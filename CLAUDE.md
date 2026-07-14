@@ -2314,6 +2314,27 @@ Verificado en navegador: cambiar a Quincenal muestra el selector de
 Quincena; seleccionar manualmente "Diciembre" se mantiene sin que ningún
 efecto en segundo plano lo revierta.
 
+## Ningún historial se oculta por antigüedad + creación retroactiva de períodos
+
+El usuario preguntó cuántos "períodos fiscales" quedarían habilitados,
+preocupado por si una empresa con varios años usando Cielo Cloud perdería
+acceso a su historial más antiguo. Se auditaron todos los selectores de año
+del sistema (Cálculo de Nómina, Gestión de Envíos, y los reportes de
+Reportería con filtro de año — Horas Extras, Salario vs. Licencias) — todos
+ya se arman dinámicamente a partir de `Array.from(new Set(periodos.map(p =>
+p.anio)))` (o el equivalente para licencias), sin ningún tope: si hay datos
+de 2025, aparecerán en el filtro sin importar cuántos años pasen. Los datos
+en `localStorage` tampoco tienen expiración — un período solo desaparece si
+se elimina manualmente.
+
+La única excepción real (no afecta historial, solo creación) era el
+selector de "Año" al crear un período nuevo en Cálculo de Nómina, limitado a
+año actual ±1 — sin forma de registrar retroactivamente un período de una
+empresa con historial previo a Cielo Cloud. Ampliado a 10 años atrás hasta 1
+año adelante del año calendario real (fijo — no se mueve si el usuario
+cambia el año seleccionado en el propio formulario, para evitar que el
+rango de opciones "se corra" cada vez que se elige un año distinto).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -2322,6 +2343,7 @@ efecto en segundo plano lo revierta.
 
 | Hash | Descripción |
 |---|---|
+| `bb2f8ec` | feat: permitir crear períodos retroactivos hasta 10 años atrás |
 | `320390a` | fix: Cálculo de Nómina — permitir seleccionar el período libremente |
 | `de3e2c4` | redesign: separar Nómina en Cálculo de Nómina y Gestión de Envíos |
 | `86bf00a` | fix: períodos de Regalía Pascual contaminaban Reportería/Liquidación + rediseño premium con prepantalla |
