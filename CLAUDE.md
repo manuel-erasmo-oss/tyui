@@ -2159,6 +2159,72 @@ RD$187,541.66"; filtro por departamento "Administración" reduce la tabla a
 María González Pérez; clic en su nombre abre la ficha de solo lectura con
 sus datos reales y ningún control de edición visible.
 
+## Bug hunt de Regalía Pascual (3 años simulados) + rediseño con prepantalla
+
+El usuario reportó, con capturas de pantalla, que los "Ciclos Liquidados y
+Pagados" no se veían premium en la parte de arriba de Regalía Pascual y que
+"esos acumulados abajo no me cuadran" — pidiendo explícitamente simular 3
+años de Regalía Pascual + Nómina en busca de bugs, y una prepantalla al
+estilo Alegra (captura de referencia: pantalla "Calcular nómina" con un
+período sugerido y una tabla de períodos históricos) que pregunte si se
+quiere ver un período histórico o la acumulación actual.
+
+**Investigación**: se inyectaron 2 períodos `regalia` sintéticos (2024 y
+2025, `cerrada`, con `resultadosPorEmpleado` reales) directo en
+`localStorage` vía Playwright para simular 3 ciclos completos sin depender
+de que pasara tiempo real. Se encontraron 3 bugs reales de contaminación
+cruzada — el tipo `'regalia'` (agregado en la sesión anterior) nunca se
+excluyó de código que asumía implícitamente solo `'mensual'`/`'quincenal'`:
+
+1. **`calcularSalarioPromedioUltimos12Meses`** (dominican-labor.ts) — el
+   más grave: sumaba el pago de Regalía Pascual como si fuera salario
+   ordinario de ese mes al promediar los últimos 12 meses, usado por
+   Liquidación para Cesantía/Preaviso/Asistencia Económica. Un empleado
+   despedido dentro de los 12 meses posteriores a cobrar su regalía veía su
+   indemnización inflada artificialmente. Fix: excluir `tipo === 'regalia'`
+   del filtro `relevantes` — la Regalía Pascual nunca es "salario
+   ordinario".
+2. **Los 6 selectores de "Período" en Reportería** (Resumen Gerencial,
+   Nómina por Período, Cumplimiento Fiscal, Costo por Departamento,
+   Planilla ACH, Empleados Sin Ingresos) no excluían `tipo === 'regalia'` —
+   aparecía en el dropdown como **"Diciembre {año}"** (`periodoLabel` no
+   tenía rama para ese tipo), indistinguible de un mes real. Si se
+   seleccionaba, `calcularConPeriodo` caía al motor normal de nómina y
+   fabricaba un salario mensual completo inexistente bajo esa etiqueta.
+   Fix: excluido de los 6 selectores; `calcularConPeriodo`/`periodoLabel`
+   también reciben manejo explícito de `'regalia'` como defensa adicional
+   (`calcularConPeriodo` devuelve un `ResultadoNomina` en cero en vez de
+   recalcular).
+3. **Historial Nómina del empleado** (`empleados/page.tsx`) tenía el mismo
+   patrón: un período de regalía sin snapshot para un empleado (nunca
+   formó parte de ese pago) fabricaba un salario mensual bajo esa etiqueta.
+   Fix: se filtra antes de construir el historial; `labelPeriodoHist`
+   etiqueta "Regalía Pascual {año}" en vez de "Diciembre {año}".
+
+Verificado en navegador: tras inyectar los 2 ciclos sintéticos, la
+acumulación 2026 en vivo se mantuvo exacta (RD$187,541.66, idéntica a
+antes de inyectar — sin fuga entre años); el dropdown de "Nómina por
+Período" dejó de listar los ciclos de regalía; el Historial Nómina de
+Carlos Rodríguez muestra "Regalía Pascual 2025"/"2024" correctamente
+etiquetados (RD$88,000 bruto=neto, sin AFP/SFS/ISR); y su Cesantía
+(con una regalía de diciembre 2025 dentro de los últimos 12 meses)
+calculó exacto sobre su salario base real — RD$594,544.69 = 23 días ×
+7 años × RD$3,692.82/día — sin ningún rastro de inflación.
+
+**Rediseño — prepantalla "¿Qué quieres ver?"**: con historial existente,
+el módulo ya no amontona la tabla de ciclos cerrados sobre la acumulación
+en vivo. Ahora abre en una pantalla de elección (patrón "Calcular Nómina"
+de Alegra) con dos tarjetas grandes — "Acumulación Actual" (ciclo en curso
++ cifra acumulada) y "Historial de Liquidaciones" (conteo de ciclos +
+cifra del más reciente) — cada una con degradado navy/esmeralda, halo y
+hover lift, mismo lenguaje visual ya usado en Configuración Inicial. El
+Historial pasa a su propia pantalla con una tabla densa (Ciclo, Empleados,
+Total Pagado, Fecha de Pago, Estado, "Ver en Nómina"), sin mezclarse con
+la acumulación. Un botón "Cambiar de vista" en el header de cualquiera de
+las dos pantallas regresa al selector sin recargar el módulo. Sin
+historial (primer año de la empresa), se salta la prepantalla y va directo
+a la acumulación — no hay nada que elegir todavía.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -2167,6 +2233,8 @@ sus datos reales y ningún control de edición visible.
 
 | Hash | Descripción |
 |---|---|
+| `86bf00a` | fix: períodos de Regalía Pascual contaminaban Reportería/Liquidación + rediseño premium con prepantalla |
+| `252b78a` | docs: registrar en CLAUDE.md las fases pendientes y las 3 features más recientes |
 | `4c8bbab` | fix: Regalía Pascual — banner de ciclo pendiente no distinguía período cerrado |
 | `5ffe5b5` | fix: vacaciones no gozadas llevan AFP/SFS/ISR — no son indemnización exenta |
 | `fe92d70` | feat: liquidación de Regalía Pascual vía período especial en Nómina |
