@@ -4,20 +4,25 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
+import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { getMesesServicio, regaliaPagadaVigente } from '@/lib/dominican-labor'
 import { formatRD, formatDate, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
-import { Gift, Calendar, AlertTriangle, Download, Send, Pencil, Check, X, ArrowRight, CheckCircle2 } from 'lucide-react'
-import type { PeriodoNomina } from '@/types'
+import {
+  Gift, Calendar, AlertTriangle, Download, Send, Pencil, Check, X, ArrowRight,
+  CheckCircle2, Search, History, RotateCcw,
+} from 'lucide-react'
+import { EmpleadoInfoReadOnly } from '@/components/empleados/EmpleadoInfoReadOnly'
+import type { Empleado, PeriodoNomina } from '@/types'
 
 const hoy = new Date()
 const mesActual  = hoy.getMonth() + 1  // 1-based
 const anioActual = hoy.getFullYear()
 
 export default function RegaliaPage() {
-  const { empleadosEnNomina } = useEmpleados()
+  const { empleados, empleadosEnNomina } = useEmpleados()
   const { empresa } = useEmpresa()
   const { periodos, generar } = usePeriodos()
 
@@ -47,11 +52,37 @@ export default function RegaliaPage() {
     (new Date(hoy.getFullYear(), 11, 20).getTime() - hoy.getTime()) / (1000 * 3600 * 24)
   ))
 
-  // Ya existe un período de nómina de Regalía Pascual para este año — no se
-  // puede solicitar otra liquidación hasta que ese se elimine (el desposteo
-  // en Nómina no aplica aquí: si hace falta un ajuste, se corrige el monto
-  // directamente en ese período antes de procesarlo).
-  const periodoRegaliaExistente = periodos.find(p => p.tipo === 'regalia' && p.anio === anioActual)
+  // Período de nómina de Regalía Pascual para el año en curso. Solo bloquea
+  // "Solicitar Liquidación" mientras sigue en_proceso/procesada en Nómina —
+  // una vez cerrada (pagada), el ciclo del año quedó completado de verdad:
+  // el acumulado ya volvió a 0 y el módulo debe volver a mostrar el estado
+  // normal de acumulación (hacia el próximo diciembre), no seguir apuntando
+  // a Nómina indefinidamente como si aún hubiera algo pendiente.
+  const periodoRegaliaAnioActual = periodos.find(p => p.tipo === 'regalia' && p.anio === anioActual)
+  const periodoRegaliaExistente = periodoRegaliaAnioActual?.estado !== 'cerrada' ? periodoRegaliaAnioActual : undefined
+
+  // Historial de ciclos ya liquidados y pagados — así queda visible que años
+  // anteriores se pagaron y sobre cuál año se está acumulando ahora mismo.
+  const historialRegalia = periodos
+    .filter(p => p.tipo === 'regalia' && p.estado === 'cerrada')
+    .sort((a, b) => b.anio - a.anio)
+
+  // ── Filtros (nombre, cédula, departamento) ────────────────────────────────
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroDepto, setFiltroDepto] = useState('todos')
+  const departamentos = Array.from(new Set(filas.map(f => f.empleado.departamento))).sort()
+  const q = busqueda.trim().toLowerCase()
+  const filasVisibles = filas.filter(f => {
+    if (filtroDepto !== 'todos' && f.empleado.departamento !== filtroDepto) return false
+    if (!q) return true
+    return fullName(f.empleado).toLowerCase().includes(q) || f.empleado.cedula.toLowerCase().includes(q)
+  })
+  const hayFiltrosActivos = busqueda.trim() !== '' || filtroDepto !== 'todos'
+  const totalAcumuladoVisible  = filasVisibles.reduce((s, f) => s + f.acumulado, 0)
+  const totalProyectadoVisible = filasVisibles.reduce((s, f) => s + f.proyeccionAnual, 0)
+
+  // ── Ficha de empleado de solo lectura ──────────────────────────────────────
+  const [empleadoInfo, setEmpleadoInfo] = useState<Empleado | null>(null)
 
   // ── Solicitar Liquidación de Regalía ──────────────────────────────────────
   const [solicitudAbierta, setSolicitudAbierta] = useState(false)
@@ -153,7 +184,7 @@ export default function RegaliaPage() {
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Regalía Pascual"
-        subtitle="Art. 219 · Código de Trabajo · Ley 16-92"
+        subtitle={`Art. 219 · Código de Trabajo · Ley 16-92 · Ciclo en acumulación: ${anioActual}`}
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -198,6 +229,32 @@ export default function RegaliaPage() {
           </div>
         )}
 
+        {historialRegalia.length > 0 && (
+          <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+            <div className="flex items-center gap-2 border-b border-zinc-100 dark:border-[#1d2035] px-5 py-3">
+              <History className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Ciclos Liquidados y Pagados
+              </h2>
+            </div>
+            <div className="divide-y divide-zinc-100 dark:divide-[#1d2035]">
+              {historialRegalia.map(p => (
+                <div key={p.id} className="flex items-center justify-between px-5 py-2.5 text-sm">
+                  <div className="flex items-center gap-2.5">
+                    <Badge variant="success">{p.anio}</Badge>
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      {p.totalEmpleados} empleado(s) · pagada{p.fechaPago ? ` el ${formatDate(p.fechaPago)}` : ''}
+                    </span>
+                  </div>
+                  <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-200">
+                    {formatRD(p.totales.bruto)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-4">
           <StatCard
             label="Acumulado al Mes Actual"
@@ -230,6 +287,37 @@ export default function RegaliaPage() {
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
               Cálculo: Salario mensual ÷ 12 × meses laborados en el año. Pago obligatorio entre el 1 y 20 de diciembre.
             </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+              <input
+                type="text"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre o cédula…"
+                className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 pl-8 pr-3 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+              />
+            </div>
+            <select
+              value={filtroDepto}
+              onChange={e => setFiltroDepto(e.target.value)}
+              className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+            >
+              <option value="todos">Todos los departamentos</option>
+              {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            {hayFiltrosActivos && (
+              <button
+                onClick={() => { setBusqueda(''); setFiltroDepto('todos') }}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Ver todos
+              </button>
+            )}
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 ml-auto">
+              {filasVisibles.length} de {filas.length} empleado(s)
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -265,18 +353,30 @@ export default function RegaliaPage() {
                     </td>
                   </tr>
                 )}
-                {filas.map(({ empleado, mesesAcumulados, acumulado, proyeccionAnual, porcentaje }) => (
+                {filas.length > 0 && filasVisibles.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-zinc-400 dark:text-zinc-500">
+                      Ningún empleado coincide con el filtro.
+                    </td>
+                  </tr>
+                )}
+                {filasVisibles.map(({ empleado, mesesAcumulados, acumulado, proyeccionAnual, porcentaje }) => (
                   <tr key={empleado.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                      <button
+                        type="button"
+                        onClick={() => setEmpleadoInfo(empleado)}
+                        title="Ver ficha del empleado"
+                        className="flex items-center gap-3 text-left"
+                      >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-xs font-bold text-emerald-700 dark:text-emerald-300">
                           {empleado.nombre[0]}{empleado.apellido[0]}
                         </div>
                         <div>
-                          <p className="font-medium text-zinc-900 dark:text-zinc-100">{fullName(empleado)}</p>
+                          <p className="font-medium text-zinc-900 dark:text-zinc-100 hover:text-[#1B2980] dark:hover:text-indigo-400 hover:underline">{fullName(empleado)}</p>
                           <p className="text-xs text-zinc-500 dark:text-zinc-400">Ingreso: {formatDate(empleado.fechaIngreso)}</p>
                         </div>
-                      </div>
+                      </button>
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-700 dark:text-zinc-300">
                       {formatRD(empleado.salarioBase)}
@@ -310,9 +410,11 @@ export default function RegaliaPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
-                  <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700 dark:text-emerald-300">{formatRD(totalAcumulado)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-zinc-700 dark:text-zinc-300">{formatRD(totalProyectado)}</td>
+                  <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">
+                    {hayFiltrosActivos ? 'TOTAL (filtrado)' : 'TOTAL'}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-emerald-700 dark:text-emerald-300">{formatRD(totalAcumuladoVisible)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-zinc-700 dark:text-zinc-300">{formatRD(totalProyectadoVisible)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -506,6 +608,14 @@ export default function RegaliaPage() {
           </>
         )
       })()}
+
+      {empleadoInfo && (
+        <EmpleadoInfoReadOnly
+          empleado={empleadoInfo}
+          todosEmpleados={empleados}
+          onClose={() => setEmpleadoInfo(null)}
+        />
+      )}
     </div>
   )
 }
