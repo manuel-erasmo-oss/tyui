@@ -576,14 +576,25 @@ export interface RegistroLiquidacion {
   // momento de finalizar. A diferencia de cesantía/preaviso/asistencia
   // económica (indemnizaciones exentas), estos días SON salario ordinario —
   // llevan AFP/SFS/ISR calculados con el mismo motor de nómina
-  // (calcularNomina) sobre los días proporcionales, no un monto bruto sin
-  // retención como vacaciones/regalía.
+  // (calcularNomina) sobre los días proporcionales — mismo tratamiento que
+  // vacaciones (ver abajo), a diferencia de la Regalía Pascual (100% exenta).
   diasTrabajadosPendientes?: number
   salarioDiasTrabajadosBruto?: number
   afpDiasTrabajados?: number
   sfsDiasTrabajados?: number
   isrDiasTrabajados?: number
   salarioDiasTrabajadosNeto?: number   // ya incluido en totalPagado
+
+  // ─── Retención sobre Vacaciones No Gozadas (Art. 178) ────────────────────
+  // Las vacaciones son salario ordinario continuado, no una indemnización
+  // exenta — llevan AFP/SFS/ISR normales si el monto supera la exención del
+  // ISR, calculadas tratando el bruto como si fuera el salario del mes (ver
+  // calcularNomina en dominican-labor.ts). `vacaciones` (arriba) ya es el
+  // NETO incluido en totalPagado; estos campos son el desglose de auditoría.
+  vacacionesBruto?: number
+  afpVacaciones?: number
+  sfsVacaciones?: number
+  isrVacaciones?: number
 
   // ─── Método de pago (Recibo de Descargo) ─────────────────────────────────
   // Capturado en el paso de confirmación, antes de generar la planilla en

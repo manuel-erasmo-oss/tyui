@@ -511,7 +511,20 @@ export default function LiquidacionPage() {
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
     const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac + (emp.saldoVacacionesInicial ?? 0)
     const tarifaDiariaVac = emp.salarioBase / divisorDiario
-    const vacaciones = diasVacAcum * tarifaDiariaVac
+    const vacacionesBruto = diasVacAcum * tarifaDiariaVac
+    // Las vacaciones SÍ son salario ordinario continuado (Art. 178, Código de
+    // Trabajo) — a diferencia de cesantía/preaviso/asistencia económica
+    // (indemnizaciones exentas) y de la Regalía Pascual (100% exenta, Art.
+    // 219), llevan AFP/SFS/ISR normales si el monto supera la exención del
+    // ISR. Mismo mecanismo ya usado para "días trabajados pendientes": se
+    // trata el monto como si fuera el salario del mes y se calcula con el
+    // motor real (calcularNomina), topado en AFP/SFS y con ISR vía los
+    // tramos anuales normales sobre el monto anualizado ×12.
+    const vacacionesCalc = calcularNomina({ ...emp, salarioBase: vacacionesBruto })
+    const afpVacaciones = vacacionesCalc.afpEmpleado
+    const sfsVacaciones = vacacionesCalc.sfsEmpleado
+    const isrVacaciones = vacacionesCalc.isrMensual
+    const vacaciones = vacacionesCalc.salarioNeto
 
     const regaliaBruta = (emp.salarioBase / 12) * mesesCalendario
     const regalia = Math.max(0, regaliaBruta - regaliaPagadaVigente(emp, fechaTerm.getFullYear()))
@@ -548,7 +561,8 @@ export default function LiquidacionPage() {
     return {
       anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario,
       cesantia, cesantiaDetalle, preaviso, preavisoDetalle, asistenciaEconomica, asistenciaDetalle,
-      vacaciones, diasVacAcum, diasVacAnuales, tarifaDiariaVac,
+      vacaciones, vacacionesBruto, afpVacaciones, sfsVacaciones, isrVacaciones,
+      diasVacAcum, diasVacAnuales, tarifaDiariaVac,
       regalia, regaliaBruta,
       totalPrestamos, saldoISR: saldoISRPendiente,
       diasPreavisoRequeridos, diasAnticipacionReal, cumplioPreaviso, diferenciaDiasPreaviso,
@@ -608,7 +622,7 @@ export default function LiquidacionPage() {
         ],
       },
       vacaciones: {
-        titulo: 'Vacaciones No Gozadas', articulo: 'Art. 177 — Código de Trabajo',
+        titulo: 'Vacaciones No Gozadas', articulo: 'Art. 177/178 — con AFP/SFS/ISR',
         colores: {
           border: 'border-sky-200 dark:border-sky-800/40', text: 'text-sky-700 dark:text-sky-300',
           panelBg: 'bg-sky-50/70 dark:bg-sky-950/20', gradFrom: '#0284c7', gradTo: '#38bdf8',
@@ -618,7 +632,8 @@ export default function LiquidacionPage() {
         montoAuto: resultado.vacaciones,
         detalle: [
           `${resultado.diasVacAnuales} días/año × ${resultado.mesesCicloVac.toFixed(1)} meses de ciclo${(emp.saldoVacacionesInicial ?? 0) > 0 ? ` + ${emp.saldoVacacionesInicial} días de saldo inicial` : ''} = ${resultado.diasVacAcum.toFixed(2)} días`,
-          `${resultado.diasVacAcum.toFixed(2)} días × ${formatRD(resultado.tarifaDiariaVac, 2)}/día`,
+          `${resultado.diasVacAcum.toFixed(2)} días × ${formatRD(resultado.tarifaDiariaVac, 2)}/día = ${formatRD(resultado.vacacionesBruto, 2)} bruto`,
+          `Bruto ${formatRD(resultado.vacacionesBruto, 2)} − AFP ${formatRD(resultado.afpVacaciones, 2)} − SFS ${formatRD(resultado.sfsVacaciones, 2)} − ISR ${formatRD(resultado.isrVacaciones, 2)}`,
         ],
       },
       regalia: {
@@ -817,6 +832,12 @@ export default function LiquidacionPage() {
       ...(referenciaPago.trim() ? { referenciaPago: referenciaPago.trim() } : {}),
       desgloseCalculo,
       ...(motivo === 'renuncia' && fechaNotificacionRenuncia ? { fechaNotificacionRenuncia } : {}),
+      ...(resultado.vacacionesBruto > 0 ? {
+        vacacionesBruto: resultado.vacacionesBruto,
+        afpVacaciones: resultado.afpVacaciones,
+        sfsVacaciones: resultado.sfsVacaciones,
+        isrVacaciones: resultado.isrVacaciones,
+      } : {}),
       ...(diasTrabajadosFinal > 0 || resultado.diasTrabajadosPendientes > 0 ? {
         diasTrabajadosPendientes: resultado.diasTrabajadosPendientes,
         salarioDiasTrabajadosBruto: resultado.salarioDiasTrabajadosBruto,

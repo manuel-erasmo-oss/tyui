@@ -7,12 +7,13 @@ import { useEmpleados } from '@/lib/empleados-context'
 import {
   getAnosServicio,
   getDivisorSalarioDiario,
+  calcularNomina,
   DIAS_VACACIONES_HASTA_5_ANOS,
   DIAS_VACACIONES_MAS_5_ANOS,
 } from '@/lib/dominican-labor'
 import { useEmpresa } from '@/lib/empresa-context'
 import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
-import { CalendarDays, Users, Clock, AlertCircle, Download } from 'lucide-react'
+import { CalendarDays, Users, Wallet, AlertCircle, Download } from 'lucide-react'
 
 export default function VacacionesPage() {
   const { empleadosEnNomina } = useEmpleados()
@@ -28,19 +29,27 @@ export default function VacacionesPage() {
     const diasAcumulados  = Math.max(0, (diasAnuales / 12) * mesesServicio + (e.saldoVacacionesInicial ?? 0))
     const valorDiario     = e.salarioBase / getDivisorSalarioDiario(e)
     const valorAcumulado  = diasAcumulados * valorDiario
+    // Las vacaciones son salario ordinario (Art. 178) — llevan AFP/SFS/ISR
+    // normales si el monto supera la exención del ISR, igual que al pagarse
+    // en Liquidación. Este neto es un ESTIMADO de lo que el empleado
+    // recibiría si se le pagara hoy — el monto real se calcula (y puede
+    // ajustarse) al momento de pagarlo de verdad.
+    const retencionEstimada = calcularNomina({ ...e, salarioBase: valorAcumulado })
+    const valorNetoEstimado = retencionEstimada.salarioNeto
     const puedeGozar      = anos >= 1
-    return { empleado: e, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, puedeGozar }
+    return { empleado: e, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, valorNetoEstimado, puedeGozar }
   })
 
   const totalDias        = filas.reduce((s, f) => s + f.diasAcumulados, 0)
   const totalValor       = filas.reduce((s, f) => s + f.valorAcumulado, 0)
+  const totalValorNeto   = filas.reduce((s, f) => s + f.valorNetoEstimado, 0)
   const empleadosAptos   = filas.filter(f => f.puedeGozar).length
 
   // Exporta exactamente las mismas filas ya calculadas para la tabla en
   // pantalla (mismo desglose, mismo total). Carga la librería bajo demanda.
   async function handleExportar() {
     const { exportarExcel } = await import('@/lib/excel-export')
-    const filasExcel = filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, puedeGozar }) => [
+    const filasExcel = filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, valorNetoEstimado, puedeGozar }) => [
       fullName(empleado),
       empleado.cedula,
       formatAnosServicio(anos),
@@ -48,6 +57,7 @@ export default function VacacionesPage() {
       valorDiario,
       Number(diasAcumulados.toFixed(2)),
       Number(valorAcumulado.toFixed(2)),
+      Number(valorNetoEstimado.toFixed(2)),
       puedeGozar ? 'Puede gozar' : 'En acumulación',
     ])
     await exportarExcel({
@@ -57,11 +67,11 @@ export default function VacacionesPage() {
       hojas: [{
         nombre: 'Vacaciones',
         titulo: 'Vacaciones por Empleado',
-        subtitulo: 'Art. 177 · Código de Trabajo · Ley 16-92',
-        encabezados: ['Empleado', 'Cédula', 'Antigüedad', 'Días/Año', 'Tarifa Diaria', 'Días Acumulados', 'Valor Acumulado', 'Estado'],
+        subtitulo: 'Art. 177/178 · Código de Trabajo · Ley 16-92 · Neto estimado con AFP/SFS/ISR',
+        encabezados: ['Empleado', 'Cédula', 'Antigüedad', 'Días/Año', 'Tarifa Diaria', 'Días Acumulados', 'Valor Bruto', 'Neto Estimado', 'Estado'],
         filas: filasExcel,
-        totales: ['TOTAL', '', '', '', '', Number(totalDias.toFixed(2)), Number(totalValor.toFixed(2)), ''],
-        anchos: [26, 16, 14, 10, 14, 16, 16, 16],
+        totales: ['TOTAL', '', '', '', '', Number(totalDias.toFixed(2)), Number(totalValor.toFixed(2)), Number(totalValorNeto.toFixed(2)), ''],
+        anchos: [26, 16, 14, 10, 14, 16, 16, 16, 16],
         columnasEnteras: [3],
       }],
     })
@@ -84,7 +94,7 @@ export default function VacacionesPage() {
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
           <StatCard
             label="Días Acumulados"
             value={`${totalDias.toFixed(1)} días`}
@@ -93,11 +103,18 @@ export default function VacacionesPage() {
             iconColor="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
           />
           <StatCard
-            label="Valor Provisión"
+            label="Valor Bruto"
             value={formatRD(totalValor)}
             sub="Días acumulados × tarifa diaria"
-            icon={Clock}
+            icon={Wallet}
             iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
+          />
+          <StatCard
+            label="Neto Estimado"
+            value={formatRD(totalValorNeto)}
+            sub="Si se pagara hoy — con AFP/SFS/ISR"
+            icon={Wallet}
+            iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
           />
           <StatCard
             label="Empleados con Derecho"
@@ -113,7 +130,7 @@ export default function VacacionesPage() {
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Vacaciones por Empleado</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
               14 días laborables (1–5 años) · 18 días laborables (más de 5 años). Tarifa diaria = salario ÷ 23.83
-              (÷ 26 en régimen de trabajo intermitente).
+              (÷ 26 en régimen de trabajo intermitente). Neto estimado con AFP/SFS/ISR (Art. 178) al pagarse.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -125,14 +142,15 @@ export default function VacacionesPage() {
                   <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Días/Año</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tarifa Diaria</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Días Acum.</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Valor Acum.</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Valor Bruto</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Neto Estimado</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filas.length === 0 && (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={8}>
                       <div className="flex flex-col items-center justify-center py-16 text-center">
                         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -148,7 +166,7 @@ export default function VacacionesPage() {
                     </td>
                   </tr>
                 )}
-                {filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, puedeGozar }) => (
+                {filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, valorNetoEstimado, puedeGozar }) => (
                   <tr key={empleado.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
@@ -177,8 +195,11 @@ export default function VacacionesPage() {
                     <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">
                       {diasAcumulados.toFixed(2)}
                     </td>
-                    <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">
+                    <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                       {formatRD(valorAcumulado)}
+                    </td>
+                    <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">
+                      {formatRD(valorNetoEstimado)}
                     </td>
                     <td className="px-4 py-3.5">
                       {puedeGozar
@@ -198,7 +219,8 @@ export default function VacacionesPage() {
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
                   <td colSpan={4} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
                   <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{totalDias.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{formatRD(totalValor)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-zinc-500 dark:text-zinc-400">{formatRD(totalValor)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{formatRD(totalValorNeto)}</td>
                   <td />
                 </tr>
               </tfoot>
@@ -209,6 +231,7 @@ export default function VacacionesPage() {
         <div className="rounded-xl border border-sky-200 dark:border-sky-800/40 bg-sky-50 dark:bg-sky-950/30 px-5 py-4 text-xs text-sky-800 dark:text-sky-300">
           <p className="font-semibold mb-1">Art. 177–179, Código de Trabajo — República Dominicana</p>
           <p>Después de un trabajo continuo no menor de un año, el trabajador tendrá derecho a <strong>un período de vacaciones remuneradas de catorce (14) días laborables</strong>. Después de cinco años de servicio ininterrumpido, el trabajador tendrá derecho a <strong>dieciocho (18) días laborables</strong> de vacaciones. Las vacaciones no pueden ser sustituidas por una compensación en dinero, excepto cuando el contrato termina sin que hayan sido disfrutadas.</p>
+          <p className="mt-2">A diferencia de la cesantía/preaviso (indemnizaciones exentas) y de la Regalía Pascual (100% exenta, Art. 219), las vacaciones son salario ordinario continuado (Art. 178) — llevan AFP, SFS e ISR normales si el monto supera la exención del ISR. La columna "Neto Estimado" muestra lo que el empleado recibiría hoy después de esas retenciones.</p>
         </div>
       </div>
     </div>
