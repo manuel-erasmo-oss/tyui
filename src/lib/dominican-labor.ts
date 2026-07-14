@@ -515,6 +515,17 @@ export function getMesesServicio(fechaIngreso: string): number {
   return Math.floor(getAnosServicio(fechaIngreso) * 12)
 }
 
+// Monto de Empleado.regaliaPagadaEsteAnio realmente vigente para `anio` — ver
+// el comentario del campo en types/index.ts. Sin regaliaPagadaAnio (registros
+// previos a este campo), se asume vigente solo para el año calendario actual,
+// para no alterar el comportamiento ya existente de golpe ni requerir migrar
+// datos, dejando que el descuento deje de aplicar por sí solo al año siguiente.
+export function regaliaPagadaVigente(empleado: Pick<Empleado, 'regaliaPagadaEsteAnio' | 'regaliaPagadaAnio'>, anio: number): number {
+  if (!empleado.regaliaPagadaEsteAnio) return 0
+  const anioVigente = empleado.regaliaPagadaAnio ?? new Date().getFullYear()
+  return anioVigente === anio ? empleado.regaliaPagadaEsteAnio : 0
+}
+
 // ─── Asistencia Económica (Art. 82, Código de Trabajo) ───────────────────────
 // Distinta de la cesantía: aplica en terminación de contratos por tiempo
 // determinado/obra, o en casos de terminación sin responsabilidad de las partes.

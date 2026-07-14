@@ -22,6 +22,7 @@ import {
   Send,
   Filter,
   FileSpreadsheet,
+  Gift,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -40,7 +41,7 @@ import {
   enviarComprobante, plantillaComprobanteDeEmpresa, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
 } from '@/lib/comprobante-email'
 import type { PlantillaComprobante } from '@/lib/comprobante-email'
-import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams, getAnosServicio } from '@/lib/dominican-labor'
 import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
 import { formatRD, fullName, formatCedula, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
 import jsPDF from 'jspdf'
@@ -83,11 +84,37 @@ function formatMoneda(amountRD: number, empresa: Empresa, mostrarUSD: boolean, d
 }
 
 function labelPeriodo(p: PeriodoNomina): string {
+  if (p.tipo === 'regalia') return `Regalía Pascual ${p.anio}`
   const mes = MESES[p.mes - 1]
   if (p.tipo === 'quincenal') {
     return `${p.quincena === 1 ? '1ª' : '2ª'} Quincena · ${mes} ${p.anio}`
   }
   return `${mes} ${p.anio}`
+}
+
+// ── Resultado sintético para el período de Regalía Pascual ────────────────────
+// El pago de Regalía Pascual es bruto — sin AFP/SFS/ISR, igual tratamiento que
+// Vacaciones/Regalía dentro de Liquidación (no es salario cotizable) — así que
+// se representa como un ResultadoNomina con todo en cero salvo lo pagado, para
+// poder reutilizar tal cual el modal de comprobante, el PDF y el flujo de
+// envío por correo que ya existen para la nómina normal.
+function resultadoRegalia(empleadoId: string, monto: number, anosServicio: number): ResultadoNomina {
+  return {
+    empleadoId,
+    salarioBruto: monto, importeHE35: 0, importeHE100: 0, totalHorasExtras: 0, importeNocturno: 0,
+    bonificaciones: 0, comisiones: 0, ingresosPersonalizados: 0, totalBruto: monto,
+    salarioCotizable: 0,
+    afpEmpleado: 0, sfsEmpleado: 0, isrMensual: 0, sfsDependientes: 0, otrosDescuentos: 0,
+    aporteVoluntarioAFPEmpleado: 0, totalDescuentos: 0,
+    grossingUpEmpresa: 0,
+    saldoISRAplicado: 0,
+    salarioNeto: monto,
+    afpEmpleador: 0, sfsEmpleador: 0, srlEmpleador: 0, infotepEmpleador: 0,
+    aporteVoluntarioAFPEmpresa: 0, totalAportesEmpleador: 0,
+    totalCostoEmpleador: monto,
+    regaliaPascual: monto, vacacionesMensualesDias: 0, vacacionesMensualesValor: 0,
+    anosServicio,
+  }
 }
 
 function labelConcepto(concepto: ConceptoAjuste): string {
@@ -630,7 +657,7 @@ function DetalleNomina({
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function NominaPage() {
-  const { empleados, empleadosEnNomina } = useEmpleados()
+  const { empleados, empleadosEnNomina, update: actualizarEmpleado } = useEmpleados()
   const { periodos, generar, cerrar, eliminar, actualizarAjustes, actualizarTotales, marcarProcesados, reabrir, marcarPagada } = usePeriodos()
   const { empresa } = useEmpresa()
   const { getPrestamosActivos, registrarPago, registrarOmisionCuota } = usePrestamos()
@@ -755,7 +782,10 @@ export default function NominaPage() {
   // monto nunca se pagó realmente. Al reabrir (desposteo) el estado vuelve a
   // en_proceso y el recálculo en vivo se reanuda correctamente.
   useEffect(() => {
-    if (!periodoActual || periodoActual.estado !== 'en_proceso') return
+    // El período de Regalía Pascual (tipo 'regalia') nace con sus totales ya
+    // congelados desde montosRegalia — no usa ajustesPorEmpleado ni el motor
+    // normal de calcularNomina, así que este recálculo no aplica.
+    if (!periodoActual || periodoActual.estado !== 'en_proceso' || periodoActual.tipo === 'regalia') return
     const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
     const rs = empleadosPeriodo.map(e =>
       conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual), periodoActual)
@@ -872,6 +902,29 @@ export default function NominaPage() {
     setToast('Período cerrado · Pagos de préstamos registrados')
   }
 
+  // Procesa el pago de Regalía Pascual de uno o varios empleados dentro de un
+  // período tipo 'regalia': congela el ResultadoNomina sintético (bruto, sin
+  // AFP/SFS/ISR) igual que cualquier otro período, y además "reinicia" el
+  // acumulado del empleado a cero estampando regaliaPagadaEsteAnio/Anio — así
+  // regalia-pascual/page.tsx vuelve a mostrar RD$0 acumulado a partir de este
+  // pago, acumulando de nuevo mes a mes hacia la próxima liquidación.
+  function handleProcesarRegalia(empIds: string[]) {
+    if (!periodoActual || periodoActual.tipo !== 'regalia') return
+    const montos = periodoActual.montosRegalia ?? {}
+    const resultados: Record<string, ResultadoNomina> = {}
+    for (const id of empIds) {
+      const emp = empleados.find(e => e.id === id)
+      if (!emp) continue
+      const monto = montos[id] ?? 0
+      resultados[id] = resultadoRegalia(id, monto, getAnosServicio(emp.fechaIngreso))
+      actualizarEmpleado(id, { regaliaPagadaEsteAnio: monto, regaliaPagadaAnio: periodoActual.anio })
+    }
+    if (Object.keys(resultados).length === 0) return
+    marcarProcesados(periodoActual.id, resultados)
+    setSelectedEmps(new Set())
+    setToast(empIds.length === 1 ? 'Regalía procesada' : `${empIds.length} pago(s) de regalía procesados`)
+  }
+
   // Export a Excel con TODO el detalle transaccional del período: una hoja
   // de resumen por empleado (mismos totales que ya se ven en la tabla) más
   // una segunda hoja con cada línea de ajuste individual (bonos, comisiones,
@@ -881,6 +934,36 @@ export default function NominaPage() {
   async function handleExportar() {
     if (!periodoActual) return
     const { exportarExcel } = await import('@/lib/excel-export')
+
+    if (periodoActual.tipo === 'regalia') {
+      const montos = periodoActual.montosRegalia ?? {}
+      const procesadosSet = new Set(periodoActual.empleadosProcesados ?? [])
+      const filas = Object.entries(montos).map(([empId, monto]) => {
+        const e = empleados.find(x => x.id === empId)
+        return [
+          e ? fullName(e) : empId, e?.cargo ?? '—', e?.departamento ?? '—',
+          monto, procesadosSet.has(empId) ? 'Procesado' : 'Pendiente',
+        ]
+      })
+      const totalMonto = Object.values(montos).reduce((s, m) => s + m, 0)
+      await exportarExcel({
+        nombreArchivo: `regalia-pascual-${periodoActual.anio}`,
+        empresa: empresa.nombre,
+        rnc: empresa.rnc,
+        hojas: [{
+          nombre: 'Regalía Pascual',
+          titulo: `Regalía Pascual — ${periodoActualLabel}`,
+          subtitulo: `${filas.length} empleado(s)`,
+          encabezados: ['Empleado', 'Cargo', 'Departamento', 'Monto Regalía', 'Estado'],
+          filas,
+          totales: [`TOTAL — ${filas.length} empleado(s)`, '', '', totalMonto, ''],
+          anchos: [26, 20, 18, 16, 14],
+        }],
+      })
+      setToast('Regalía Pascual exportada a Excel')
+      return
+    }
+
     const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
 
     const resultados = empleadosPeriodo.map(e => {
@@ -1386,16 +1469,21 @@ export default function NominaPage() {
           const periodoEnvio = periodos.find(p => p.id === envioPeriodoId)
           if (!periodoEnvio) return null
           const periodoEnvioLabel = labelPeriodo(periodoEnvio)
-          const concepto = periodoEnvio.tipo === 'quincenal'
-            ? `Nómina Quincenal (${periodoEnvio.quincena}ª quincena)`
-            : 'Nómina Mensual'
+          const concepto = periodoEnvio.tipo === 'regalia'
+            ? 'Regalía Pascual'
+            : periodoEnvio.tipo === 'quincenal'
+              ? `Nómina Quincenal (${periodoEnvio.quincena}ª quincena)`
+              : 'Nómina Mensual'
           const ajustesEnvio = periodoEnvio.ajustesPorEmpleado ?? {}
-          const empleadosEnvio = empleadosDelPeriodo(empleados, empleadosEnNomina, periodoEnvio.mes, periodoEnvio.anio, periodoEnvio.tipo, periodoEnvio.quincena ?? 1)
 
-          const filas = empleadosEnvio.map(e => ({
-            empleado: e,
-            resultado: resultadoDePeriodo(e, ajustesEnvio[e.id] ?? [], periodoEnvio),
-          }))
+          const filas = periodoEnvio.tipo === 'regalia'
+            ? Object.entries(periodoEnvio.montosRegalia ?? {}).flatMap(([empId, monto]) => {
+                const e = empleados.find(x => x.id === empId)
+                if (!e) return []
+                return [{ empleado: e, resultado: resultadoRegalia(empId, monto, getAnosServicio(e.fechaIngreso)) }]
+              })
+            : empleadosDelPeriodo(empleados, empleadosEnNomina, periodoEnvio.mes, periodoEnvio.anio, periodoEnvio.tipo, periodoEnvio.quincena ?? 1)
+                .map(e => ({ empleado: e, resultado: resultadoDePeriodo(e, ajustesEnvio[e.id] ?? [], periodoEnvio) }))
 
           const fechaPagoTexto = periodoEnvio.fechaPago ? formatDate(periodoEnvio.fechaPago) : ''
 
@@ -1574,6 +1662,200 @@ export default function NominaPage() {
   // ── VISTA: DETALLE ────────────────────────────────────────────────────────────
   if (!periodoActual) {
     return null
+  }
+
+  // ── VISTA: DETALLE — Regalía Pascual (tipo 'regalia') ──────────────────────
+  // Vista independiente y deliberadamente más simple que la nómina normal: no
+  // hay ajustes editables, préstamos, filtros ni auditoría pre-cierre — cada
+  // empleado tiene un monto ya congelado (montosRegalia) al momento de
+  // "Solicitar Liquidación" en el módulo Regalía Pascual.
+  if (periodoActual.tipo === 'regalia') {
+    const montos = periodoActual.montosRegalia ?? {}
+    const motivosAjuste = periodoActual.motivosAjusteRegalia ?? {}
+    const procesadosReg = new Set(periodoActual.empleadosProcesados ?? [])
+    const filasRegalia = Object.entries(montos)
+      .map(([empId, monto]) => ({ empleado: empleados.find(e => e.id === empId), empId, monto }))
+      .filter((f): f is { empleado: Empleado; empId: string; monto: number } => !!f.empleado)
+      .sort((a, b) => fullName(a.empleado).localeCompare(fullName(b.empleado)))
+    const totalRegalia = filasRegalia.reduce((s, f) => s + f.monto, 0)
+    const pendientesReg = filasRegalia.filter(f => !procesadosReg.has(f.empId))
+    const esEnProcesoReg = periodoActual.estado === 'en_proceso'
+    const esProcesadaReg = periodoActual.estado === 'procesada'
+
+    return (
+      <div className="flex flex-col overflow-hidden h-full">
+        <Header
+          title={periodoActualLabel}
+          subtitle={esEnProcesoReg ? 'En proceso' : esProcesadaReg ? 'Período procesado' : 'Período cerrado'}
+          actions={
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPeriodoAbierto(null)}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Períodos
+              </button>
+              {esEnProcesoReg && pendientesReg.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (!confirm(`¿Procesar el pago de Regalía Pascual de ${pendientesReg.length} empleado(s)? El acumulado de cada uno vuelve a cero para el resto del año.`)) return
+                    handleProcesarRegalia(pendientesReg.map(f => f.empId))
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 px-3 py-2 text-sm font-semibold text-white transition-colors"
+                >
+                  <PlayCircle className="h-4 w-4" />
+                  Procesar Todo
+                </button>
+              )}
+              {esProcesadaReg && (
+                <button
+                  onClick={handleCerrarPeriodo}
+                  className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                >
+                  <Lock className="h-4 w-4" />
+                  Cerrar
+                </button>
+              )}
+              <button
+                onClick={handleExportar}
+                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Exportar Excel
+              </button>
+            </div>
+          }
+        />
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+            <StatCard
+              label="Total a Pagar"
+              value={formatRD(totalRegalia)}
+              sub="Suma de acumulados liquidados"
+              icon={Gift}
+              iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
+            />
+            <StatCard
+              label="Empleados"
+              value={String(filasRegalia.length)}
+              sub="Incluidos en esta liquidación"
+              icon={BarChart3}
+              iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+            />
+            <StatCard
+              label={esEnProcesoReg ? 'Pendientes de Pago' : 'Estado'}
+              value={esEnProcesoReg ? String(pendientesReg.length) : (esProcesadaReg ? 'Procesado' : 'Cerrado')}
+              sub={esEnProcesoReg ? `de ${filasRegalia.length} empleado(s)` : 'Todos los pagos registrados'}
+              icon={CheckCircle2}
+              iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+            />
+          </div>
+
+          <div className="rounded-lg border border-[#1B2980]/15 bg-[#eef0fb] dark:bg-indigo-950/20 dark:border-indigo-800/30 px-4 py-3 text-xs text-[#1B2980] dark:text-indigo-300">
+            Pago bruto de Regalía Pascual (Art. 219, Código de Trabajo) — no es salario cotizable, por lo
+            que no lleva descuentos de AFP, SFS ni retención de ISR, igual que el tratamiento ya vigente
+            para Vacaciones y Regalía dentro de Liquidación.
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+            <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Detalle por Empleado — {periodoActualLabel}
+              </h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
+                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Monto Regalía</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filasRegalia.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-sm text-zinc-400 dark:text-zinc-500">
+                        Este período no tiene empleados con monto de regalía asociado.
+                      </td>
+                    </tr>
+                  )}
+                  {filasRegalia.map(({ empleado, empId, monto }) => {
+                    const isProcesado = procesadosReg.has(empId)
+                    const resultado = resultadoRegalia(empId, monto, getAnosServicio(empleado.fechaIngreso))
+                    const motivo = motivosAjuste[empId]
+                    return (
+                      <tr
+                        key={empId}
+                        onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
+                        className={`cursor-pointer border-b border-zinc-200 dark:border-[#252840] transition-colors ${
+                          isProcesado ? 'bg-emerald-50/40 dark:bg-emerald-950/10' : 'hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20'
+                        }`}
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                              isProcesado
+                                ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-[#eef0fb] dark:bg-indigo-900/40 text-[#1B2980] dark:text-indigo-300'
+                            }`}>
+                              {empleado.nombre[0]}{empleado.apellido[0]}
+                            </div>
+                            <div>
+                              <p className="font-medium text-[#1B2980] dark:text-indigo-400 leading-tight">{fullName(empleado)}</p>
+                              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-tight mt-0.5">
+                                {empleado.cedula} · {empleado.cargo}
+                                {motivo && <span title={motivo} className="ml-1.5 text-amber-500 dark:text-amber-400">· ajustado manualmente</span>}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
+                          {formatRD(monto)}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {isProcesado
+                            ? <Badge variant="success"><CheckCircle2 className="mr-1 h-3 w-3" />Procesado</Badge>
+                            : <Badge variant="warning">Pendiente</Badge>}
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          {esEnProcesoReg && !isProcesado && (
+                            <button
+                              onClick={e => { e.stopPropagation(); handleProcesarRegalia([empId]) }}
+                              className="rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                            >
+                              Procesar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
+        {detalleModal && (
+          <>
+            <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in" />
+            <DetalleNomina
+              empleado={detalleModal.emp}
+              nomina={detalleModal.nom}
+              periodoLabel={periodoActualLabel}
+              mostrarUSD={mostrarUSD}
+              onClose={() => setDetalleModal(null)}
+            />
+          </>
+        )}
+      </div>
+    )
   }
 
   const ajustesPorEmp  = periodoActual.ajustesPorEmpleado ?? {}

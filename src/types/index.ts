@@ -16,7 +16,7 @@ export type Banco =
   | 'Banistmo'
   | 'Otro'
 
-export type TipoPeriodo = 'mensual' | 'quincenal'
+export type TipoPeriodo = 'mensual' | 'quincenal' | 'regalia'
 export type EstadoPeriodo = 'en_proceso' | 'procesada' | 'cerrada'
 
 export type ConceptoAjuste =
@@ -122,7 +122,17 @@ export interface Empleado {
   // Se capturan una vez, al migrar un empleado con antigüedad real, para que
   // los cálculos no asuman "cero historial" solo porque el sistema es nuevo.
   saldoVacacionesInicial?: number      // días de vacaciones pendientes reconocidos a la fecha de la carga
-  regaliaPagadaEsteAnio?: number       // monto de regalía ya pagado en el año en curso, antes de la migración
+  // Monto de regalía ya pagado, vigente SOLO para el año en `regaliaPagadaAnio`
+  // (ver regaliaPagadaVigente() en dominican-labor.ts). Dos orígenes posibles:
+  // (1) carga inicial/migración — monto pagado antes de Cielo Cloud, capturado
+  // a mano en el Asistente/Importador; (2) el período de nómina de Regalía
+  // Pascual (tipo 'regalia') lo estampa automáticamente al procesar el pago,
+  // "reiniciando" el acumulado a cero de cara al resto del año. Sin
+  // regaliaPagadaAnio (registros previos a este campo) se asume vigente solo
+  // para el año calendario actual — así el descuento deja de aplicar solo al
+  // llegar el año siguiente, sin necesidad de migrar datos existentes.
+  regaliaPagadaEsteAnio?: number
+  regaliaPagadaAnio?: number
   salarioHistoricoReferencia?: number  // salario promedio de referencia (Cesantía/Preaviso/Asistencia Económica)
                                         // mientras se acumulan 12 meses reales de nómina procesada en el sistema
   saldosInicialesRevisado?: boolean    // true una vez que el Asistente de Carga Inicial confirmó este
@@ -299,6 +309,21 @@ export interface PeriodoNomina {
   bitacoraDesposteos?: BitacoraDesposteo[]
   pagada?: boolean       // true una vez confirmada la transferencia ACH del período cerrado
   fechaPago?: string     // fecha en que se confirmó el pago (ISO date), solo si pagada === true
+
+  // ─── Período especial de Regalía Pascual (tipo === 'regalia') ────────────
+  // Se crea desde "Solicitar Liquidación de Regalía" en el módulo Regalía
+  // Pascual, no desde el formulario normal de "Crear Período" — nace ya con
+  // el acumulado de cada empleado congelado (montosRegalia), no con
+  // ajustesPorEmpleado/el motor normal de calcularNomina. El pago es bruto,
+  // sin AFP/SFS/ISR (mismo tratamiento que Vacaciones/Regalía en
+  // Liquidación — no es salario cotizable). Al procesar cada empleado, el
+  // sistema estampa Empleado.regaliaPagadaEsteAnio/regaliaPagadaAnio con el
+  // monto pagado, "reiniciando" su acumulado a cero.
+  montosRegalia?: Record<string, number>
+  // Motivo capturado SOLO cuando el usuario editó manualmente el monto
+  // sugerido antes de solicitar la liquidación (ajuste manual, ver Regalía
+  // Pascual) — para dejar rastro de por qué difiere del cálculo automático.
+  motivosAjusteRegalia?: Record<string, string>
 }
 
 export interface ResumenNomina {

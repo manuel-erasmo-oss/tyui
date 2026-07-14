@@ -1,27 +1,41 @@
 'use client'
 
+import { useState } from 'react'
+import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
-import { getMesesServicio } from '@/lib/dominican-labor'
-import { formatRD, formatDate, fullName } from '@/lib/utils'
-import { Gift, Calendar, AlertTriangle, Download } from 'lucide-react'
+import { usePeriodos } from '@/lib/periodos-context'
+import { getMesesServicio, regaliaPagadaVigente } from '@/lib/dominican-labor'
+import { formatRD, formatDate, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
+import { Gift, Calendar, AlertTriangle, Download, Send, Pencil, Check, X, ArrowRight, CheckCircle2 } from 'lucide-react'
+import type { PeriodoNomina } from '@/types'
 
 const hoy = new Date()
-const mesActual = hoy.getMonth() + 1  // 1-based
+const mesActual  = hoy.getMonth() + 1  // 1-based
+const anioActual = hoy.getFullYear()
 
 export default function RegaliaPage() {
   const { empleadosEnNomina } = useEmpleados()
   const { empresa } = useEmpresa()
+  const { periodos, generar } = usePeriodos()
+
   const filas = empleadosEnNomina.map(e => {
     const mesesServicio      = Math.min(getMesesServicio(e.fechaIngreso), mesActual)
     // Math.max(0, …): protege contra fechaIngreso en el futuro (error de
     // captura), que de otro modo produciría meses/porcentaje negativos.
     const mesesAcumulados    = Math.max(0, Math.min(mesesServicio, 12))
-    // Neto de lo ya pagado antes de la migración a Cielo Cloud (empleados con historial previo)
+    // Neto de lo ya pagado este año — migración previa a Cielo Cloud, o un
+    // pago ya liquidado vía un período de Regalía Pascual anterior de este
+    // mismo año (ver regaliaPagadaVigente en dominican-labor.ts).
     const acumuladoBruto     = (e.salarioBase / 12) * mesesAcumulados
-    const acumulado          = Math.max(0, acumuladoBruto - (e.regaliaPagadaEsteAnio ?? 0))
+    // Redondeado a centavos: sin esto, un empleado recién liquidado en su
+    // totalidad (acumuladoBruto === regaliaPagadaVigente) puede arrastrar un
+    // residuo de fracciones de centavo por error de punto flotante — visible
+    // como RD$0.00 pero técnicamente > 0, colándolo de vuelta a la próxima
+    // solicitud de liquidación como si aún tuviera saldo pendiente.
+    const acumulado          = Math.round(Math.max(0, acumuladoBruto - regaliaPagadaVigente(e, anioActual)) * 100) / 100
     const proyeccionAnual    = e.salarioBase  // 1 salario completo
     const porcentaje         = (mesesAcumulados / 12) * 100
     return { empleado: e, mesesAcumulados, acumulado, proyeccionAnual, porcentaje }
@@ -32,6 +46,78 @@ export default function RegaliaPage() {
   const diasParaDic20    = Math.max(0, Math.ceil(
     (new Date(hoy.getFullYear(), 11, 20).getTime() - hoy.getTime()) / (1000 * 3600 * 24)
   ))
+
+  // Ya existe un período de nómina de Regalía Pascual para este año — no se
+  // puede solicitar otra liquidación hasta que ese se elimine (el desposteo
+  // en Nómina no aplica aquí: si hace falta un ajuste, se corrige el monto
+  // directamente en ese período antes de procesarlo).
+  const periodoRegaliaExistente = periodos.find(p => p.tipo === 'regalia' && p.anio === anioActual)
+
+  // ── Solicitar Liquidación de Regalía ──────────────────────────────────────
+  const [solicitudAbierta, setSolicitudAbierta] = useState(false)
+  const [overrides, setOverrides] = useState<Record<string, { monto: number; motivo: string }>>({})
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [montoEdit, setMontoEdit] = useState('')
+  const [motivoEdit, setMotivoEdit] = useState('')
+  const [periodoCreado, setPeriodoCreado] = useState<PeriodoNomina | null>(null)
+
+  function abrirSolicitud() {
+    setOverrides({})
+    setEditandoId(null)
+    setPeriodoCreado(null)
+    setSolicitudAbierta(true)
+  }
+
+  function montoDe(empId: string, montoCalculado: number): number {
+    return overrides[empId]?.monto ?? montoCalculado
+  }
+
+  function abrirEdicion(empId: string, montoActual: number) {
+    setEditandoId(empId)
+    setMontoEdit(String(Math.round(montoActual * 100) / 100))
+    setMotivoEdit(overrides[empId]?.motivo ?? '')
+  }
+
+  function guardarEdicion(empId: string) {
+    const monto = parseFloat(montoEdit)
+    if (isNaN(monto) || monto < 0 || !motivoEdit.trim()) return
+    setOverrides(prev => ({ ...prev, [empId]: { monto, motivo: motivoEdit.trim() } }))
+    setEditandoId(null)
+  }
+
+  function quitarEdicion(empId: string) {
+    setOverrides(prev => {
+      const next = { ...prev }
+      delete next[empId]
+      return next
+    })
+  }
+
+  function confirmarSolicitud() {
+    const montosRegalia: Record<string, number> = {}
+    const motivosAjusteRegalia: Record<string, string> = {}
+    for (const f of filas) {
+      const monto = montoDe(f.empleado.id, f.acumulado)
+      if (monto <= 0) continue
+      montosRegalia[f.empleado.id] = Math.round(monto * 100) / 100
+      const ov = overrides[f.empleado.id]
+      if (ov) motivosAjusteRegalia[f.empleado.id] = ov.motivo
+    }
+    const totalEmpleados = Object.keys(montosRegalia).length
+    if (totalEmpleados === 0) return
+    const totalMonto = Object.values(montosRegalia).reduce((s, m) => s + m, 0)
+    const nuevo = generar({
+      tipo: 'regalia',
+      mes: 12,
+      anio: anioActual,
+      estado: 'en_proceso',
+      totalEmpleados,
+      totales: { bruto: totalMonto, descuentos: 0, neto: totalMonto, aportes: 0, isr: 0, costoTotal: totalMonto },
+      montosRegalia,
+      ...(Object.keys(motivosAjusteRegalia).length > 0 ? { motivosAjusteRegalia } : {}),
+    })
+    setPeriodoCreado(nuevo)
+  }
 
   // Exporta exactamente las mismas filas ya calculadas para la tabla en
   // pantalla (mismo desglose, mismo total). Carga la librería bajo demanda.
@@ -69,16 +155,48 @@ export default function RegaliaPage() {
         title="Regalía Pascual"
         subtitle="Art. 219 · Código de Trabajo · Ley 16-92"
         actions={
-          <button
-            onClick={handleExportar}
-            className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
-          >
-            <Download className="h-4 w-4" />
-            Exportar Excel
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportar}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              Exportar Excel
+            </button>
+            {periodoRegaliaExistente ? (
+              <Link
+                href="/nomina"
+                className="flex items-center gap-2 rounded-lg border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 transition-colors"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Liquidación {anioActual} en Nómina
+              </Link>
+            ) : (
+              <button
+                onClick={abrirSolicitud}
+                disabled={filas.every(f => f.acumulado <= 0)}
+                className={cn(BTN_PRIMARY, 'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:shadow-none')}
+              >
+                <Send className="h-4 w-4" />
+                Solicitar Liquidación de Regalía
+              </button>
+            )}
+          </div>
         }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
+
+        {periodoRegaliaExistente && (
+          <div className="flex items-center justify-between rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-950/20 px-5 py-3.5 text-sm">
+            <div className="flex items-center gap-2.5 text-emerald-800 dark:text-emerald-300">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              Ya se solicitó la liquidación de Regalía Pascual {anioActual} — continúa el pago desde Nómina.
+            </div>
+            <Link href="/nomina" className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">
+              Ir a Nómina <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-4">
           <StatCard
@@ -207,6 +325,187 @@ export default function RegaliaPage() {
           <p>Todo empleador tiene la obligación de pagar a cada uno de sus trabajadores, en el período navideño, <strong>una regalía pascual equivalente a un salario ordinario del mes de diciembre</strong>. Dicha regalía deberá pagarse en la primera quincena del mes de diciembre. El trabajador que al 30 de noviembre no haya completado el año de servicio recibirá la parte proporcional correspondiente.</p>
         </div>
       </div>
+
+      {solicitudAbierta && (() => {
+        const filasSolicitud = filas.filter(f => montoDe(f.empleado.id, f.acumulado) > 0 || overrides[f.empleado.id])
+        const totalSolicitud = filasSolicitud.reduce((s, f) => s + montoDe(f.empleado.id, f.acumulado), 0)
+
+        return (
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in"
+              onClick={() => setSolicitudAbierta(false)}
+            />
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <div className="w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-xl bg-white dark:bg-[#141722] shadow-2xl animate-modal-in flex flex-col">
+                {periodoCreado ? (
+                  <div className="flex flex-col items-center justify-center px-8 py-14 text-center">
+                    <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 dark:bg-emerald-950/30">
+                      <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">Liquidación solicitada</p>
+                    <p className="mt-1.5 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">
+                      Se creó el período <strong>Regalía Pascual {anioActual}</strong> en Nómina con{' '}
+                      {periodoCreado.totalEmpleados} empleado(s) por un total de {formatRD(periodoCreado.totales.bruto)}.
+                      Al procesar el pago allí, el acumulado de cada empleado vuelve a cero.
+                    </p>
+                    <Link
+                      href="/nomina"
+                      className={cn(BTN_PRIMARY, 'mt-6')}
+                    >
+                      Ir a Nómina a procesar el pago <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-[#1d2035]">
+                      <div className="flex items-center gap-2">
+                        <Gift className="h-5 w-5 text-[#1B2980] dark:text-indigo-400" />
+                        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          Solicitar Liquidación de Regalía Pascual {anioActual}
+                        </h2>
+                      </div>
+                      <button onClick={() => setSolicitudAbierta(false)} className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200">
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                        Esto crea un período especial en Nómina con el acumulado congelado de cada empleado, listo
+                        para procesar el pago. Puedes ajustar manualmente el monto de un empleado antes de confirmar
+                        (motivo obligatorio) — útil si hace falta un ajuste puntual.
+                      </p>
+
+                      <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-[#252840]">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-zinc-50 dark:bg-[#1a1d2e] text-left text-zinc-500 dark:text-zinc-400">
+                              <th className="px-3 py-2 font-medium">Empleado</th>
+                              <th className="px-3 py-2 font-medium text-right">Monto a Liquidar</th>
+                              <th className="px-3 py-2 font-medium text-right">Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
+                            {filasSolicitud.map(({ empleado, acumulado }) => {
+                              const monto = montoDe(empleado.id, acumulado)
+                              const ov = overrides[empleado.id]
+                              const editando = editandoId === empleado.id
+                              return (
+                                <tr key={empleado.id}>
+                                  <td className="px-3 py-2.5 font-medium text-zinc-800 dark:text-zinc-200">
+                                    {fullName(empleado)}
+                                    {ov && (
+                                      <p className="mt-0.5 text-[10px] font-normal text-amber-600 dark:text-amber-400" title={ov.motivo}>
+                                        Ajustado: {ov.motivo}
+                                      </p>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    {editando ? (
+                                      <input
+                                        type="number"
+                                        autoFocus
+                                        value={montoEdit}
+                                        onChange={e => setMontoEdit(e.target.value)}
+                                        className="w-28 rounded-md border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#0d0f1a] dark:text-zinc-200 px-2 py-1 text-right text-xs focus:border-[#1B2980] focus:outline-none"
+                                      />
+                                    ) : (
+                                      <span className={`tabular-nums font-semibold ${ov ? 'text-amber-600 dark:text-amber-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                        {formatRD(monto)}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {editando ? (
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <input
+                                          type="text"
+                                          placeholder="Motivo del ajuste (obligatorio)"
+                                          value={motivoEdit}
+                                          onChange={e => setMotivoEdit(e.target.value)}
+                                          className="w-40 rounded-md border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#0d0f1a] dark:text-zinc-200 px-2 py-1 text-xs focus:border-[#1B2980] focus:outline-none"
+                                        />
+                                        <button
+                                          onClick={() => guardarEdicion(empleado.id)}
+                                          disabled={!motivoEdit.trim() || montoEdit === '' || isNaN(parseFloat(montoEdit))}
+                                          title="Guardar"
+                                          className="rounded-md p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 disabled:opacity-30 disabled:cursor-not-allowed"
+                                        >
+                                          <Check className="h-3.5 w-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => setEditandoId(null)}
+                                          title="Cancelar"
+                                          className="rounded-md p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e]"
+                                        >
+                                          <X className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center justify-end gap-1.5">
+                                        <button
+                                          onClick={() => abrirEdicion(empleado.id, monto)}
+                                          title="Ajustar manualmente"
+                                          className="rounded-md p-1 text-zinc-400 hover:text-[#1B2980] dark:hover:text-indigo-400 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] transition-colors"
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                        </button>
+                                        {ov && (
+                                          <button
+                                            onClick={() => quitarEdicion(empleado.id)}
+                                            title="Quitar ajuste manual"
+                                            className="rounded-md p-1 text-zinc-400 hover:text-rose-500 hover:bg-zinc-100 dark:hover:bg-[#1a1d2e] transition-colors"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                            {filasSolicitud.length === 0 && (
+                              <tr>
+                                <td colSpan={3} className="px-3 py-6 text-center text-zinc-400 dark:text-zinc-500">
+                                  Ningún empleado tiene acumulado por liquidar todavía.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex items-center justify-between rounded-lg bg-[#eef0fb] dark:bg-indigo-950/20 px-4 py-3">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-300">Total a Liquidar</span>
+                        <span className="text-base font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">{formatRD(totalSolicitud)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-3 border-t border-zinc-100 dark:border-[#1d2035] px-6 py-4">
+                      <button
+                        onClick={() => setSolicitudAbierta(false)}
+                        className="rounded-lg border border-zinc-200 dark:border-[#252840] px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={confirmarSolicitud}
+                        disabled={filasSolicitud.length === 0}
+                        className={cn(BTN_PRIMARY, 'disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:shadow-none')}
+                      >
+                        <Send className="h-4 w-4" />
+                        Confirmar y Crear Período
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }

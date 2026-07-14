@@ -13,7 +13,7 @@ import { useSaldoISR } from '@/lib/saldo-isr-context'
 import {
   calcularCesantiaDetalle, calcularPreavisoDetalle, calcularAsistenciaEconomicaDetalle,
   calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario, getDiasPreavisoRequeridos,
-  calcularDiasTrabajadosPendientes, calcularNomina, MOTIVO_LIQUIDACION_LABELS,
+  calcularDiasTrabajadosPendientes, calcularNomina, MOTIVO_LIQUIDACION_LABELS, regaliaPagadaVigente,
 } from '@/lib/dominican-labor'
 import { formatRD, formatNum, formatDate, formatAnosServicio, formatCedula, fullName, BTN_PRIMARY } from '@/lib/utils'
 import type { Empleado, Empresa, MotivoLiquidacion, ConceptoLiquidacion, DesgloseConceptoLiquidacion, RegistroLiquidacion } from '@/types'
@@ -514,7 +514,7 @@ export default function LiquidacionPage() {
     const vacaciones = diasVacAcum * tarifaDiariaVac
 
     const regaliaBruta = (emp.salarioBase / 12) * mesesCalendario
-    const regalia = Math.max(0, regaliaBruta - (emp.regaliaPagadaEsteAnio ?? 0))
+    const regalia = Math.max(0, regaliaBruta - regaliaPagadaVigente(emp, fechaTerm.getFullYear()))
 
     const diasPendData = emp.pagoDiasTrabajadosPendiente === 'liquidacion'
       ? calcularDiasTrabajadosPendientes(emp, periodos, fechaTerm)
@@ -632,7 +632,9 @@ export default function LiquidacionPage() {
         montoAuto: resultado.regalia,
         detalle: [
           `Salario base ÷ 12 × ${resultado.mesesCalendario} mes(es) del año en curso = ${formatRD(resultado.regaliaBruta, 2)}`,
-          ...((emp.regaliaPagadaEsteAnio ?? 0) > 0 ? [`Menos ${formatRD(emp.regaliaPagadaEsteAnio!, 2)} ya pagados antes de la migración a Cielo Cloud`] : []),
+          ...(regaliaPagadaVigente(emp, new Date(fechaTerminacion).getFullYear()) > 0
+            ? [`Menos ${formatRD(regaliaPagadaVigente(emp, new Date(fechaTerminacion).getFullYear()), 2)} ya pagados este año (migración o liquidación previa de Regalía Pascual)`]
+            : []),
         ],
       },
       diasTrabajados: {
