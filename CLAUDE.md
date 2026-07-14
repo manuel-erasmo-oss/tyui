@@ -2364,6 +2364,7 @@ página).
 
 | Hash | Descripción |
 |---|---|
+| `0aa2a7e` | feat: agregar favicon al sistema (isotipo Cielo Cloud) |
 | `bb2f8ec` | feat: permitir crear períodos retroactivos hasta 10 años atrás |
 | `320390a` | fix: Cálculo de Nómina — permitir seleccionar el período libremente |
 | `de3e2c4` | redesign: separar Nómina en Cálculo de Nómina y Gestión de Envíos |
