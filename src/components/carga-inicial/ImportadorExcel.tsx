@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
+import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { getCategoriaSRLPorSector } from '@/lib/dominican-labor'
 import { formatRD } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
@@ -28,6 +29,7 @@ const ENCABEZADOS = [
   'Vacaciones Pendientes (días)',
   'Regalía Pagada Este Año (RD$)',
   'Salario Histórico de Referencia (RD$)',
+  'Saldo ISR a Favor (RD$)',
 ] as const
 
 type Accion = 'crear' | 'actualizar'
@@ -44,6 +46,10 @@ interface FilaImportacion {
   saldoVacacionesInicial: number | null
   regaliaPagadaEsteAnio: number | null
   salarioHistoricoReferencia: number | null
+  // No es un campo de Empleado — crea un SaldoISRFavor real vía
+  // registrarSaldoISR() al confirmar, igual que registrarlo desde la ficha
+  // del empleado (ver comentario en confirmarImportacion).
+  saldoISRFavor: number | null
   accion: Accion
   empleadoExistenteId?: string
   error?: string
@@ -133,6 +139,7 @@ function parsearNumeroOpcional(v: unknown): { ok: boolean; valor: number | null 
 export function ImportadorExcel({ onFinish }: Props) {
   const { empleados, add, update } = useEmpleados()
   const { empresa } = useEmpresa()
+  const { registrar: registrarSaldoISR } = useSaldoISR()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [paso, setPaso] = useState<Paso>('plantilla')
@@ -148,15 +155,15 @@ export function ImportadorExcel({ onFinish }: Props) {
       [...ENCABEZADOS],
       [
         '000-0000000-0 (ejemplo — bórrame)', 'Juana', 'Pérez', 'Analista de Contabilidad', 'Contabilidad',
-        '2019-03-15', 35000, 14, 0, 32000,
+        '2019-03-15', 35000, 14, 0, 32000, 0,
       ],
       [
         '000-0000001-1 (ejemplo — bórrame)', 'Carlos', 'Ramírez', 'Supervisor de Bodega', 'Almacén',
-        '2022-08-01', 28000, 7, 5000, '',
+        '2022-08-01', 28000, 7, 5000, '', 3500,
       ],
     ]
     const ws = XLSX.utils.aoa_to_sheet(wsData)
-    ws['!cols'] = [16, 16, 16, 24, 18, 16, 14, 16, 20, 22].map(w => ({ wch: w }))
+    ws['!cols'] = [16, 16, 16, 24, 18, 16, 14, 16, 20, 22, 18].map(w => ({ wch: w }))
     XLSX.utils.book_append_sheet(wb, ws, 'Saldos Iniciales')
     XLSX.writeFile(wb, 'plantilla-carga-inicial-cielo-cloud.xlsx')
   }
@@ -201,11 +208,13 @@ export function ImportadorExcel({ onFinish }: Props) {
           const vacacionesRaw = row[7]
           const regaliaRaw = row[8]
           const salarioHistRaw = row[9]
+          const saldoISRRaw = row[10]
 
           const filaCompletamenteVacia =
             !cedulaRaw && !nombreRaw && !apellidoRaw && !cargoRaw && !departamentoRaw &&
             celdaTexto(fechaRaw) === '' && celdaTexto(salarioRaw) === '' &&
-            celdaTexto(vacacionesRaw) === '' && celdaTexto(regaliaRaw) === '' && celdaTexto(salarioHistRaw) === ''
+            celdaTexto(vacacionesRaw) === '' && celdaTexto(regaliaRaw) === '' && celdaTexto(salarioHistRaw) === '' &&
+            celdaTexto(saldoISRRaw) === ''
           if (filaCompletamenteVacia) return
 
           const numFila = idx + 2 // +1 por header, +1 por 1-index
@@ -221,6 +230,7 @@ export function ImportadorExcel({ onFinish }: Props) {
           const vac = parsearNumeroOpcional(vacacionesRaw)
           const reg = parsearNumeroOpcional(regaliaRaw)
           const histRef = parsearNumeroOpcional(salarioHistRaw)
+          const isr = parsearNumeroOpcional(saldoISRRaw)
 
           let error: string | undefined
 
@@ -238,6 +248,7 @@ export function ImportadorExcel({ onFinish }: Props) {
           if (!error && !vac.ok) error = 'Vacaciones Pendientes debe ser un número mayor o igual a 0'
           if (!error && !reg.ok) error = 'Regalía Pagada debe ser un número mayor o igual a 0'
           if (!error && !histRef.ok) error = 'Salario Histórico de Referencia debe ser un número mayor o igual a 0'
+          if (!error && !isr.ok) error = 'Saldo ISR a Favor debe ser un número mayor o igual a 0'
 
           parsed.push({
             fila: numFila,
@@ -251,6 +262,7 @@ export function ImportadorExcel({ onFinish }: Props) {
             saldoVacacionesInicial: vac.valor,
             regaliaPagadaEsteAnio: reg.valor,
             salarioHistoricoReferencia: histRef.valor,
+            saldoISRFavor: isr.valor,
             accion,
             empleadoExistenteId: existente?.id,
             error,
@@ -277,12 +289,14 @@ export function ImportadorExcel({ onFinish }: Props) {
 
   function confirmarImportacion() {
     for (const f of filasValidas) {
+      let empleadoId: string
       if (f.accion === 'actualizar' && f.empleadoExistenteId) {
         const cambios: Partial<Empleado> = { saldosInicialesRevisado: true }
         if (f.saldoVacacionesInicial !== null) cambios.saldoVacacionesInicial = f.saldoVacacionesInicial
         if (f.regaliaPagadaEsteAnio !== null) cambios.regaliaPagadaEsteAnio = f.regaliaPagadaEsteAnio
         if (f.salarioHistoricoReferencia !== null) cambios.salarioHistoricoReferencia = f.salarioHistoricoReferencia
         update(f.empleadoExistenteId, cambios)
+        empleadoId = f.empleadoExistenteId
       } else {
         const nuevo: Omit<Empleado, 'id'> = {
           nombre: f.nombre.trim(),
@@ -301,7 +315,20 @@ export function ImportadorExcel({ onFinish }: Props) {
           salarioHistoricoReferencia: f.salarioHistoricoReferencia ?? undefined,
           saldosInicialesRevisado: true,
         }
-        add(nuevo)
+        empleadoId = add(nuevo).id
+      }
+      // Saldo ISR a Favor no es un campo de Empleado — crea un SaldoISRFavor
+      // real vía registrarSaldoISR(), igual que registrarlo desde la ficha
+      // del empleado, para que se aplique automáticamente en su próxima nómina.
+      if (f.saldoISRFavor !== null && f.saldoISRFavor > 0) {
+        registrarSaldoISR({
+          empleadoId,
+          monto: f.saldoISRFavor,
+          motivo: 'Saldo migrado en Carga Inicial (Importador Excel)',
+          tipo: 'retencion_excesiva',
+          anio: new Date().getFullYear(),
+          fechaRegistro: new Date().toISOString().slice(0, 10),
+        })
       }
     }
     setImportados(filasValidas.length)
@@ -448,6 +475,7 @@ export function ImportadorExcel({ onFinish }: Props) {
                   <th className="px-4 py-2.5 font-medium">Vacaciones</th>
                   <th className="px-4 py-2.5 font-medium">Regalía Pagada</th>
                   <th className="px-4 py-2.5 font-medium">Salario Histórico</th>
+                  <th className="px-4 py-2.5 font-medium">Saldo ISR</th>
                   <th className="px-4 py-2.5 font-medium">Estado</th>
                 </tr>
               </thead>
@@ -471,6 +499,7 @@ export function ImportadorExcel({ onFinish }: Props) {
                     <td className="px-4 py-2.5 text-zinc-500 tabular-nums">{f.saldoVacacionesInicial ?? '—'}</td>
                     <td className="px-4 py-2.5 text-zinc-500 tabular-nums">{f.regaliaPagadaEsteAnio !== null ? formatRD(f.regaliaPagadaEsteAnio) : '—'}</td>
                     <td className="px-4 py-2.5 text-zinc-500 tabular-nums">{f.salarioHistoricoReferencia !== null ? formatRD(f.salarioHistoricoReferencia) : '—'}</td>
+                    <td className="px-4 py-2.5 text-zinc-500 tabular-nums">{f.saldoISRFavor !== null ? formatRD(f.saldoISRFavor) : '—'}</td>
                     <td className="px-4 py-2.5">
                       {f.error ? (
                         <span className="inline-flex items-center gap-1.5 text-xs text-rose-600 dark:text-rose-400">
@@ -486,7 +515,7 @@ export function ImportadorExcel({ onFinish }: Props) {
                 ))}
                 {filas.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-6 text-center text-xs text-zinc-400">
+                    <td colSpan={8} className="px-4 py-6 text-center text-xs text-zinc-400">
                       No se encontraron filas con datos en el archivo.
                     </td>
                   </tr>

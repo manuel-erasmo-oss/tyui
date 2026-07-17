@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
+import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { getAnosServicio } from '@/lib/dominican-labor'
 import { formatAnosServicio, formatDate, fullName } from '@/lib/utils'
 import { EmpleadoFormFields } from '@/components/empleados/EmpleadoFormFields'
@@ -33,17 +34,24 @@ interface FormState {
   saldoVacacionesInicial: string
   regaliaPagadaEsteAnio: string
   salarioHistoricoReferencia: string
+  // Saldo ISR a Favor migrado (retención en exceso reconocida antes de
+  // Cielo Cloud) — no es un campo de Empleado, crea un SaldoISRFavor real
+  // vía registrarSaldoISR() al guardar, para que se aplique automáticamente
+  // en la próxima nómina igual que si se hubiera registrado desde su ficha.
+  saldoISRFavor: string
 }
 
 const EMPTY_FORM: FormState = {
   saldoVacacionesInicial: '',
   regaliaPagadaEsteAnio: '',
   salarioHistoricoReferencia: '',
+  saldoISRFavor: '',
 }
 
 export function AsistenteGuiado({ onFinish }: Props) {
   const { empleados, empleadosActivos, add, update } = useEmpleados()
   const { empresa } = useEmpresa()
+  const { registrar: registrarSaldoISR } = useSaldoISR()
 
   // Lista viva de pendientes: se recalcula en cada render a partir de
   // empleadosActivos, así que en cuanto `update()` marca a alguien como
@@ -107,6 +115,16 @@ export function AsistenteGuiado({ onFinish }: Props) {
       changes.salarioHistoricoReferencia = Number(form.salarioHistoricoReferencia)
     }
     update(empleadoActual.id, changes)
+    if (form.saldoISRFavor.trim() !== '' && Number(form.saldoISRFavor) > 0) {
+      registrarSaldoISR({
+        empleadoId: empleadoActual.id,
+        monto: Number(form.saldoISRFavor),
+        motivo: 'Saldo migrado en Carga Inicial',
+        tipo: 'retencion_excesiva',
+        anio: new Date().getFullYear(),
+        fechaRegistro: new Date().toISOString().slice(0, 10),
+      })
+    }
     setForm(EMPTY_FORM)
   }
 
@@ -271,6 +289,24 @@ export function AsistenteGuiado({ onFinish }: Props) {
           El salario histórico se usa solo para Cesantía/Preaviso mientras este empleado no acumule
           12 meses reales de nómina procesada en Cielo Cloud — después el sistema recalcula con datos propios.
         </span>
+      </div>
+
+      <div className="mt-4 border-t border-zinc-100 dark:border-[#1d2035] pt-4">
+        <label className={labelCls}>Saldo ISR a Favor migrado (RD$)</label>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          className={`${inputCls} sm:max-w-xs`}
+          value={form.saldoISRFavor}
+          onChange={e => set('saldoISRFavor', e.target.value)}
+          placeholder="0 — ISR retenido de más antes de Cielo Cloud"
+        />
+        <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+          Si esta empresa ya le reconocía a este empleado un saldo de ISR retenido en exceso, regístralo
+          aquí — se aplicará automáticamente para reducir el ISR de sus próximas nóminas, igual que si se
+          registrara desde su ficha en Empleados.
+        </p>
       </div>
 
       {/* Acciones */}

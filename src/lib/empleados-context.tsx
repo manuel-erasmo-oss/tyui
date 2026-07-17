@@ -19,7 +19,7 @@ interface EmpleadosCtx {
   // y regalía). Para el roster general, liquidación o saldos iniciales sigue
   // usándose empleadosActivos, porque un suspendido conserva su vínculo.
   empleadosEnNomina: Empleado[]
-  add: (data: Omit<Empleado, 'id'>) => void
+  add: (data: Omit<Empleado, 'id'>) => Empleado
   update: (id: string, changes: Partial<Empleado>) => void
   remove: (id: string) => void
   suspender: (id: string, fecha: string, motivo: string) => void
@@ -38,7 +38,7 @@ const Ctx = createContext<EmpleadosCtx>({
   empleados: [],
   empleadosActivos: [],
   empleadosEnNomina: [],
-  add: () => {},
+  add: () => { throw new Error('EmpleadosProvider not mounted') },
   update: () => {},
   remove: () => {},
   suspender: () => {},
@@ -61,12 +61,14 @@ export function EmpleadosProvider({ children }: { children: ReactNode }) {
     }
   }, [key, ready])
 
-  function add(data: Omit<Empleado, 'id'>) {
+  function add(data: Omit<Empleado, 'id'>): Empleado {
+    const nuevo: Empleado = { ...data, id: genId() }
     setEmpleados(prev => {
-      const next = [...prev, { ...data, id: genId() }]
+      const next = [...prev, nuevo]
       try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
       return next
     })
+    return nuevo
   }
 
   function update(id: string, changes: Partial<Empleado>) {
