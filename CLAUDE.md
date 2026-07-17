@@ -2437,6 +2437,77 @@ María (Mutuo Acuerdo) → tarjeta "Vacaciones No Gozadas" muestra "− 5 días 
 disfrutados" en la fórmula, confirmando que no se paga doble. Sin errores de
 consola en ningún paso. `tsc --noEmit` y `npm run build` limpios (19 rutas).
 
+## Vacaciones — acumulación multi-año compuesta + venta de vacaciones
+
+El usuario describió dos escenarios reales de su experiencia laboral: (1)
+empleados con 1-3 períodos de vacaciones pendientes acumulados (nunca
+disfrutadas, la empresa nunca los obliga a tomarlas) y una liquidación con
+saldo pendiente de 2 años distintos (ej. 9 días de 2023 + 7 de 2024); (2)
+"venta de vacaciones" — el empleado sigue trabajando en su período de
+vacaciones y prefiere que el valor de esos días se le añada como pago extra
+en la nómina, en vez de disfrutarlos.
+
+**Bug real encontrado en el escenario 1 — confirmado, no solo hipotético.**
+La fórmula de acumulación que ya existía (antes de esta sesión) en
+`/vacaciones` y Liquidación usaba `(años % 1) × 12` para los meses del
+"ciclo actual" — el residuo de la división, que **descarta por completo
+cualquier año COMPLETO ya transcurrido sin disfrutar**. Un empleado con 1
+año 5 meses sin tomar vacaciones acumulaba ~5.8 días en vez de los ~19.8
+reales (14 del primer año + la fracción del segundo). Fix: nueva función
+`calcularDiasVacacionesAcumulados(añosServicio, saldoInicial)` en
+`dominican-labor.ts` que COMPONE cada año completo (a la tasa vigente EN
+ESE año — 14 los primeros 5 años, 18 después) + la fracción del año en
+curso, sin resetear nunca — reemplaza la fórmula duplicada y buggy en
+`vacaciones/page.tsx` y `liquidacion/page.tsx`. Con `diasTomados` (ya
+existente) restando lo realmente disfrutado/vendido, el escenario de "9
+días de 2023 + 7 de 2024" ahora sale correcto automáticamente sin necesidad
+de trackear "por año calendario" — el acumulado compuesto total menos lo
+tomado ya refleja el saldo real, sin importar cuántos años lleve.
+
+**Venta de vacaciones — nuevo `tipo?: 'disfrute' | 'venta'` en
+`DisfruteVacaciones`** (default `'disfrute'`, retrocompatible). A
+diferencia de un disfrute (el empleado deja de trabajar esos días, se
+prorratea el salario normal), una venta:
+- **No reduce días trabajados** — el empleado sigue cobrando el salario
+  completo del período, `diasVacacionEnPeriodo()` (`nomina/page.tsx`) separa
+  internamente los registros por `tipo`: solo los de `'disfrute'` restan de
+  `diasVacCalendario`/`diasTrabajados`, los de `'venta'` nunca.
+- **Se paga aparte, no en lugar de** — nuevo campo `vacacionesVendidas` en
+  `ParametrosNomina`/`ResultadoNomina` (paralelo a `vacacionesGoce`, mismo
+  tratamiento fiscal: cotizable TSS, gravable ISR, mismo "halving"
+  quincenal), para no confundir "goce" (sustituye el salario) con "venta"
+  (pago extra sobre el salario completo) en el comprobante.
+- **Se registra con una fecha efectiva** (`fechaInicio === fechaFin`,
+  reutilizando el mismo mecanismo de solape por fecha ya usado para
+  disfrute) — el período de Nómina que la cubra la aplica automáticamente,
+  sin necesidad de elegir el período a mano.
+- `diasTomados`/`Días Disponibles` en `/vacaciones` no distinguen tipo —
+  una venta resta del acumulado exactamente igual que un disfrute (ambas
+  formas consumen el derecho). `disfruteActivo`/`estaDeVacaciones` SÍ
+  filtran tipo `'venta'` — nunca debe verse el badge "De Vacaciones" para
+  alguien que sigue trabajando.
+
+**UI**: botón "Vender Vacaciones" en `/vacaciones` (modal: empleado, días a
+vender, fecha efectiva, notas, preview en vivo del monto con aviso no
+bloqueante si excede lo disponible). La tabla de registros se renombra
+"Disfrutes y Ventas Registradas" con columna "Tipo" (badge Disfrute/Venta).
+Línea "Vacaciones Vendidas" en Devengos del modal `DetalleNomina` y del PDF
+de comprobante, con nota "pago extra sobre el salario normal completo".
+
+Verificado en navegador con Playwright, datos demo reales: José Hernández
+Cruz (3 años 9 meses) pasó de ~11.51 días acumulados (fórmula buggy, sesión
+anterior) a 53.51 días (fórmula compuesta) — confirma que ya no se descartan
+años completos. Venta de 14 días para Carlos Rodríguez Méndez (fecha
+efectiva dentro de un período ya abierto) → Días Disponibles baja exacto de
+110.80 a 96.80, sin badge "De Vacaciones" (sigue "Puede gozar", confirmando
+que no se le marca como ausente). En el comprobante de esa quincena: Salario
+Básico RD$44,000.00 (completo, SIN prorratear — a diferencia de un
+disfrute) + Vacaciones Vendidas RD$51,699.54 (14 días × tarifa diaria,
+matemática exacta tras el pre-doblado/halving quincenal) + nota "Incluye
+venta de vacaciones — pago extra sobre el salario normal completo, con
+AFP/SFS/ISR". Sin errores de consola en ningún paso. `tsc --noEmit` y
+`npm run build` limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
