@@ -2356,6 +2356,87 @@ con el markup esperado. `tsc --noEmit` y `npm run build` limpios (19 rutas,
 sin cambio de conteo — `/icon.svg` es una ruta de asset estático, no una
 página).
 
+## Disfrute de Vacaciones — registro de toma de vacaciones + puente a Nómina
+
+Pedido explícito del usuario: hasta ahora `/vacaciones` solo proyectaba la
+acumulación (14/18 días laborables/año) sin ninguna forma de registrar que un
+empleado REALMENTE tomó un tramo de sus vacaciones ya acumuladas, restarlo del
+disponible, y que el período de Nómina que se solape con esas fechas pague
+esos días como vacaciones (con AFP/SFS/ISR, Art. 178) en vez de como sueldo
+normal. El usuario planteó el ejemplo concreto de un empleado que sale el 20
+de julio y regresa el 27 (trabajó 16–19, vacacionó 20–26 dentro de la misma
+quincena) — confirmó dos decisiones antes de implementar: (1) los días se
+cuentan en **días laborables** (excluye domingo, consistente con cómo ya se
+acumulan los 14/18 días anuales), y (2) el período de Nómina **pre-carga
+automático** el prorrateo, sin requerir un ajuste manual.
+
+**Arquitectura:**
+- Nuevo tipo `DisfruteVacaciones` (empleadoId, fechaInicio/fechaFin,
+  `diasLaborables` congelado al registrar, notas) — un empleado puede
+  fraccionar sus vacaciones en varios tramos a lo largo del año, así que es
+  una lista, no un campo único. Nuevo `src/lib/vacaciones-context.tsx`
+  (mismo patrón que `licencias-context.tsx`): `registrarDisfrute`/
+  `eliminarDisfrute`/`diasTomados(empId)` (suma de días laborables de todos
+  los tramos, lo que se resta del acumulado disponible)/`estaDeVacaciones`.
+- `contarDiasLaborables(inicio, fin)` (nuevo helper en `dominican-labor.ts`)
+  — excluye domingos, reutilizado tanto para restar del acumulado como para
+  valorar el goce a pagar.
+- **Nuevo campo `ParametrosNomina.vacacionesGoce`** — se suma a
+  `totalBrutoLegado` en `calcularNomina` exactamente igual que
+  bonificaciones/comisiones (cotizable TSS, gravable ISR — salario
+  ordinario, Art. 178), con el mismo "halving" automático en
+  `calcularNominaQuincenal`.
+- **`diasVacacionEnPeriodo()`** (nuevo, `nomina/page.tsx`, junto a
+  `diasSuspensionEnPeriodo`) — calcula, para el rango de fechas de UN
+  período específico: (a) los días CALENDARIO de vacación que caen dentro
+  del período, para reducir `diasTrabajados` (mismo mecanismo ya usado para
+  prorratear por suspensión) y (b) los días LABORABLES tomados en ese mismo
+  rango, valorados a tarifa diaria (salario ÷ 23.83/26) para el monto de
+  goce — la misma convención que ya usa `/vacaciones` y Liquidación para
+  "Vacaciones No Gozadas", no la fracción calendario. **Detalle clave de
+  precisión**: si el período es quincenal, el monto de goce se PRE-DOBLA
+  antes de pasarlo a `calcularNomina` — el sistema ya divide TODO el bruto
+  (incluidas bonificaciones/comisiones) entre 2 en `calcularNominaQuincenal`
+  (ver sección "Quincenal" arriba), así que duplicarlo aquí hace que, tras
+  esa división automática, el resultado sea el monto real correspondiente a
+  esa quincena específica — mismo truco implícito que ya "sobrevive" el
+  prorrateo de días vía `diasCorteEnPeriodo`. `calcularParaPeriodo` (único
+  choke point, ya usado por suspensión/salida) ahora también recibe la
+  lista de disfrutes y aplica automáticamente esta lógica en sus 6 call
+  sites — sin necesidad de un `AjusteLinea` manual, es 100% automático como
+  suspensión/salida pendiente.
+- **UI Nómina**: línea "Vacaciones (Goce)" en Devengos del modal
+  `DetalleNomina` y del PDF de comprobante, con nota "Incluye días de
+  disfrute de vacaciones — salario ordinario, con AFP/SFS/ISR normales
+  (Art. 178)". El toast al crear un período menciona cuántos empleados
+  tienen vacaciones dentro de ese período.
+- **`/vacaciones`**: nueva columna "Días Disponibles" (acumulados − ya
+  tomados), botón "Registrar Disfrute" (modal con preview en vivo de días
+  laborables y aviso no bloqueante si supera lo disponible), badge "De
+  Vacaciones" cuando la fecha de hoy cae dentro de un tramo registrado, y
+  tabla "Disfrutes Registrados" (todos los tramos, con acción eliminar).
+  Nueva stat card "De Vacaciones Ahora".
+- **Liquidación**: `diasVacAcum` ahora resta `diasTomados(emp.id)` antes de
+  calcular "Vacaciones No Gozadas" — evita pagar dos veces los días que el
+  empleado ya disfrutó (una vez en Nómina al gozarlos, otra al liquidar). El
+  detalle de la tarjeta muestra "− N días ya disfrutados" cuando aplica.
+
+Verificado en navegador con Playwright, datos demo reales: registro de un
+disfrute de 6 días calendario (incluye 1 domingo → 5 días laborables) para
+María González Pérez (salarioBase RD$55,000) → Días Disponibles baja exacto
+de 6.10 a 1.10, badge "De Vacaciones" visible. Período mensual Julio 2026 →
+toast "1 empleado(s) con vacaciones en este período" → comprobante de María
+muestra Salario Básico RD$44,354.84 (=55,000×25/31 días trabajados) +
+Vacaciones (Goce) RD$11,540.08 (=5 días × RD$2,308.02/día), con AFP/SFS/ISR
+calculados sobre el total combinado. 2ª Quincena de Julio 2026 (16–31, el
+disfrute solapa 16–20 → 4 días laborables) → Salario Básico RD$18,906.25
+(=55,000×11/16/2, matemática exacta tras el halving quincenal) + Vacaciones
+(Goce) RD$9,232.06 — ambos números exactos confirmando que el pre-doblado
+sobrevive la división quincenal automática sin desajustes. Liquidación de
+María (Mutuo Acuerdo) → tarjeta "Vacaciones No Gozadas" muestra "− 5 días ya
+disfrutados" en la fórmula, confirmando que no se paga doble. Sin errores de
+consola en ningún paso. `tsc --noEmit` y `npm run build` limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
