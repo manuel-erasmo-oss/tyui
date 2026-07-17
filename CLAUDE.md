@@ -2508,6 +2508,55 @@ venta de vacaciones — pago extra sobre el salario normal completo, con
 AFP/SFS/ISR". Sin errores de consola en ningún paso. `tsc --noEmit` y
 `npm run build` limpios (19 rutas).
 
+## Saldo ISR a Favor migrado — Carga Inicial deja de ser decorativa
+
+El usuario pidió explícitamente que los datos de Carga Inicial "pasen por
+el flujo del sistema y no sean decorativos", usando el Saldo ISR a Favor
+como ejemplo. Antes de tocar código se auditó el estado real (vía agente,
+no solo CLAUDE.md): el mecanismo de Saldo ISR a Favor YA estaba 100%
+conectado a Nómina (reduce el ISR calculado, sube el neto, nunca cuenta
+como base cotizable de TSS ni gravable de ISR — confirmado rastreando
+`aplicarSaldoISRFavor` línea por línea) — el hueco real era que solo se
+podía **registrar** desde el drawer de Empleados, uno por uno, nunca desde
+el Asistente Guiado ni el Importador Excel de Carga Inicial.
+
+**Fix — ambos flujos de Carga Inicial ahora crean un `SaldoISRFavor` real:**
+- `AsistenteGuiado.tsx`: nuevo campo "Saldo ISR a Favor migrado (RD$)" en el
+  paso por-empleado (separado visualmente de los 3 campos de `Empleado` con
+  un `border-t`, porque esto NO es un campo de `Empleado` — crea un registro
+  aparte). Al "Guardar y Continuar", si el monto es > 0, llama
+  `registrarSaldoISR()` del mismo `saldo-isr-context.tsx` que ya usa el
+  drawer — mismo motivo por defecto ("Saldo migrado en Carga Inicial"),
+  tipo `'retencion_excesiva'`, año fiscal actual.
+- `ImportadorExcel.tsx`: nueva 11ª columna "Saldo ISR a Favor (RD$)" en la
+  plantilla/`ENCABEZADOS`/`FilaImportacion`, con su propia validación
+  (número ≥ 0) y columna en la tabla de vista previa. Funciona tanto para
+  filas que actualizan un empleado existente como para filas que crean uno
+  nuevo — este segundo caso requirió un cambio de contrato: `add()` en
+  `empleados-context.tsx` antes devolvía `void`, ahora devuelve el
+  `Empleado` recién creado (con su `id` generado) para poder asociarle el
+  `SaldoISRFavor` en el mismo `confirmarImportacion()`. Cambio aditivo — los
+  demás call sites de `add()` que ignoraban el valor de retorno no se ven
+  afectados.
+- Deliberadamente NO se agregó al sub-flujo "Registrar empleado nuevo desde
+  el asistente" (`modoAlta`, que reutiliza `EmpleadoFormFields`) ni al
+  formulario "Nuevo Empleado" de `/empleados` — ambos son para contrataciones
+  genuinamente nuevas, sin retención previa que reembolsar; el pedido del
+  usuario aplicaba específicamente a empleados con historial migrando desde
+  otro sistema.
+
+Verificado en navegador con Playwright: Asistente Guiado con María González
+Pérez → RD$4,200 en el nuevo campo → Guardar y Continuar → su drawer en
+Empleados muestra la sección "Saldo ISR a Favor" con "Saldo migrado en Carga
+Inicial · Año 2026 · original RD$4,200.00" — mismo componente visual que
+usa el registro manual. Importador Excel con un CSV de un empleado nuevo
+("Roberto Testigo", cédula no existente) y RD$2,500 en la columna 11 → vista
+previa muestra "RD$2,500" en la columna "Saldo ISR" con acción "Crear
+empleado nuevo" → tras confirmar, su drawer real (verificado con el
+`id` generado, no un placeholder) muestra el saldo con motivo "Saldo
+migrado en Carga Inicial (Importador Excel)". Sin errores de consola en
+ningún paso. `tsc --noEmit` y `npm run build` limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
