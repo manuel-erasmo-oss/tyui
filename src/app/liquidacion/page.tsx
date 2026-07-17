@@ -15,6 +15,7 @@ import {
   calcularCesantiaDetalle, calcularPreavisoDetalle, calcularAsistenciaEconomicaDetalle,
   calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario, getDiasPreavisoRequeridos,
   calcularDiasTrabajadosPendientes, calcularNomina, MOTIVO_LIQUIDACION_LABELS, regaliaPagadaVigente,
+  calcularDiasVacacionesAcumulados,
 } from '@/lib/dominican-labor'
 import { formatRD, formatNum, formatDate, formatAnosServicio, formatCedula, fullName, BTN_PRIMARY } from '@/lib/utils'
 import type { Empleado, Empresa, MotivoLiquidacion, ConceptoLiquidacion, DesgloseConceptoLiquidacion, RegistroLiquidacion } from '@/types'
@@ -511,11 +512,15 @@ export default function LiquidacionPage() {
     const asistenciaEconomica = asistenciaDetalle.total
 
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
-    // Resta los días laborables ya disfrutados (Disfrute de Vacaciones,
-    // /vacaciones) antes de calcular lo pendiente por pagar — de lo
-    // contrario un empleado que ya tomó parte de sus vacaciones cobraría
-    // esos días DOS veces (una en Nómina al gozarlos, otra aquí al liquidar).
-    const diasVacAcum = Math.max(0, (diasVacAnuales / 12) * mesesCicloVac + (emp.saldoVacacionesInicial ?? 0) - diasTomados(emp.id))
+    // calcularDiasVacacionesAcumulados compone TODOS los años completos de
+    // servicio (a la tasa vigente en cada uno) + la fracción del año en
+    // curso — no solo el ciclo actual, que descartaría años completos nunca
+    // disfrutados (un empleado con 1 año 5 meses sin tomar vacaciones debe
+    // acumular ~19.8 días, no ~5.8). Se resta lo ya disfrutado/vendido
+    // (Disfrute de Vacaciones, /vacaciones) antes de calcular lo pendiente
+    // por pagar — de lo contrario esos días se cobrarían DOS veces (una en
+    // Nómina al gozarlos/venderlos, otra aquí al liquidar).
+    const diasVacAcum = Math.max(0, calcularDiasVacacionesAcumulados(anosServicio, emp.saldoVacacionesInicial ?? 0) - diasTomados(emp.id))
     const tarifaDiariaVac = emp.salarioBase / divisorDiario
     const vacacionesBruto = diasVacAcum * tarifaDiariaVac
     // Las vacaciones SÍ son salario ordinario continuado (Art. 178, Código de
@@ -637,7 +642,7 @@ export default function LiquidacionPage() {
         Icon: CalendarDays,
         montoAuto: resultado.vacaciones,
         detalle: [
-          `${resultado.diasVacAnuales} días/año × ${resultado.mesesCicloVac.toFixed(1)} meses de ciclo${(emp.saldoVacacionesInicial ?? 0) > 0 ? ` + ${emp.saldoVacacionesInicial} días de saldo inicial` : ''}${diasTomados(emp.id) > 0 ? ` − ${diasTomados(emp.id)} días ya disfrutados` : ''} = ${resultado.diasVacAcum.toFixed(2)} días`,
+          `Antigüedad ${formatAnosServicio(resultado.anosServicio)} (Art. 177, compuesto por cada año completo a su tasa vigente + fracción del año en curso)${(emp.saldoVacacionesInicial ?? 0) > 0 ? ` + ${emp.saldoVacacionesInicial} días de saldo inicial` : ''}${diasTomados(emp.id) > 0 ? ` − ${diasTomados(emp.id)} días ya disfrutados/vendidos` : ''} = ${resultado.diasVacAcum.toFixed(2)} días`,
           `${resultado.diasVacAcum.toFixed(2)} días × ${formatRD(resultado.tarifaDiariaVac, 2)}/día = ${formatRD(resultado.vacacionesBruto, 2)} bruto`,
           `Bruto ${formatRD(resultado.vacacionesBruto, 2)} − AFP ${formatRD(resultado.afpVacaciones, 2)} − SFS ${formatRD(resultado.sfsVacaciones, 2)} − ISR ${formatRD(resultado.isrVacaciones, 2)}`,
         ],

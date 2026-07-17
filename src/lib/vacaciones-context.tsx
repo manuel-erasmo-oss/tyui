@@ -10,11 +10,17 @@ const KEY = 'cielo-disfrutes-vacaciones'
 interface VacacionesCtx {
   disfrutes: DisfruteVacaciones[]
   registrarDisfrute: (empleadoId: string, fechaInicio: string, fechaFin: string, notas?: string) => DisfruteVacaciones
+  // Venta de vacaciones: el empleado sigue trabajando (no deja de trabajar
+  // esos días) pero recibe su valor como pago extra en la Nómina del período
+  // que cubra `fechaEfectiva`. `dias` es la cantidad elegida por el usuario,
+  // no un valor derivado de un rango de fechas.
+  registrarVenta: (empleadoId: string, dias: number, fechaEfectiva: string, notas?: string) => DisfruteVacaciones
   eliminarDisfrute: (id: string) => void
-  // Suma de días laborables ya tomados (todos los tramos registrados) — lo
+  // Suma de días laborables ya tomados/vendidos (todos los registros) — lo
   // que se resta del acumulado para saber cuánto le queda disponible.
   diasTomados: (empleadoId: string) => number
-  // true si `fecha` (hoy por defecto) cae dentro de algún tramo registrado.
+  // true si `fecha` (hoy por defecto) cae dentro de algún tramo de tipo
+  // 'disfrute' — una 'venta' NUNCA cuenta aquí, el empleado sigue trabajando.
   estaDeVacaciones: (empleadoId: string, fecha?: Date) => boolean
   disfruteActivo: (empleadoId: string, fecha?: Date) => DisfruteVacaciones | null
 }
@@ -22,6 +28,7 @@ interface VacacionesCtx {
 const Ctx = createContext<VacacionesCtx>({
   disfrutes: [],
   registrarDisfrute: () => { throw new Error('VacacionesProvider not mounted') },
+  registrarVenta: () => { throw new Error('VacacionesProvider not mounted') },
   eliminarDisfrute: () => {},
   diasTomados: () => 0,
   estaDeVacaciones: () => false,
@@ -65,6 +72,25 @@ export function VacacionesProvider({ children }: { children: ReactNode }) {
     return nuevo
   }
 
+  function registrarVenta(empleadoId: string, dias: number, fechaEfectiva: string, notas?: string): DisfruteVacaciones {
+    const nuevo: DisfruteVacaciones = {
+      id: `venta-${Date.now().toString(36)}`,
+      empleadoId,
+      fechaInicio: fechaEfectiva,
+      fechaFin: fechaEfectiva,
+      diasLaborables: dias,
+      tipo: 'venta',
+      fechaRegistro: new Date().toISOString(),
+      notas,
+    }
+    setDisfrutes(prev => {
+      const next = [nuevo, ...prev]
+      persist(next)
+      return next
+    })
+    return nuevo
+  }
+
   function eliminarDisfrute(id: string) {
     setDisfrutes(prev => {
       const next = prev.filter(d => d.id !== id)
@@ -83,6 +109,7 @@ export function VacacionesProvider({ children }: { children: ReactNode }) {
     const f = fecha.getTime()
     return disfrutes.find(d =>
       d.empleadoId === empleadoId &&
+      d.tipo !== 'venta' &&
       new Date(d.fechaInicio).getTime() <= f &&
       new Date(d.fechaFin).getTime() >= f
     ) ?? null
@@ -93,7 +120,7 @@ export function VacacionesProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <Ctx.Provider value={{ disfrutes, registrarDisfrute, eliminarDisfrute, diasTomados, estaDeVacaciones, disfruteActivo }}>
+    <Ctx.Provider value={{ disfrutes, registrarDisfrute, registrarVenta, eliminarDisfrute, diasTomados, estaDeVacaciones, disfruteActivo }}>
       {children}
     </Ctx.Provider>
   )

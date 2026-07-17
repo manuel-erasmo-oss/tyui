@@ -13,17 +13,18 @@ import {
   getDivisorSalarioDiario,
   calcularNomina,
   contarDiasLaborables,
+  calcularDiasVacacionesAcumulados,
   DIAS_VACACIONES_HASTA_5_ANOS,
   DIAS_VACACIONES_MAS_5_ANOS,
 } from '@/lib/dominican-labor'
 import { useEmpresa } from '@/lib/empresa-context'
 import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY } from '@/lib/utils'
-import { CalendarDays, Users, Wallet, AlertCircle, Download, Plane, Plus, X, Trash2 } from 'lucide-react'
+import { CalendarDays, Users, Wallet, AlertCircle, Download, Plane, Plus, X, Trash2, Banknote } from 'lucide-react'
 
 export default function VacacionesPage() {
   const { empleadosEnNomina } = useEmpleados()
   const { empresa } = useEmpresa()
-  const { disfrutes, registrarDisfrute, eliminarDisfrute, diasTomados, estaDeVacaciones } = useVacaciones()
+  const { disfrutes, registrarDisfrute, registrarVenta, eliminarDisfrute, diasTomados, estaDeVacaciones } = useVacaciones()
 
   const [toast, setToast] = useState<string | null>(null)
   const [modalAbierto, setModalAbierto] = useState(false)
@@ -32,15 +33,22 @@ export default function VacacionesPage() {
   const [fechaFin, setFechaFin] = useState('')
   const [notas, setNotas] = useState('')
 
+  // Venta de vacaciones — el empleado sigue trabajando, solo cambia días de
+  // descanso futuro por un pago extra en la fecha efectiva elegida.
+  const [modalVentaAbierto, setModalVentaAbierto] = useState(false)
+  const [empIdVenta, setEmpIdVenta] = useState('')
+  const [diasVenta, setDiasVenta] = useState('')
+  const [fechaEfectivaVenta, setFechaEfectivaVenta] = useState('')
+  const [notasVenta, setNotasVenta] = useState('')
+
   const filas = empleadosEnNomina.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
-    // Fraccional, sin truncar — prorratea el mes en curso proporcionalmente.
-    // Math.max(0, …): protege contra fechaIngreso en el futuro (error de
-    // captura), que de otro modo produciría antigüedad negativa.
-    const mesesServicio   = anos < 1 ? Math.max(0, anos * 12) : ((anos % 1) * 12 || 12)
-    // + saldo inicial: empleados con historial previo a Cielo Cloud (migración)
-    const diasAcumulados  = Math.max(0, (diasAnuales / 12) * mesesServicio + (e.saldoVacacionesInicial ?? 0))
+    // Compone TODOS los años completos de servicio (a la tasa vigente en cada
+    // uno) + la fracción del año en curso — no solo el ciclo actual, que
+    // descartaría años completos nunca disfrutados. + saldo inicial:
+    // empleados con historial previo a Cielo Cloud (migración).
+    const diasAcumulados  = calcularDiasVacacionesAcumulados(anos, e.saldoVacacionesInicial ?? 0)
     const tomados         = diasTomados(e.id)
     const diasDisponibles = Math.max(0, diasAcumulados - tomados)
     const valorDiario     = e.salarioBase / getDivisorSalarioDiario(e)
@@ -76,12 +84,31 @@ export default function VacacionesPage() {
     : 0
   const excedeDisponibles = diasLaborablesPreview > disponiblesSeleccionado
 
+  // Preview en vivo del modal de venta
+  const empSeleccionadoVenta = empleadosEnNomina.find(e => e.id === empIdVenta) ?? null
+  const diasVentaNum = Number(diasVenta) || 0
+  const disponiblesVenta = empSeleccionadoVenta
+    ? filas.find(f => f.empleado.id === empSeleccionadoVenta.id)?.diasDisponibles ?? 0
+    : 0
+  const excedeDisponiblesVenta = diasVentaNum > disponiblesVenta
+  const valorVentaPreview = empSeleccionadoVenta
+    ? diasVentaNum * (empSeleccionadoVenta.salarioBase / getDivisorSalarioDiario(empSeleccionadoVenta))
+    : 0
+
   function abrirModal(id?: string) {
     setEmpId(id ?? '')
     setFechaInicio('')
     setFechaFin('')
     setNotas('')
     setModalAbierto(true)
+  }
+
+  function abrirModalVenta(id?: string) {
+    setEmpIdVenta(id ?? '')
+    setDiasVenta('')
+    setFechaEfectivaVenta('')
+    setNotasVenta('')
+    setModalVentaAbierto(true)
   }
 
   function handleRegistrar() {
@@ -91,9 +118,16 @@ export default function VacacionesPage() {
     setToast(`Disfrute registrado — ${fullName(empSeleccionado)} · ${diasLaborablesPreview} día(s) laborables`)
   }
 
+  function handleRegistrarVenta() {
+    if (!empSeleccionadoVenta || diasVentaNum <= 0 || !fechaEfectivaVenta) return
+    registrarVenta(empSeleccionadoVenta.id, diasVentaNum, fechaEfectivaVenta, notasVenta || undefined)
+    setModalVentaAbierto(false)
+    setToast(`Venta registrada — ${fullName(empSeleccionadoVenta)} · ${diasVentaNum} día(s) · ${formatRD(valorVentaPreview)}`)
+  }
+
   function handleEliminar(id: string) {
     eliminarDisfrute(id)
-    setToast('Disfrute eliminado')
+    setToast('Registro eliminado')
   }
 
   // Exporta exactamente las mismas filas ya calculadas para la tabla en
@@ -143,6 +177,13 @@ export default function VacacionesPage() {
             >
               <Download className="h-4 w-4" />
               Exportar Excel
+            </button>
+            <button
+              onClick={() => abrirModalVenta()}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+            >
+              <Banknote className="h-4 w-4" />
+              Vender Vacaciones
             </button>
             <button onClick={() => abrirModal()} className={BTN_PRIMARY}>
               <Plus className="h-4 w-4" />
@@ -288,12 +329,19 @@ export default function VacacionesPage() {
                         )
                       }
                     </td>
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
                       <button
                         onClick={() => abrirModal(empleado.id)}
                         className="text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:underline"
                       >
                         Registrar
+                      </button>
+                      <span className="mx-1.5 text-zinc-300 dark:text-zinc-600">·</span>
+                      <button
+                        onClick={() => abrirModalVenta(empleado.id)}
+                        className="text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:underline"
+                      >
+                        Vender
                       </button>
                     </td>
                   </tr>
@@ -315,17 +363,19 @@ export default function VacacionesPage() {
 
         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
           <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Disfrutes Registrados</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Disfrutes y Ventas Registradas</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Cada tramo se resta de los días disponibles. Al procesar el período de Nómina que se solape con estas
-              fechas, el sistema prorratea los días trabajados y paga el resto como vacaciones (con AFP/SFS/ISR).
+              Cada registro resta de los días disponibles. Un <strong>Disfrute</strong> prorratea el salario normal
+              del período de Nómina que se solape con sus fechas. Una <strong>Venta</strong> no reduce días
+              trabajados — solo agrega el valor de los días vendidos como pago extra en el período que cubra la
+              fecha efectiva. Ambos con AFP/SFS/ISR (Art. 178).
             </p>
           </div>
           {disfrutesOrdenados.length === 0 ? (
             <div className="p-6">
               <EmptyState
                 icon={Plane}
-                message="Aún no se ha registrado ningún disfrute de vacaciones."
+                message="Aún no se ha registrado ningún disfrute ni venta de vacaciones."
                 action={{ label: 'Registrar Disfrute', onClick: () => abrirModal() }}
               />
             </div>
@@ -335,6 +385,7 @@ export default function VacacionesPage() {
                 <thead>
                   <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
                     <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tipo</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Desde</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Hasta</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Días Laborables</th>
@@ -345,18 +396,24 @@ export default function VacacionesPage() {
                 <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                   {disfrutesOrdenados.map(d => {
                     const emp = empleadosEnNomina.find(e => e.id === d.empleadoId)
+                    const esVenta = d.tipo === 'venta'
                     return (
                       <tr key={d.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                         <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-zinc-100">{emp ? fullName(emp) : '—'}</td>
+                        <td className="px-4 py-3.5">
+                          {esVenta
+                            ? <Badge variant="info"><Banknote className="mr-1 h-3 w-3" />Venta</Badge>
+                            : <Badge variant="default"><Plane className="mr-1 h-3 w-3" />Disfrute</Badge>}
+                        </td>
                         <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{formatDate(d.fechaInicio)}</td>
-                        <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{formatDate(d.fechaFin)}</td>
+                        <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{esVenta ? '—' : formatDate(d.fechaFin)}</td>
                         <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">{d.diasLaborables}</td>
                         <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-400 text-xs">{d.notas || '—'}</td>
                         <td className="px-4 py-3.5 text-right">
                           <button
                             onClick={() => handleEliminar(d.id)}
                             className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400 transition-colors"
-                            title="Eliminar disfrute"
+                            title="Eliminar registro"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -463,6 +520,104 @@ export default function VacacionesPage() {
                 className={`${BTN_PRIMARY} disabled:opacity-40 disabled:pointer-events-none`}
               >
                 Registrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalVentaAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setModalVentaAbierto(false)}>
+          <div className="absolute inset-0 bg-zinc-900/40 dark:bg-black/60 animate-backdrop-in" />
+          <div
+            className="relative w-full max-w-md rounded-xl bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none animate-modal-in"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Vender Vacaciones</h3>
+              <button onClick={() => setModalVentaAbierto(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                El empleado sigue trabajando normal — solo se agrega el valor de los días vendidos como pago extra
+                en el período de Nómina que cubra la fecha efectiva, con AFP/SFS/ISR (Art. 178).
+              </p>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Empleado</label>
+                <select
+                  value={empIdVenta}
+                  onChange={e => setEmpIdVenta(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                >
+                  <option value="">Selecciona un empleado…</option>
+                  {empleadosEnNomina.map(e => (
+                    <option key={e.id} value={e.id}>{fullName(e)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Días a Vender</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    value={diasVenta}
+                    onChange={e => setDiasVenta(e.target.value)}
+                    placeholder="Ej. 14"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha Efectiva</label>
+                  <input
+                    type="date"
+                    value={fechaEfectivaVenta}
+                    onChange={e => setFechaEfectivaVenta(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Notas (opcional)</label>
+                <input
+                  type="text"
+                  value={notasVenta}
+                  onChange={e => setNotasVenta(e.target.value)}
+                  placeholder="Ej. Acordado con gerencia"
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+              {diasVentaNum > 0 && empSeleccionadoVenta && (
+                <div className={`rounded-lg px-3 py-2.5 text-xs ${excedeDisponiblesVenta
+                  ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
+                  : 'bg-[#eef0fb] text-[#151f66] dark:bg-indigo-950/30 dark:text-indigo-300'}`}
+                >
+                  <p><strong>{formatRD(valorVentaPreview)} bruto</strong> ({diasVentaNum} día(s) × tarifa diaria) — {disponiblesVenta.toFixed(2)} disponible(s)</p>
+                  {excedeDisponiblesVenta && (
+                    <p className="mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      Supera los días disponibles del empleado — se puede registrar igual, pero revisa el acumulado.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+              <button
+                onClick={() => setModalVentaAbierto(false)}
+                className="rounded-lg px-4 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRegistrarVenta}
+                disabled={!empSeleccionadoVenta || diasVentaNum <= 0 || !fechaEfectivaVenta}
+                className={`${BTN_PRIMARY} disabled:opacity-40 disabled:pointer-events-none`}
+              >
+                Registrar Venta
               </button>
             </div>
           </div>

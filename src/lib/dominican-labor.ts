@@ -107,6 +107,31 @@ export function getDivisorSalarioDiario(empleado: Pick<Empleado, 'regimenIntermi
   return empleado.regimenIntermitente ? DIVISOR_DIA_INTERMITENTE : DIVISOR_DIA_ORDINARIO
 }
 
+// ─── Vacaciones acumuladas — compuestas a través de múltiples años ───────────
+// Un cálculo ingenuo por "ciclo actual" (ej. `(años % 1) × 14/12`) descarta
+// por completo cualquier año COMPLETO ya transcurrido que el empleado nunca
+// disfrutó — un empleado con 1 año y 5 meses sin tomar vacaciones acumularía
+// solo ~5.8 días en vez de los ~19.8 reales (14 del primer año + la fracción
+// del segundo). En la práctica real dominicana un empleado puede acumular 2,
+// 3 o más períodos pendientes si la empresa nunca lo obliga a disfrutarlos —
+// este helper compone correctamente cada año completo (a la tasa vigente EN
+// ESE año — 14 días los primeros 5 años, 18 después) más la fracción del año
+// en curso, sin resetear nunca. `diasTomados` (vacaciones-context.tsx) resta
+// aparte lo realmente disfrutado/vendido — la combinación de ambos refleja
+// el saldo real pendiente, sin importar cuántos años lleve acumulándose.
+export function calcularDiasVacacionesAcumulados(anosServicio: number, saldoVacacionesInicial: number = 0): number {
+  if (anosServicio <= 0) return Math.max(0, saldoVacacionesInicial)
+  const aniosCompletos  = Math.floor(anosServicio)
+  const fraccionActual  = anosServicio - aniosCompletos
+  let dias = 0
+  for (let i = 1; i <= aniosCompletos; i++) {
+    dias += i >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
+  }
+  const tasaActual = (aniosCompletos + 1) >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
+  dias += tasaActual * fraccionActual
+  return Math.max(0, dias + saldoVacacionesInicial)
+}
+
 // ─── Días laborables entre dos fechas (excluye domingos) ─────────────────────
 // Usado por el Disfrute de Vacaciones: tanto para restar del acumulado
 // disponible como para valorar el goce pagado en Nómina — consistente con
@@ -151,6 +176,7 @@ export function calcularNomina(
     ingresosPersonalizadosGravablesISR = 0,
     ingresosPersonalizadosCotizablesTSS = 0,
     vacacionesGoce      = 0,
+    vacacionesVendidas  = 0,
   } = params
 
   // Salario proporcional a días trabajados
@@ -169,9 +195,12 @@ export function calcularNomina(
 
   // Base "legado" — todo lo que ya era gravable ISR y cotizable TSS por igual
   // antes del catálogo configurable (sin cambios para nóminas que no lo usan).
-  // vacacionesGoce (Disfrute de Vacaciones) se trata igual que bonificaciones/
-  // comisiones — salario ordinario, cotizable TSS y gravable ISR (Art. 178).
-  const totalBrutoLegado = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones + vacacionesGoce
+  // vacacionesGoce (Disfrute) y vacacionesVendidas (Venta) se tratan igual
+  // que bonificaciones/comisiones — salario ordinario, cotizable TSS y
+  // gravable ISR (Art. 178). vacacionesVendidas es un pago EXTRA sobre el
+  // salario normal completo (el empleado sigue trabajando), a diferencia de
+  // vacacionesGoce que sustituye el salario de días no trabajados.
+  const totalBrutoLegado = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones + vacacionesGoce + vacacionesVendidas
   const ingresosPersonalizados = ingresosPersonalizadosTotal
   const totalBruto = totalBrutoLegado + ingresosPersonalizados
 
@@ -282,6 +311,7 @@ export function calcularNomina(
     otrosDescuentos,
     aporteVoluntarioAFPEmpleado,
     vacacionesGoce,
+    vacacionesVendidas,
     totalDescuentos,
     grossingUpEmpresa,
     saldoISRAplicado: 0,  // se aplica después, vía aplicarSaldoISRFavor() — no depende del empleado/empresa
@@ -346,6 +376,7 @@ export function calcularNominaQuincenal(
     // correspondiente a esa quincena específica (mismo mecanismo que ya
     // aplica automáticamente a bonificaciones/comisiones).
     vacacionesGoce:           m.vacacionesGoce / 2,
+    vacacionesVendidas:       m.vacacionesVendidas / 2,
     totalDescuentos:          totalDesc,
     grossingUpEmpresa:        grossingUp,
     salarioNeto:              bruto - totalDesc + grossingUp,
@@ -648,7 +679,7 @@ function resultadoVacio(empleadoId: string): ResultadoNomina {
     bonificaciones: 0, comisiones: 0, ingresosPersonalizados: 0, totalBruto: 0,
     salarioCotizable: 0,
     afpEmpleado: 0, sfsEmpleado: 0, isrMensual: 0, sfsDependientes: 0, otrosDescuentos: 0,
-    aporteVoluntarioAFPEmpleado: 0, vacacionesGoce: 0, totalDescuentos: 0,
+    aporteVoluntarioAFPEmpleado: 0, vacacionesGoce: 0, vacacionesVendidas: 0, totalDescuentos: 0,
     grossingUpEmpresa: 0, saldoISRAplicado: 0,
     salarioNeto: 0,
     afpEmpleador: 0, sfsEmpleador: 0, srlEmpleador: 0, infotepEmpleador: 0,

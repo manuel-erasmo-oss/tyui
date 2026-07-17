@@ -213,7 +213,8 @@ export interface ResultadoNomina {
   sfsDependientes: number
   otrosDescuentos: number
   aporteVoluntarioAFPEmpleado: number  // no reduce la base imponible del ISR (post-retención)
-  vacacionesGoce: number  // valor de los días de vacaciones tomados dentro de este período (ya incluido en totalBruto)
+  vacacionesGoce: number  // valor de los días de vacaciones tomados (disfrute) dentro de este período (ya incluido en totalBruto)
+  vacacionesVendidas: number  // pago extra por venta de vacaciones dentro de este período (ya incluido en totalBruto)
   totalDescuentos: number
 
   // Grossing-up (empresa asume ISR/TSS) — se reembolsa al empleado vía el neto
@@ -274,6 +275,13 @@ export interface ParametrosNomina {
   // (cotizable TSS + gravable ISR, salario ordinario — Art. 178) y sigue el
   // mismo tratamiento de "halving" quincenal que bonificaciones/comisiones.
   vacacionesGoce?: number
+  // ─── Venta de vacaciones ────────────────────────────────────────────────
+  // A diferencia de vacacionesGoce (sustituye el salario del período que el
+  // empleado NO trabajó), esto es un pago EXTRA sobre el salario normal
+  // completo — el empleado sigue trabajando, solo cambia días de descanso
+  // futuro por dinero ahora. Mismo tratamiento fiscal (cotizable/gravable),
+  // pero se muestra como línea propia para no confundir "goce" con "venta".
+  vacacionesVendidas?: number
 }
 
 // Registro de auditoría cada vez que se reabre (desposteo) un período que ya
@@ -543,6 +551,20 @@ export interface Licencia {
 // solape prorratea el salario normal (días trabajados) y agrega el valor de
 // esos días como "goce vacacional" — salario ordinario cotizable ISR/TSS
 // (Art. 178), no una indemnización exenta.
+// 'disfrute' (default, retrocompatible con registros previos a este campo):
+// el empleado deja de trabajar esos días — el período de Nómina que se
+// solape prorratea el salario normal y paga el resto como vacaciones.
+// 'venta': el empleado sigue trabajando normal (no se le resta salario
+// ordinario) pero además recibe el valor de esos días como un pago extra en
+// la Nómina — práctica común en pymes dominicanas aunque el Código de
+// Trabajo, en su letra estricta, solo contempla la compensación en dinero al
+// terminar el contrato (Art. 178). Para 'venta', fechaInicio === fechaFin
+// (una sola fecha efectiva que decide en qué período de Nómina se paga,
+// reutilizando el mismo mecanismo de detección por solape ya usado para
+// 'disfrute') y `diasLaborables` es la cantidad que el usuario eligió
+// vender, no un valor derivado de un rango de fechas.
+export type TipoDisfruteVacaciones = 'disfrute' | 'venta'
+
 export interface DisfruteVacaciones {
   id: string
   empleadoId: string
@@ -553,6 +575,7 @@ export interface DisfruteVacaciones {
   // vacaciones-context.tsx). Distinto de los días calendario del tramo
   // (fechaFin - fechaInicio), que sí incluyen domingos.
   diasLaborables: number
+  tipo?: TipoDisfruteVacaciones
   fechaRegistro: string     // ISO timestamp
   notas?: string
 }

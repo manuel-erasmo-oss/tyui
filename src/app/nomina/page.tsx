@@ -126,11 +126,13 @@ function calcularConAjustes(
   quincena: 1 | 2,
   diasOverride?: { diasTrabajados: number; diasLaborablesMes: number } | null,
   vacacionesGoce?: number,
+  vacacionesVendidas?: number,
 ): ResultadoNomina {
   const params: ParametrosNomina = {
     ...ajustesToParams(ajustes),
     ...(diasOverride ? { diasTrabajados: diasOverride.diasTrabajados, diasLaborablesMes: diasOverride.diasLaborablesMes } : {}),
     ...(vacacionesGoce ? { vacacionesGoce } : {}),
+    ...(vacacionesVendidas ? { vacacionesVendidas } : {}),
   }
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
@@ -197,38 +199,52 @@ function diasSalidaEnPeriodo(
 // diaria × días — la misma convención ya usada en /vacaciones y en
 // Liquidación para "Vacaciones No Gozadas", no la fracción calendario).
 //
-// Si el período es quincenal, el monto de goce se PRE-DOBLA antes de
-// devolverlo: calcularNominaQuincenal divide TODO el bruto entre 2 —
+// Un registro de tipo 'venta' (venta de vacaciones) NO reduce días
+// trabajados — el empleado sigue trabajando normal, solo cambia días de
+// descanso futuro por dinero ahora — así que su solape con el período se
+// evalúa igual (fechaInicio === fechaFin, una sola fecha efectiva) pero solo
+// aporta a `vacacionesVendidas`, nunca a `diasVacCalendario`.
+//
+// Si el período es quincenal, ambos montos se PRE-DOBLAN antes de
+// devolverlos: calcularNominaQuincenal divide TODO el bruto entre 2 —
 // incluidas bonificaciones/comisiones, ver CLAUDE.md "Quincenal" — así que
 // duplicarlo aquí hace que, tras esa división automática, el resultado sea
 // el monto real correspondiente a esta quincena específica (mismo truco
 // implícito que ya "sobrevive" el prorrateo de días vía diasCorteEnPeriodo).
 function diasVacacionEnPeriodo(
   empleado: Empleado, disfrutes: DisfruteVacaciones[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): { diasTrabajados: number; diasLaborablesMes: number; vacacionesGoce: number } | null {
+): { diasTrabajados: number; diasLaborablesMes: number; vacacionesGoce: number; vacacionesVendidas: number } | null {
   const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
   const msPorDia = 24 * 3600 * 1000
   const propios = disfrutes.filter(d => d.empleadoId === empleado.id)
+  const tarifaDiaria = empleado.salarioBase / getDivisorSalarioDiario(empleado)
 
   let diasVacCalendario = 0
-  let diasVacLaborables  = 0
+  let goceRealDisfrute  = 0
+  let goceRealVenta     = 0
   for (const d of propios) {
     const dInicio = new Date(d.fechaInicio)
     const dFin    = new Date(d.fechaFin)
     const solapInicio = dInicio < inicio ? inicio : dInicio
     const solapFin    = dFin > fin ? fin : dFin
     if (solapInicio > solapFin) continue
-    diasVacCalendario += Math.floor((solapFin.getTime() - solapInicio.getTime()) / msPorDia) + 1
-    diasVacLaborables  += contarDiasLaborables(solapInicio, solapFin)
+    if (d.tipo === 'venta') {
+      goceRealVenta += d.diasLaborables * tarifaDiaria
+    } else {
+      diasVacCalendario += Math.floor((solapFin.getTime() - solapInicio.getTime()) / msPorDia) + 1
+      goceRealDisfrute   += contarDiasLaborables(solapInicio, solapFin) * tarifaDiaria
+    }
   }
-  if (diasVacCalendario === 0) return null
+  if (diasVacCalendario === 0 && goceRealVenta === 0) return null
 
   const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
   const diasTrabajados    = Math.max(0, diasLaborablesMes - diasVacCalendario)
-  const tarifaDiaria = empleado.salarioBase / getDivisorSalarioDiario(empleado)
-  const goceReal = diasVacLaborables * tarifaDiaria
-  const vacacionesGoce = tipo === 'quincenal' ? goceReal * 2 : goceReal
-  return { diasTrabajados, diasLaborablesMes, vacacionesGoce }
+  const factor = tipo === 'quincenal' ? 2 : 1
+  return {
+    diasTrabajados, diasLaborablesMes,
+    vacacionesGoce:     goceRealDisfrute * factor,
+    vacacionesVendidas: goceRealVenta * factor,
+  }
 }
 
 // Lista de empleados que participan de un período específico: los normales
@@ -292,6 +308,7 @@ function calcularParaPeriodo(
     empleado, ajustes, periodo.tipo, quincena,
     vac ? { diasTrabajados: vac.diasTrabajados, diasLaborablesMes: vac.diasLaborablesMes } : null,
     vac?.vacacionesGoce,
+    vac?.vacacionesVendidas,
   )
 }
 
@@ -347,6 +364,7 @@ function DetalleNomina({
                 { label: 'Bonificaciones',       value: nomina.bonificaciones, hide: nomina.bonificaciones === 0 },
                 { label: 'Comisiones',           value: nomina.comisiones,     hide: nomina.comisiones === 0 },
                 { label: 'Vacaciones (Goce)',     value: nomina.vacacionesGoce, hide: nomina.vacacionesGoce === 0 },
+                { label: 'Vacaciones Vendidas',   value: nomina.vacacionesVendidas, hide: nomina.vacacionesVendidas === 0 },
                 { label: 'Otros Ingresos',       value: nomina.ingresosPersonalizados, hide: nomina.ingresosPersonalizados === 0 },
               ].filter(r => !r.hide).map(row => (
                 <div key={row.label} className="flex justify-between text-sm">
@@ -357,6 +375,11 @@ function DetalleNomina({
               {nomina.vacacionesGoce > 0 && (
                 <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
                   Incluye días de disfrute de vacaciones — salario ordinario, con AFP/SFS/ISR normales (Art. 178)
+                </p>
+              )}
+              {nomina.vacacionesVendidas > 0 && (
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
+                  Incluye venta de vacaciones — pago extra sobre el salario normal completo, con AFP/SFS/ISR (Art. 178)
                 </p>
               )}
               <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-2 flex justify-between font-semibold text-sm">
