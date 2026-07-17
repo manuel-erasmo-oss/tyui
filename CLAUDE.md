@@ -2445,6 +2445,7 @@ consola en ningún paso. `tsc --noEmit` y `npm run build` limpios (19 rutas).
 
 | Hash | Descripción |
 |---|---|
+| `c167b40` | feat: disfrute de vacaciones — registro de toma + puente automático a Nómina |
 | `0aa2a7e` | feat: agregar favicon al sistema (isotipo Cielo Cloud) |
 | `bb2f8ec` | feat: permitir crear períodos retroactivos hasta 10 años atrás |
 | `320390a` | fix: Cálculo de Nómina — permitir seleccionar el período libremente |
