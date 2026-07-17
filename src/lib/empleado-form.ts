@@ -13,6 +13,19 @@ export const DOC_TIPOS: { value: TipoDocumento; label: string; placeholder: stri
   { value: 'permiso_trabajo', label: 'Permiso de trabajo', placeholder: 'PT-2024-00001' },
 ]
 
+// Compartido entre EmpleadoFormFields (los 2 selects inline de Tipo de
+// Contrato) y la Carga Inicial (Asistente Guiado + Importador Excel) — una
+// sola fuente de verdad para las etiquetas exactas de TipoContrato.
+export const TIPO_CONTRATO_OPTIONS: { value: TipoContrato; label: string }[] = [
+  { value: 'fijo',        label: 'Fijo (Tiempo Indefinido)' },
+  { value: 'temporal',    label: 'Temporal' },
+  { value: 'estacional',  label: 'Estacional / Temporada' },
+  { value: 'ocasional',   label: 'Móvil / Ocasional' },
+  { value: 'pasante',     label: 'Pasante' },
+  { value: 'aprendiz',    label: 'Aprendiz' },
+  { value: 'eventual',    label: 'Eventual (Obra/Servicio)' },
+]
+
 export interface Pais {
   code: string
   nombre: string

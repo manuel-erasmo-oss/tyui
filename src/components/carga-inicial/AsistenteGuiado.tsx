@@ -18,9 +18,9 @@ import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { getAnosServicio } from '@/lib/dominican-labor'
 import { formatAnosServicio, formatDate, fullName } from '@/lib/utils'
 import { EmpleadoFormFields } from '@/components/empleados/EmpleadoFormFields'
-import { EMPTY_EMP_FORM, formToEmpleado, validateEmpForm } from '@/lib/empleado-form'
+import { EMPTY_EMP_FORM, formToEmpleado, validateEmpForm, DOC_TIPOS, PAISES, BANCOS, TIPO_CONTRATO_OPTIONS } from '@/lib/empleado-form'
 import type { EmpForm } from '@/lib/empleado-form'
-import type { Empleado } from '@/types'
+import type { Empleado, TipoDocumento, TipoContrato, Banco } from '@/types'
 
 interface Props {
   onFinish: () => void
@@ -39,6 +39,19 @@ interface FormState {
   // vía registrarSaldoISR() al guardar, para que se aplique automáticamente
   // en la próxima nómina igual que si se hubiera registrado desde su ficha.
   saldoISRFavor: string
+  // ─── Identidad y contacto ────────────────────────────────────────────────
+  // Estos empleados YA existen en el sistema (a diferencia del modo alta) —
+  // igual que los saldos de arriba, en blanco significa "no tocar" (nunca
+  // se sobreescribe un dato bueno ya cargado con vacío), no "borrar".
+  tipoDocumento: TipoDocumento | ''
+  nacionalidad: string
+  fechaNacimiento: string
+  tipoContrato: TipoContrato | ''
+  email: string
+  telefono: string
+  banco: Banco | ''
+  numeroCuenta: string
+  regimenIntermitente: boolean
 }
 
 const EMPTY_FORM: FormState = {
@@ -46,6 +59,15 @@ const EMPTY_FORM: FormState = {
   regaliaPagadaEsteAnio: '',
   salarioHistoricoReferencia: '',
   saldoISRFavor: '',
+  tipoDocumento: '',
+  nacionalidad: '',
+  fechaNacimiento: '',
+  tipoContrato: '',
+  email: '',
+  telefono: '',
+  banco: '',
+  numeroCuenta: '',
+  regimenIntermitente: false,
 }
 
 export function AsistenteGuiado({ onFinish }: Props) {
@@ -114,6 +136,15 @@ export function AsistenteGuiado({ onFinish }: Props) {
     if (form.salarioHistoricoReferencia.trim() !== '') {
       changes.salarioHistoricoReferencia = Number(form.salarioHistoricoReferencia)
     }
+    if (form.tipoDocumento !== '') changes.tipoDocumento = form.tipoDocumento
+    if (form.nacionalidad !== '') changes.nacionalidad = form.nacionalidad
+    if (form.fechaNacimiento !== '') changes.fechaNacimiento = form.fechaNacimiento
+    if (form.tipoContrato !== '') changes.tipoContrato = form.tipoContrato
+    if (form.email.trim() !== '') changes.email = form.email.trim()
+    if (form.telefono.trim() !== '') changes.telefono = form.telefono.trim()
+    if (form.banco !== '') changes.banco = form.banco
+    if (form.numeroCuenta.trim() !== '') changes.numeroCuenta = form.numeroCuenta.trim()
+    if (form.regimenIntermitente) changes.regimenIntermitente = true
     update(empleadoActual.id, changes)
     if (form.saldoISRFavor.trim() !== '' && Number(form.saldoISRFavor) > 0) {
       registrarSaldoISR({
@@ -289,6 +320,109 @@ export function AsistenteGuiado({ onFinish }: Props) {
           El salario histórico se usa solo para Cesantía/Preaviso mientras este empleado no acumule
           12 meses reales de nómina procesada en Cielo Cloud — después el sistema recalcula con datos propios.
         </span>
+      </div>
+
+      {/* Identidad y contacto — deja en blanco lo que ya esté correcto en el sistema */}
+      <div className="mt-4 border-t border-zinc-100 dark:border-[#1d2035] pt-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+          Identidad y Contacto
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className={labelCls}>Tipo de Documento</label>
+            <select
+              className={inputCls}
+              value={form.tipoDocumento}
+              onChange={e => set('tipoDocumento', e.target.value as TipoDocumento | '')}
+            >
+              <option value="">Sin cambiar</option>
+              {DOC_TIPOS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Nacionalidad</label>
+            <select
+              className={inputCls}
+              value={form.nacionalidad}
+              onChange={e => set('nacionalidad', e.target.value)}
+            >
+              <option value="">Sin cambiar</option>
+              {PAISES.map(p => <option key={p.code} value={p.code}>{p.bandera} {p.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Fecha de Nacimiento</label>
+            <input
+              type="date"
+              className={inputCls}
+              value={form.fechaNacimiento}
+              onChange={e => set('fechaNacimiento', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Tipo de Contrato</label>
+            <select
+              className={inputCls}
+              value={form.tipoContrato}
+              onChange={e => set('tipoContrato', e.target.value as TipoContrato | '')}
+            >
+              <option value="">Sin cambiar</option>
+              {TIPO_CONTRATO_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Correo Electrónico</label>
+            <input
+              type="email"
+              className={inputCls}
+              value={form.email}
+              onChange={e => set('email', e.target.value)}
+              placeholder="empleado@empresa.com"
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Teléfono</label>
+            <input
+              type="tel"
+              className={inputCls}
+              value={form.telefono}
+              onChange={e => set('telefono', e.target.value)}
+              placeholder="809-555-0100"
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Banco</label>
+            <select
+              className={inputCls}
+              value={form.banco}
+              onChange={e => set('banco', e.target.value as Banco | '')}
+            >
+              <option value="">Sin cambiar</option>
+              {BANCOS.map(b => <option key={b} value={b}>{b}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Número de Cuenta</label>
+            <input
+              type="text"
+              className={inputCls}
+              value={form.numeroCuenta}
+              onChange={e => set('numeroCuenta', e.target.value)}
+              placeholder="000-0000000-0"
+            />
+          </div>
+          <div className="flex items-end pb-2">
+            <label className="flex items-center gap-2 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+              <input
+                type="checkbox"
+                checked={form.regimenIntermitente}
+                onChange={e => set('regimenIntermitente', e.target.checked)}
+                className="h-4 w-4 rounded border-zinc-300 dark:border-[#252840] text-[#1B2980] focus:ring-[#1B2980]/20"
+              />
+              Régimen de trabajo intermitente
+            </label>
+          </div>
+        </div>
       </div>
 
       <div className="mt-4 border-t border-zinc-100 dark:border-[#1d2035] pt-4">
