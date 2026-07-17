@@ -489,10 +489,6 @@ export default function LiquidacionPage() {
       12
     )
 
-    const mesesCicloVac = anosServicio < 1
-      ? anosServicio * 12
-      : ((anosServicio % 1) * 12 || 12)
-
     const salarioOrdinario = calcularSalarioPromedioUltimos12Meses(emp, periodos, fechaTerm)
     const divisorDiario    = getDivisorSalarioDiario(emp)
 
@@ -570,7 +566,7 @@ export default function LiquidacionPage() {
       : null
 
     return {
-      anosServicio, mesesCicloVac, mesesCalendario, salarioOrdinario,
+      anosServicio, mesesCalendario, salarioOrdinario,
       cesantia, cesantiaDetalle, preaviso, preavisoDetalle, asistenciaEconomica, asistenciaDetalle,
       vacaciones, vacacionesBruto, afpVacaciones, sfsVacaciones, isrVacaciones,
       diasVacAcum, diasVacAnuales, tarifaDiariaVac,
