@@ -2557,6 +2557,70 @@ empleado nuevo" → tras confirmar, su drawer real (verificado con el
 migrado en Carga Inicial (Importador Excel)". Sin errores de consola en
 ningún paso. `tsc --noEmit` y `npm run build` limpios (19 rutas).
 
+## Plantilla de Carga Inicial ampliada — identidad, contacto y datos bancarios
+
+Pedido explícito del usuario: "actualizar la plantilla de carga inicial con
+todos los datos que entiendas que son necesarios, tomando en consideración
+todo lo que se ha hecho porque después de esa plantilla vamos lejos". Antes
+de tocar código se auditó (vía agente) el tipo `Empleado` completo y las
+entidades relacionadas (`Prestamo`, `Dependiente`, `DisfruteVacaciones`,
+`BandaSalarial`) para armar una propuesta de alcance, confirmada con el
+usuario: **excluir préstamos activos** (es una entidad completa con su
+propia lógica de amortización, no un campo — queda como tarea aparte) y
+**excluir categoría de riesgo SRL** (se define a nivel de empresa al crear
+la cuenta, vía sector, no por empleado). Se agregaron exactamente 9 campos:
+`tipoDocumento`, `nacionalidad`, `fechaNacimiento`, `tipoContrato`, `email`,
+`telefono`, `banco`, `numeroCuenta`, `regimenIntermitente`.
+
+- **`empleado-form.ts`** — nueva constante compartida `TIPO_CONTRATO_OPTIONS`
+  (antes las 7 opciones vivían duplicadas inline 2 veces dentro de
+  `EmpleadoFormFields.tsx`), reutilizada junto con los catálogos ya
+  existentes `DOC_TIPOS`/`PAISES`/`BANCOS` en los dos flujos de Carga
+  Inicial — una sola fuente de verdad para las etiquetas exactas.
+- **Asistente Guiado** — nueva sección "Identidad y Contacto" con los 9
+  campos, mismo patrón no-destructivo que ya usan los saldos: en blanco
+  significa "no tocar" (nunca sobreescribe un dato bueno ya cargado con
+  vacío), no "borrar" — coherente porque este paso es para empleados que
+  YA existen en el sistema.
+- **Importador Excel** — 9 columnas nuevas insertadas entre los datos base
+  (Cédula...Salario Base) y los de migración (Vacaciones...Saldo ISR), con
+  parsers tolerantes: aceptan tanto el valor exacto en inglés (`cedula`)
+  como la etiqueta en español que ve el usuario en el Excel (`Cédula`),
+  comparando normalizado (sin acentos, sin mayúsculas) contra los mismos
+  catálogos compartidos — igual para país (nombre o código ISO, ej. "DO"),
+  banco, tipo de contrato. Mensajes de error específicos en español cuando
+  el valor no se reconoce. Para filas que actualizan un empleado existente,
+  mismo criterio no-destructivo del Asistente; para filas que crean uno
+  nuevo, valores por defecto sensatos (`tipoDocumento: 'cedula'`,
+  `tipoContrato: 'fijo'`) si la columna viene vacía.
+- **Bug real encontrado durante la verificación (no relacionado con la
+  lógica de parseo en sí)**: los archivos `.csv` se leían con
+  `reader.readAsBinaryString()` + `XLSX.read(..., {type: 'binary'})` —
+  correcto para `.xlsx`/`.xls` (formato binario ZIP), pero corrompe
+  cualquier acento en un `.csv` de texto plano UTF-8 (cada byte multi-byte
+  se lee como un carácter latin1 aparte, ej. "Cédula" → "CÃ©dula"). Nunca se
+  había notado porque ningún campo anterior necesitaba coincidencia EXACTA
+  contra un catálogo (nombres/cédulas no se comparan por igualdad, solo se
+  guardan tal cual). Fix: `.csv` ahora se lee con `readAsText(file, 'UTF-8')`
+  + `XLSX.read(texto, {type: 'string'})`; `.xlsx`/`.xls` siguen usando
+  `readAsArrayBuffer()` + `{type: 'array'}` (más robusto que `'binary'`
+  para archivos realmente binarios). Verificado con un CSV real conteniendo
+  "Cédula" en una celda de datos (no solo en el encabezado) — antes del fix
+  fallaba con "Tipo de Documento no reconocido" para TODAS las filas
+  (incluidas las válidas); después del fix, exacto.
+
+Verificado en navegador con Playwright, datos demo reales: Asistente Guiado
+con Carlos Rodríguez Méndez → llenar Tipo de Documento/Nacionalidad/Tipo de
+Contrato/Banco/Email/Teléfono/Cuenta/Régimen Intermitente → Guardar y
+Continuar → su drawer en Empleados muestra los 9 valores exactos guardados.
+Importador Excel con un CSV de 2 filas nuevas: Laura Campos (todos los
+catálogos válidos, incluido "Cédula" con acento) → "OK", importada con
+Nacionalidad/Banco/Email correctos en su drawer; Pedro Nunez (banco
+inventado "BancoInventado") → error "Banco no reconocido — usa Banco
+Popular/BanReservas/Scotiabank/BHD León/Banistmo/Otro", NO se creó su
+registro. Sin errores de consola en ningún paso. `tsc --noEmit` y
+`npm run build` limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
