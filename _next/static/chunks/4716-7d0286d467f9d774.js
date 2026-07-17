@@ -1,4 +1,4 @@
-(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[9556],{95137:function(t,e,n){"use strict";n.d(e,{Z:function(){return c}});/**
+(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[4716],{95137:function(t,e,n){"use strict";n.d(e,{Z:function(){return c}});/**
  * @license lucide-react v0.400.0 - ISC
  *
  * This source code is licensed under the ISC license.
@@ -168,9 +168,4 @@
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
- */let c=(0,n(78030).Z)("User",[["path",{d:"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2",key:"975kel"}],["circle",{cx:"12",cy:"7",r:"4",key:"17ys0d"}]])},74697:function(t,e,n){"use strict";n.d(e,{Z:function(){return c}});/**
- * @license lucide-react v0.400.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */let c=(0,n(78030).Z)("X",[["path",{d:"M18 6 6 18",key:"1bl5f8"}],["path",{d:"m6 6 12 12",key:"d8bk6v"}]])},36233:function(t){t.exports={style:{fontFamily:"'__Inter_bc1a1a', '__Inter_Fallback_bc1a1a'",fontStyle:"normal"},className:"__className_bc1a1a",variable:"__variable_bc1a1a"}}}]);
+ */let c=(0,n(78030).Z)("User",[["path",{d:"M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2",key:"975kel"}],["circle",{cx:"12",cy:"7",r:"4",key:"17ys0d"}]])},36233:function(t){t.exports={style:{fontFamily:"'__Inter_bc1a1a', '__Inter_Fallback_bc1a1a'",fontStyle:"normal"},className:"__className_bc1a1a",variable:"__variable_bc1a1a"}}}]);
