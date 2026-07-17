@@ -2629,6 +2629,7 @@ registro. Sin errores de consola en ningún paso. `tsc --noEmit` y
 
 | Hash | Descripción |
 |---|---|
+| `06c579f` | feat: ampliar plantilla de Carga Inicial con identidad, contacto y datos bancarios |
 | `7374260` | feat: Saldo ISR a Favor migrado — Carga Inicial ya no es decorativa |
 | `f32d2cf` | fix: acumulación de vacaciones ahora compone múltiples años + venta de vacaciones |
 | `c167b40` | feat: disfrute de vacaciones — registro de toma + puente automático a Nómina |
