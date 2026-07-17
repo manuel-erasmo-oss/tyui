@@ -213,6 +213,7 @@ export interface ResultadoNomina {
   sfsDependientes: number
   otrosDescuentos: number
   aporteVoluntarioAFPEmpleado: number  // no reduce la base imponible del ISR (post-retención)
+  vacacionesGoce: number  // valor de los días de vacaciones tomados dentro de este período (ya incluido en totalBruto)
   totalDescuentos: number
 
   // Grossing-up (empresa asume ISR/TSS) — se reembolsa al empleado vía el neto
@@ -264,6 +265,15 @@ export interface ParametrosNomina {
   ingresosPersonalizadosTotal?: number
   ingresosPersonalizadosGravablesISR?: number
   ingresosPersonalizadosCotizablesTSS?: number
+  // ─── Goce de vacaciones dentro del período (Disfrute de Vacaciones) ───────
+  // Monto YA calculado y escalado por el llamador (nomina/page.tsx) para el
+  // período específico que se está calculando — a diferencia de
+  // horas extra/bonificaciones (que el usuario entra directo por período),
+  // este valor se deriva automáticamente de los días laborables tomados que
+  // caen dentro del rango de fechas del período. Se suma a totalBrutoLegado
+  // (cotizable TSS + gravable ISR, salario ordinario — Art. 178) y sigue el
+  // mismo tratamiento de "halving" quincenal que bonificaciones/comisiones.
+  vacacionesGoce?: number
 }
 
 // Registro de auditoría cada vez que se reabre (desposteo) un período que ya
@@ -522,6 +532,29 @@ export interface Licencia {
   modalidadEnfermedad?: 'ambulatoria' | 'hospitalaria'  // solo enfermedad_comun — define 60%/40%
   disfruteSueldo?: boolean        // beneficio adicional: el empleador decide pagar el sueldo completo
   montoSubsidioEstimado?: number  // estimado de lo que SISALRIL/ARL paga o reembolsa — informativo
+}
+
+// ─── Disfrute de vacaciones ───────────────────────────────────────────────────
+// Registro de que un empleado tomó (gozó) un tramo de sus vacaciones ya
+// acumuladas — un empleado puede fraccionar sus vacaciones en varios tramos
+// a lo largo del año, así que esto es una lista, no un campo único. A
+// diferencia de Licencia (pagada 100% vía nómina normal), el disfrute NO se
+// paga aparte: durante ese rango de fechas, el período de Nómina que se
+// solape prorratea el salario normal (días trabajados) y agrega el valor de
+// esos días como "goce vacacional" — salario ordinario cotizable ISR/TSS
+// (Art. 178), no una indemnización exenta.
+export interface DisfruteVacaciones {
+  id: string
+  empleadoId: string
+  fechaInicio: string       // ISO date
+  fechaFin: string          // ISO date
+  // Días laborables (excluye domingos) del tramo — congelado al registrar,
+  // es lo que se resta del acumulado disponible (ver diasTomados en
+  // vacaciones-context.tsx). Distinto de los días calendario del tramo
+  // (fechaFin - fechaInicio), que sí incluyen domingos.
+  diasLaborables: number
+  fechaRegistro: string     // ISO timestamp
+  notas?: string
 }
 
 // ─── Bandas/niveles salariales ────────────────────────────────────────────────

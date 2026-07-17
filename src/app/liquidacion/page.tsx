@@ -10,6 +10,7 @@ import { usePrestamos } from '@/lib/prestamos-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
+import { useVacaciones } from '@/lib/vacaciones-context'
 import {
   calcularCesantiaDetalle, calcularPreavisoDetalle, calcularAsistenciaEconomicaDetalle,
   calcularSalarioPromedioUltimos12Meses, getDivisorSalarioDiario, getDiasPreavisoRequeridos,
@@ -415,6 +416,7 @@ export default function LiquidacionPage() {
   const { getPrestamosActivos, registrarPago } = usePrestamos()
   const { periodos } = usePeriodos()
   const { liquidaciones, registrar } = useLiquidaciones()
+  const { diasTomados } = useVacaciones()
   const { getSaldosActivos, liquidar: liquidarSaldoISR } = useSaldoISR()
 
   const [paso, setPaso] = useState<Paso>(1)
@@ -509,7 +511,11 @@ export default function LiquidacionPage() {
     const asistenciaEconomica = asistenciaDetalle.total
 
     const diasVacAnuales = anosServicio >= 5 ? 18 : 14
-    const diasVacAcum = (diasVacAnuales / 12) * mesesCicloVac + (emp.saldoVacacionesInicial ?? 0)
+    // Resta los días laborables ya disfrutados (Disfrute de Vacaciones,
+    // /vacaciones) antes de calcular lo pendiente por pagar — de lo
+    // contrario un empleado que ya tomó parte de sus vacaciones cobraría
+    // esos días DOS veces (una en Nómina al gozarlos, otra aquí al liquidar).
+    const diasVacAcum = Math.max(0, (diasVacAnuales / 12) * mesesCicloVac + (emp.saldoVacacionesInicial ?? 0) - diasTomados(emp.id))
     const tarifaDiariaVac = emp.salarioBase / divisorDiario
     const vacacionesBruto = diasVacAcum * tarifaDiariaVac
     // Las vacaciones SÍ son salario ordinario continuado (Art. 178, Código de
@@ -631,7 +637,7 @@ export default function LiquidacionPage() {
         Icon: CalendarDays,
         montoAuto: resultado.vacaciones,
         detalle: [
-          `${resultado.diasVacAnuales} días/año × ${resultado.mesesCicloVac.toFixed(1)} meses de ciclo${(emp.saldoVacacionesInicial ?? 0) > 0 ? ` + ${emp.saldoVacacionesInicial} días de saldo inicial` : ''} = ${resultado.diasVacAcum.toFixed(2)} días`,
+          `${resultado.diasVacAnuales} días/año × ${resultado.mesesCicloVac.toFixed(1)} meses de ciclo${(emp.saldoVacacionesInicial ?? 0) > 0 ? ` + ${emp.saldoVacacionesInicial} días de saldo inicial` : ''}${diasTomados(emp.id) > 0 ? ` − ${diasTomados(emp.id)} días ya disfrutados` : ''} = ${resultado.diasVacAcum.toFixed(2)} días`,
           `${resultado.diasVacAcum.toFixed(2)} días × ${formatRD(resultado.tarifaDiariaVac, 2)}/día = ${formatRD(resultado.vacacionesBruto, 2)} bruto`,
           `Bruto ${formatRD(resultado.vacacionesBruto, 2)} − AFP ${formatRD(resultado.afpVacaciones, 2)} − SFS ${formatRD(resultado.sfsVacaciones, 2)} − ISR ${formatRD(resultado.isrVacaciones, 2)}`,
         ],

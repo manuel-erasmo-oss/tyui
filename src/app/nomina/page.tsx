@@ -38,8 +38,9 @@ import { usePrestamos } from '@/lib/prestamos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { useFeriados } from '@/lib/feriados-context'
+import { useVacaciones } from '@/lib/vacaciones-context'
 import { useAuth } from '@/lib/auth-context'
-import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams, getAnosServicio } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams, getAnosServicio, getDivisorSalarioDiario, contarDiasLaborables } from '@/lib/dominican-labor'
 import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
 import { formatRD, fullName, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
 import { labelPeriodo, resultadoRegalia, descargarComprobantePDF } from '@/lib/nomina-shared'
@@ -53,6 +54,7 @@ import type {
   ConceptoAjuste,
   AjusteLinea,
   Empresa,
+  DisfruteVacaciones,
 } from '@/types'
 import { UMBRAL_ENDEUDAMIENTO_DEFAULT, UMBRAL_VARIACION_BRUTO_DEFAULT } from '@/types'
 import { Wallet, TrendingUp, Receipt, BarChart3 } from 'lucide-react'
@@ -123,10 +125,12 @@ function calcularConAjustes(
   tipo: TipoPeriodo,
   quincena: 1 | 2,
   diasOverride?: { diasTrabajados: number; diasLaborablesMes: number } | null,
+  vacacionesGoce?: number,
 ): ResultadoNomina {
   const params: ParametrosNomina = {
     ...ajustesToParams(ajustes),
     ...(diasOverride ? { diasTrabajados: diasOverride.diasTrabajados, diasLaborablesMes: diasOverride.diasLaborablesMes } : {}),
+    ...(vacacionesGoce ? { vacacionesGoce } : {}),
   }
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
@@ -182,6 +186,51 @@ function diasSalidaEnPeriodo(
   return diasCorteEnPeriodo(new Date(empleado.fechaSalidaPendiente), mes, anio, tipo, quincena)
 }
 
+// ── Goce de vacaciones dentro de un período ────────────────────────────────
+// A diferencia de suspensión/salida (un solo punto de corte, desde ahí en
+// adelante), un Disfrute de Vacaciones es un RANGO que puede caer en medio
+// del período. Se calculan por separado: (1) los días CALENDARIO de
+// vacación dentro del rango del período, para reducir los días trabajados
+// normales (mismo mecanismo de diasCorteEnPeriodo — consistente con cómo ya
+// se prorratea por suspensión); y (2) los días LABORABLES (excl. domingo)
+// tomados dentro de ese mismo rango, para valorar el goce a pagar (tarifa
+// diaria × días — la misma convención ya usada en /vacaciones y en
+// Liquidación para "Vacaciones No Gozadas", no la fracción calendario).
+//
+// Si el período es quincenal, el monto de goce se PRE-DOBLA antes de
+// devolverlo: calcularNominaQuincenal divide TODO el bruto entre 2 —
+// incluidas bonificaciones/comisiones, ver CLAUDE.md "Quincenal" — así que
+// duplicarlo aquí hace que, tras esa división automática, el resultado sea
+// el monto real correspondiente a esta quincena específica (mismo truco
+// implícito que ya "sobrevive" el prorrateo de días vía diasCorteEnPeriodo).
+function diasVacacionEnPeriodo(
+  empleado: Empleado, disfrutes: DisfruteVacaciones[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { diasTrabajados: number; diasLaborablesMes: number; vacacionesGoce: number } | null {
+  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
+  const msPorDia = 24 * 3600 * 1000
+  const propios = disfrutes.filter(d => d.empleadoId === empleado.id)
+
+  let diasVacCalendario = 0
+  let diasVacLaborables  = 0
+  for (const d of propios) {
+    const dInicio = new Date(d.fechaInicio)
+    const dFin    = new Date(d.fechaFin)
+    const solapInicio = dInicio < inicio ? inicio : dInicio
+    const solapFin    = dFin > fin ? fin : dFin
+    if (solapInicio > solapFin) continue
+    diasVacCalendario += Math.floor((solapFin.getTime() - solapInicio.getTime()) / msPorDia) + 1
+    diasVacLaborables  += contarDiasLaborables(solapInicio, solapFin)
+  }
+  if (diasVacCalendario === 0) return null
+
+  const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
+  const diasTrabajados    = Math.max(0, diasLaborablesMes - diasVacCalendario)
+  const tarifaDiaria = empleado.salarioBase / getDivisorSalarioDiario(empleado)
+  const goceReal = diasVacLaborables * tarifaDiaria
+  const vacacionesGoce = tipo === 'quincenal' ? goceReal * 2 : goceReal
+  return { diasTrabajados, diasLaborablesMes, vacacionesGoce }
+}
+
 // Lista de empleados que participan de un período específico: los normales
 // (empleadosEnNomina) más cualquier empleado suspendido o con salida
 // pendiente (pago "por nómina") cuya fecha de corte cae dentro de este
@@ -227,11 +276,23 @@ function sugerirProximoPeriodo(
 function calcularParaPeriodo(
   empleado: Empleado, ajustes: AjusteLinea[],
   periodo: { mes: number; anio: number; tipo: TipoPeriodo; quincena?: 1 | 2 },
+  disfrutes: DisfruteVacaciones[] = [],
 ): ResultadoNomina {
   const quincena = periodo.quincena ?? 1
   const dias = diasSuspensionEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasSalidaEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
-  return calcularConAjustes(empleado, ajustes, periodo.tipo, quincena, dias)
+  // Suspensión/salida tienen prioridad — un empleado suspendido no debería
+  // tener a la vez un disfrute de vacaciones vigente en la práctica; si
+  // ambos existieran por error de captura, se respeta el prorrateo por
+  // suspensión (ya excluye al empleado de nómina normal) y se ignora el
+  // disfrute para ese período.
+  if (dias) return calcularConAjustes(empleado, ajustes, periodo.tipo, quincena, dias)
+  const vac = diasVacacionEnPeriodo(empleado, disfrutes, periodo.mes, periodo.anio, periodo.tipo, quincena)
+  return calcularConAjustes(
+    empleado, ajustes, periodo.tipo, quincena,
+    vac ? { diasTrabajados: vac.diasTrabajados, diasLaborablesMes: vac.diasLaborablesMes } : null,
+    vac?.vacacionesGoce,
+  )
 }
 
 // ── Detalle modal ─────────────────────────────────────────────────────────────
@@ -285,6 +346,7 @@ function DetalleNomina({
                 { label: 'Recargo Nocturno (15%)', value: nomina.importeNocturno, hide: nomina.importeNocturno === 0 },
                 { label: 'Bonificaciones',       value: nomina.bonificaciones, hide: nomina.bonificaciones === 0 },
                 { label: 'Comisiones',           value: nomina.comisiones,     hide: nomina.comisiones === 0 },
+                { label: 'Vacaciones (Goce)',     value: nomina.vacacionesGoce, hide: nomina.vacacionesGoce === 0 },
                 { label: 'Otros Ingresos',       value: nomina.ingresosPersonalizados, hide: nomina.ingresosPersonalizados === 0 },
               ].filter(r => !r.hide).map(row => (
                 <div key={row.label} className="flex justify-between text-sm">
@@ -292,6 +354,11 @@ function DetalleNomina({
                   <span className="tabular-nums font-medium text-zinc-900 dark:text-zinc-100">{fmt(row.value)}</span>
                 </div>
               ))}
+              {nomina.vacacionesGoce > 0 && (
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
+                  Incluye días de disfrute de vacaciones — salario ordinario, con AFP/SFS/ISR normales (Art. 178)
+                </p>
+              )}
               <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-2 flex justify-between font-semibold text-sm">
                 <span className="text-zinc-800 dark:text-zinc-200">Total Bruto</span>
                 <span className="text-emerald-700 dark:text-emerald-400 tabular-nums">{fmt(nomina.totalBruto)}</span>
@@ -413,6 +480,7 @@ export default function NominaPage() {
   const { liquidaciones } = useLiquidaciones()
   const { saldos: saldosISR, getSaldosActivos, getMontoAplicadoEnPeriodo, aplicar: aplicarSaldoISR } = useSaldoISR()
   const { getFeriados } = useFeriados()
+  const { disfrutes } = useVacaciones()
   const { user } = useAuth()
   const { conceptosActivos: conceptosPersonalizados, getConcepto: getConceptoPersonalizado } = useConceptosPersonalizados()
 
@@ -438,7 +506,7 @@ export default function NominaPage() {
   function resultadoDePeriodo(empleado: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
     const snapshot = periodo.resultadosPorEmpleado?.[empleado.id]
     if (snapshot) return snapshot
-    return conSaldoISR(empleado, calcularParaPeriodo(empleado, ajustes, periodo), periodo)
+    return conSaldoISR(empleado, calcularParaPeriodo(empleado, ajustes, periodo, disfrutes), periodo)
   }
 
   // View state
@@ -549,7 +617,7 @@ export default function NominaPage() {
     if (!periodoActual || periodoActual.estado !== 'en_proceso' || periodoActual.tipo === 'regalia') return
     const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
     const rs = empleadosPeriodo.map(e =>
-      conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual), periodoActual)
+      conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual, disfrutes), periodoActual)
     )
     const round = (n: number) => Math.round(n * 100) / 100
     const nuevos = {
@@ -564,12 +632,12 @@ export default function NominaPage() {
     const cambiaron = (Object.keys(nuevos) as (keyof typeof nuevos)[]).some(k => nuevos[k] !== actuales[k])
     if (cambiaron) actualizarTotales(periodoActual.id, nuevos)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodoActual?.id, periodoActual?.ajustesPorEmpleado, periodoActual?.empleadosProcesados, periodoActual?.estado, empleadosPeriodo, saldosISR])
+  }, [periodoActual?.id, periodoActual?.ajustesPorEmpleado, periodoActual?.empleadosProcesados, periodoActual?.estado, empleadosPeriodo, saldosISR, disfrutes])
 
   function calcularTotalesRapido(ajustesPorEmp: Record<string, AjusteLinea[]> = {}) {
     const empleadosNuevoPeriodo = empleadosDelPeriodo(empleados, empleadosEnNomina, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
     const rs = empleadosNuevoPeriodo.map(e =>
-      calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], { mes: nuevoMes, anio: nuevoAnio, tipo: nuevoTipo, quincena: nuevaQuincena })
+      calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], { mes: nuevoMes, anio: nuevoAnio, tipo: nuevoTipo, quincena: nuevaQuincena }, disfrutes)
     )
     return {
       bruto:      rs.reduce((s, r) => s + r.totalBruto, 0),
@@ -640,7 +708,15 @@ export default function NominaPage() {
     })
     setPeriodoAbierto(nuevo.id)
     setSelectedEmps(new Set())
-    setToast('Período creado · Cuotas de préstamos pre-cargadas')
+    // El goce de vacaciones (Disfrute registrado en /vacaciones) se aplica
+    // automáticamente al calcular cada empleado — no es un AjusteLinea, así
+    // que no hay nada que pre-cargar aquí, solo avisar si aplica a alguien.
+    const conVacaciones = empleadosNuevoPeriodo.filter(e =>
+      diasVacacionEnPeriodo(e, disfrutes, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
+    ).length
+    setToast(conVacaciones > 0
+      ? `Período creado · Cuotas de préstamos pre-cargadas · ${conVacaciones} empleado(s) con vacaciones en este período`
+      : 'Período creado · Cuotas de préstamos pre-cargadas')
   }
 
   function handleCerrarPeriodo() {
@@ -849,7 +925,7 @@ export default function NominaPage() {
     if (!periodoActual) return null
     const emp = empleadosPeriodo.find(e => e.id === empId)
     if (!emp) return null
-    const base = calcularParaPeriodo(emp, ajustes, periodoActual)
+    const base = calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes)
     const saldo = getSaldosActivos(emp.id)[0]
     const { resultado, montoAplicado } = aplicarSaldoISRFavor(base, saldo?.saldoPendiente ?? 0, emp.grossingUpPct)
     if (saldo && montoAplicado > 0) {
@@ -873,14 +949,14 @@ export default function NominaPage() {
     if (!periodoActual) return { ajustesFinales: ajustes, omitido: null }
     const emp = empleadosPeriodo.find(e => e.id === empId)
     if (!emp) return { ajustesFinales: ajustes, omitido: null }
-    const resultado = conSaldoISR(emp, calcularParaPeriodo(emp, ajustes, periodoActual), periodoActual)
+    const resultado = conSaldoISR(emp, calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes), periodoActual)
     if (resultado.salarioNeto >= 0) return { ajustesFinales: ajustes, omitido: null }
 
     const ajustesPrestamo = ajustes.filter(a => a.concepto === 'prestamo' && a.prestamoId)
     if (ajustesPrestamo.length === 0) return { ajustesFinales: ajustes, omitido: null }
 
     const ajustesSinPrestamo = ajustes.filter(a => !(a.concepto === 'prestamo' && a.prestamoId))
-    const resultadoSinPrestamo = conSaldoISR(emp, calcularParaPeriodo(emp, ajustesSinPrestamo, periodoActual), periodoActual)
+    const resultadoSinPrestamo = conSaldoISR(emp, calcularParaPeriodo(emp, ajustesSinPrestamo, periodoActual, disfrutes), periodoActual)
     if (resultadoSinPrestamo.salarioNeto < 0) return { ajustesFinales: ajustes, omitido: null } // no es solo el préstamo — se deja para la auditoría
 
     actualizarAjustes(periodoActual.id, empId, ajustesSinPrestamo)

@@ -107,6 +107,20 @@ export function getDivisorSalarioDiario(empleado: Pick<Empleado, 'regimenIntermi
   return empleado.regimenIntermitente ? DIVISOR_DIA_INTERMITENTE : DIVISOR_DIA_ORDINARIO
 }
 
+// ─── Días laborables entre dos fechas (excluye domingos) ─────────────────────
+// Usado por el Disfrute de Vacaciones: tanto para restar del acumulado
+// disponible como para valorar el goce pagado en Nómina — consistente con
+// que el acumulado anual (14/18 días) ya es en "días laborables" (Art. 177).
+export function contarDiasLaborables(inicio: Date, fin: Date): number {
+  let dias = 0
+  const cur = new Date(inicio)
+  while (cur <= fin) {
+    if (cur.getDay() !== 0) dias++  // 0 = domingo
+    cur.setDate(cur.getDate() + 1)
+  }
+  return dias
+}
+
 // ─── Cálculo ISR anual ────────────────────────────────────────────────────────
 export function calcularISRAnual(ingresoGravableAnual: number): number {
   if (ingresoGravableAnual <= TRAMOS_ISR[0].hasta) return 0
@@ -136,6 +150,7 @@ export function calcularNomina(
     ingresosPersonalizadosTotal        = 0,
     ingresosPersonalizadosGravablesISR = 0,
     ingresosPersonalizadosCotizablesTSS = 0,
+    vacacionesGoce      = 0,
   } = params
 
   // Salario proporcional a días trabajados
@@ -154,7 +169,9 @@ export function calcularNomina(
 
   // Base "legado" — todo lo que ya era gravable ISR y cotizable TSS por igual
   // antes del catálogo configurable (sin cambios para nóminas que no lo usan).
-  const totalBrutoLegado = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones
+  // vacacionesGoce (Disfrute de Vacaciones) se trata igual que bonificaciones/
+  // comisiones — salario ordinario, cotizable TSS y gravable ISR (Art. 178).
+  const totalBrutoLegado = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones + vacacionesGoce
   const ingresosPersonalizados = ingresosPersonalizadosTotal
   const totalBruto = totalBrutoLegado + ingresosPersonalizados
 
@@ -264,6 +281,7 @@ export function calcularNomina(
     sfsDependientes,
     otrosDescuentos,
     aporteVoluntarioAFPEmpleado,
+    vacacionesGoce,
     totalDescuentos,
     grossingUpEmpresa,
     saldoISRAplicado: 0,  // se aplica después, vía aplicarSaldoISRFavor() — no depende del empleado/empresa
@@ -322,6 +340,12 @@ export function calcularNominaQuincenal(
     sfsDependientes:          sfsDep,
     otrosDescuentos:          otros,
     aporteVoluntarioAFPEmpleado: aporteVolEmp,
+    // El llamador (diasVacacionEnPeriodo en nomina/page.tsx) ya pre-dobla el
+    // monto antes de pasarlo como vacacionesGoce cuando el período es
+    // quincenal — exactamente para que este /2 lo devuelva al monto real
+    // correspondiente a esa quincena específica (mismo mecanismo que ya
+    // aplica automáticamente a bonificaciones/comisiones).
+    vacacionesGoce:           m.vacacionesGoce / 2,
     totalDescuentos:          totalDesc,
     grossingUpEmpresa:        grossingUp,
     salarioNeto:              bruto - totalDesc + grossingUp,
@@ -624,7 +648,7 @@ function resultadoVacio(empleadoId: string): ResultadoNomina {
     bonificaciones: 0, comisiones: 0, ingresosPersonalizados: 0, totalBruto: 0,
     salarioCotizable: 0,
     afpEmpleado: 0, sfsEmpleado: 0, isrMensual: 0, sfsDependientes: 0, otrosDescuentos: 0,
-    aporteVoluntarioAFPEmpleado: 0, totalDescuentos: 0,
+    aporteVoluntarioAFPEmpleado: 0, vacacionesGoce: 0, totalDescuentos: 0,
     grossingUpEmpresa: 0, saldoISRAplicado: 0,
     salarioNeto: 0,
     afpEmpleador: 0, sfsEmpleador: 0, srlEmpleador: 0, infotepEmpleador: 0,

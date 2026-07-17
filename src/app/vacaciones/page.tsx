@@ -1,23 +1,37 @@
 'use client'
 
+import { useState } from 'react'
 import { Header } from '@/components/layout/Header'
 import { StatCard } from '@/components/ui/StatCard'
 import { Badge } from '@/components/ui/Badge'
+import { Toast } from '@/components/ui/Toast'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { useEmpleados } from '@/lib/empleados-context'
+import { useVacaciones } from '@/lib/vacaciones-context'
 import {
   getAnosServicio,
   getDivisorSalarioDiario,
   calcularNomina,
+  contarDiasLaborables,
   DIAS_VACACIONES_HASTA_5_ANOS,
   DIAS_VACACIONES_MAS_5_ANOS,
 } from '@/lib/dominican-labor'
 import { useEmpresa } from '@/lib/empresa-context'
-import { formatRD, formatDate, formatAnosServicio, fullName } from '@/lib/utils'
-import { CalendarDays, Users, Wallet, AlertCircle, Download } from 'lucide-react'
+import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY } from '@/lib/utils'
+import { CalendarDays, Users, Wallet, AlertCircle, Download, Plane, Plus, X, Trash2 } from 'lucide-react'
 
 export default function VacacionesPage() {
   const { empleadosEnNomina } = useEmpleados()
   const { empresa } = useEmpresa()
+  const { disfrutes, registrarDisfrute, eliminarDisfrute, diasTomados, estaDeVacaciones } = useVacaciones()
+
+  const [toast, setToast] = useState<string | null>(null)
+  const [modalAbierto, setModalAbierto] = useState(false)
+  const [empId, setEmpId] = useState('')
+  const [fechaInicio, setFechaInicio] = useState('')
+  const [fechaFin, setFechaFin] = useState('')
+  const [notas, setNotas] = useState('')
+
   const filas = empleadosEnNomina.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
     const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
@@ -27,6 +41,8 @@ export default function VacacionesPage() {
     const mesesServicio   = anos < 1 ? Math.max(0, anos * 12) : ((anos % 1) * 12 || 12)
     // + saldo inicial: empleados con historial previo a Cielo Cloud (migración)
     const diasAcumulados  = Math.max(0, (diasAnuales / 12) * mesesServicio + (e.saldoVacacionesInicial ?? 0))
+    const tomados         = diasTomados(e.id)
+    const diasDisponibles = Math.max(0, diasAcumulados - tomados)
     const valorDiario     = e.salarioBase / getDivisorSalarioDiario(e)
     const valorAcumulado  = diasAcumulados * valorDiario
     // Las vacaciones son salario ordinario (Art. 178) — llevan AFP/SFS/ISR
@@ -37,25 +53,62 @@ export default function VacacionesPage() {
     const retencionEstimada = calcularNomina({ ...e, salarioBase: valorAcumulado })
     const valorNetoEstimado = retencionEstimada.salarioNeto
     const puedeGozar      = anos >= 1
-    return { empleado: e, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, valorNetoEstimado, puedeGozar }
+    const deVacacionesHoy = estaDeVacaciones(e.id)
+    return { empleado: e, anos, diasAnuales, diasAcumulados, tomados, diasDisponibles, valorDiario, valorAcumulado, valorNetoEstimado, puedeGozar, deVacacionesHoy }
   })
 
   const totalDias        = filas.reduce((s, f) => s + f.diasAcumulados, 0)
+  const totalDisponibles = filas.reduce((s, f) => s + f.diasDisponibles, 0)
   const totalValor       = filas.reduce((s, f) => s + f.valorAcumulado, 0)
   const totalValorNeto   = filas.reduce((s, f) => s + f.valorNetoEstimado, 0)
   const empleadosAptos   = filas.filter(f => f.puedeGozar).length
+  const deVacacionesAhora = filas.filter(f => f.deVacacionesHoy).length
+
+  const disfrutesOrdenados = [...disfrutes].sort((a, b) => b.fechaRegistro.localeCompare(a.fechaRegistro))
+
+  // Preview en vivo del registro que se está armando en el modal
+  const empSeleccionado = empleadosEnNomina.find(e => e.id === empId) ?? null
+  const diasLaborablesPreview = (empSeleccionado && fechaInicio && fechaFin && fechaFin >= fechaInicio)
+    ? contarDiasLaborables(new Date(fechaInicio), new Date(fechaFin))
+    : 0
+  const disponiblesSeleccionado = empSeleccionado
+    ? filas.find(f => f.empleado.id === empSeleccionado.id)?.diasDisponibles ?? 0
+    : 0
+  const excedeDisponibles = diasLaborablesPreview > disponiblesSeleccionado
+
+  function abrirModal(id?: string) {
+    setEmpId(id ?? '')
+    setFechaInicio('')
+    setFechaFin('')
+    setNotas('')
+    setModalAbierto(true)
+  }
+
+  function handleRegistrar() {
+    if (!empSeleccionado || !fechaInicio || !fechaFin || fechaFin < fechaInicio) return
+    registrarDisfrute(empSeleccionado.id, fechaInicio, fechaFin, notas || undefined)
+    setModalAbierto(false)
+    setToast(`Disfrute registrado — ${fullName(empSeleccionado)} · ${diasLaborablesPreview} día(s) laborables`)
+  }
+
+  function handleEliminar(id: string) {
+    eliminarDisfrute(id)
+    setToast('Disfrute eliminado')
+  }
 
   // Exporta exactamente las mismas filas ya calculadas para la tabla en
   // pantalla (mismo desglose, mismo total). Carga la librería bajo demanda.
   async function handleExportar() {
     const { exportarExcel } = await import('@/lib/excel-export')
-    const filasExcel = filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, valorNetoEstimado, puedeGozar }) => [
+    const filasExcel = filas.map(({ empleado, anos, diasAnuales, diasAcumulados, tomados, diasDisponibles, valorDiario, valorAcumulado, valorNetoEstimado, puedeGozar }) => [
       fullName(empleado),
       empleado.cedula,
       formatAnosServicio(anos),
       diasAnuales,
       valorDiario,
       Number(diasAcumulados.toFixed(2)),
+      Number(tomados.toFixed(2)),
+      Number(diasDisponibles.toFixed(2)),
       Number(valorAcumulado.toFixed(2)),
       Number(valorNetoEstimado.toFixed(2)),
       puedeGozar ? 'Puede gozar' : 'En acumulación',
@@ -68,10 +121,10 @@ export default function VacacionesPage() {
         nombre: 'Vacaciones',
         titulo: 'Vacaciones por Empleado',
         subtitulo: 'Art. 177/178 · Código de Trabajo · Ley 16-92 · Neto estimado con AFP/SFS/ISR',
-        encabezados: ['Empleado', 'Cédula', 'Antigüedad', 'Días/Año', 'Tarifa Diaria', 'Días Acumulados', 'Valor Bruto', 'Neto Estimado', 'Estado'],
+        encabezados: ['Empleado', 'Cédula', 'Antigüedad', 'Días/Año', 'Tarifa Diaria', 'Días Acumulados', 'Días Tomados', 'Días Disponibles', 'Valor Bruto', 'Neto Estimado', 'Estado'],
         filas: filasExcel,
-        totales: ['TOTAL', '', '', '', '', Number(totalDias.toFixed(2)), Number(totalValor.toFixed(2)), Number(totalValorNeto.toFixed(2)), ''],
-        anchos: [26, 16, 14, 10, 14, 16, 16, 16, 16],
+        totales: ['TOTAL', '', '', '', '', Number(totalDias.toFixed(2)), '', Number(totalDisponibles.toFixed(2)), Number(totalValor.toFixed(2)), Number(totalValorNeto.toFixed(2)), ''],
+        anchos: [26, 16, 14, 10, 14, 16, 14, 16, 16, 16, 16],
         columnasEnteras: [3],
       }],
     })
@@ -83,24 +136,37 @@ export default function VacacionesPage() {
         title="Vacaciones"
         subtitle="Art. 177 · Código de Trabajo · Ley 16-92"
         actions={
-          <button
-            onClick={handleExportar}
-            className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
-          >
-            <Download className="h-4 w-4" />
-            Exportar Excel
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportar}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              Exportar Excel
+            </button>
+            <button onClick={() => abrirModal()} className={BTN_PRIMARY}>
+              <Plus className="h-4 w-4" />
+              Registrar Disfrute
+            </button>
+          </div>
         }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
-        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
           <StatCard
             label="Días Acumulados"
             value={`${totalDias.toFixed(1)} días`}
             sub="Total planilla activa"
             icon={CalendarDays}
             iconColor="bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400"
+          />
+          <StatCard
+            label="Días Disponibles"
+            value={`${totalDisponibles.toFixed(1)} días`}
+            sub="Acumulados − ya tomados"
+            icon={CalendarDays}
+            iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
           />
           <StatCard
             label="Valor Bruto"
@@ -123,6 +189,13 @@ export default function VacacionesPage() {
             icon={Users}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
           />
+          <StatCard
+            label="De Vacaciones Ahora"
+            value={`${deVacacionesAhora}`}
+            sub={`de ${filas.length} empleado(s)`}
+            icon={Plane}
+            iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+          />
         </div>
 
         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
@@ -130,7 +203,7 @@ export default function VacacionesPage() {
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Vacaciones por Empleado</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
               14 días laborables (1–5 años) · 18 días laborables (más de 5 años). Tarifa diaria = salario ÷ 23.83
-              (÷ 26 en régimen de trabajo intermitente). Neto estimado con AFP/SFS/ISR (Art. 178) al pagarse.
+              (÷ 26 en régimen de trabajo intermitente). Días Disponibles resta lo ya tomado en Disfrutes registrados.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -140,17 +213,18 @@ export default function VacacionesPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Antigüedad</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Días/Año</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tarifa Diaria</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Días Acum.</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Disponibles</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Valor Bruto</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Neto Estimado</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filas.length === 0 && (
                   <tr>
-                    <td colSpan={8}>
+                    <td colSpan={9}>
                       <div className="flex flex-col items-center justify-center py-16 text-center">
                         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -166,7 +240,7 @@ export default function VacacionesPage() {
                     </td>
                   </tr>
                 )}
-                {filas.map(({ empleado, anos, diasAnuales, diasAcumulados, valorDiario, valorAcumulado, valorNetoEstimado, puedeGozar }) => (
+                {filas.map(({ empleado, anos, diasAnuales, diasAcumulados, diasDisponibles, valorAcumulado, valorNetoEstimado, puedeGozar, deVacacionesHoy }) => (
                   <tr key={empleado.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
@@ -189,11 +263,11 @@ export default function VacacionesPage() {
                         {diasAnuales} días
                       </span>
                     </td>
-                    <td className="px-4 py-3.5 text-right tabular-nums text-zinc-600 dark:text-zinc-400">
-                      {formatRD(valorDiario)}
+                    <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                      {diasAcumulados.toFixed(2)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">
-                      {diasAcumulados.toFixed(2)}
+                      {diasDisponibles.toFixed(2)}
                     </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
                       {formatRD(valorAcumulado)}
@@ -202,7 +276,9 @@ export default function VacacionesPage() {
                       {formatRD(valorNetoEstimado)}
                     </td>
                     <td className="px-4 py-3.5">
-                      {puedeGozar
+                      {deVacacionesHoy
+                        ? <Badge variant="success"><Plane className="mr-1 h-3 w-3" />De Vacaciones</Badge>
+                        : puedeGozar
                         ? <Badge variant="success">Puede gozar</Badge>
                         : (
                           <div className="flex items-center gap-1">
@@ -212,20 +288,86 @@ export default function VacacionesPage() {
                         )
                       }
                     </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <button
+                        onClick={() => abrirModal(empleado.id)}
+                        className="text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:underline"
+                      >
+                        Registrar
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
-                  <td colSpan={4} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{totalDias.toFixed(2)}</td>
+                  <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-zinc-500 dark:text-zinc-400">{totalDias.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{totalDisponibles.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right tabular-nums font-semibold text-zinc-500 dark:text-zinc-400">{formatRD(totalValor)}</td>
                   <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{formatRD(totalValorNeto)}</td>
-                  <td />
+                  <td colSpan={2} />
                 </tr>
               </tfoot>
             </table>
           </div>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+          <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Disfrutes Registrados</h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              Cada tramo se resta de los días disponibles. Al procesar el período de Nómina que se solape con estas
+              fechas, el sistema prorratea los días trabajados y paga el resto como vacaciones (con AFP/SFS/ISR).
+            </p>
+          </div>
+          {disfrutesOrdenados.length === 0 ? (
+            <div className="p-6">
+              <EmptyState
+                icon={Plane}
+                message="Aún no se ha registrado ningún disfrute de vacaciones."
+                action={{ label: 'Registrar Disfrute', onClick: () => abrirModal() }}
+              />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Desde</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Hasta</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Días Laborables</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Notas</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
+                  {disfrutesOrdenados.map(d => {
+                    const emp = empleadosEnNomina.find(e => e.id === d.empleadoId)
+                    return (
+                      <tr key={d.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
+                        <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-zinc-100">{emp ? fullName(emp) : '—'}</td>
+                        <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{formatDate(d.fechaInicio)}</td>
+                        <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{formatDate(d.fechaFin)}</td>
+                        <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">{d.diasLaborables}</td>
+                        <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-400 text-xs">{d.notas || '—'}</td>
+                        <td className="px-4 py-3.5 text-right">
+                          <button
+                            onClick={() => handleEliminar(d.id)}
+                            className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 dark:hover:text-rose-400 transition-colors"
+                            title="Eliminar disfrute"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border border-sky-200 dark:border-sky-800/40 bg-sky-50 dark:bg-sky-950/30 px-5 py-4 text-xs text-sky-800 dark:text-sky-300">
@@ -234,6 +376,100 @@ export default function VacacionesPage() {
           <p className="mt-2">A diferencia de la cesantía/preaviso (indemnizaciones exentas) y de la Regalía Pascual (100% exenta, Art. 219), las vacaciones son salario ordinario continuado (Art. 178) — llevan AFP, SFS e ISR normales si el monto supera la exención del ISR. La columna "Neto Estimado" muestra lo que el empleado recibiría hoy después de esas retenciones.</p>
         </div>
       </div>
+
+      {modalAbierto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setModalAbierto(false)}>
+          <div className="absolute inset-0 bg-zinc-900/40 dark:bg-black/60 animate-backdrop-in" />
+          <div
+            className="relative w-full max-w-md rounded-xl bg-white dark:bg-[#141722] shadow-2xl dark:shadow-none animate-modal-in"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Registrar Disfrute de Vacaciones</h3>
+              <button onClick={() => setModalAbierto(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Empleado</label>
+                <select
+                  value={empId}
+                  onChange={e => setEmpId(e.target.value)}
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                >
+                  <option value="">Selecciona un empleado…</option>
+                  {empleadosEnNomina.map(e => (
+                    <option key={e.id} value={e.id}>{fullName(e)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha Inicio</label>
+                  <input
+                    type="date"
+                    value={fechaInicio}
+                    onChange={e => setFechaInicio(e.target.value)}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Fecha Fin (regreso)</label>
+                  <input
+                    type="date"
+                    value={fechaFin}
+                    onChange={e => setFechaFin(e.target.value)}
+                    min={fechaInicio || undefined}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400">Notas (opcional)</label>
+                <input
+                  type="text"
+                  value={notas}
+                  onChange={e => setNotas(e.target.value)}
+                  placeholder="Ej. Viaje familiar"
+                  className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+              {diasLaborablesPreview > 0 && (
+                <div className={`rounded-lg px-3 py-2.5 text-xs ${excedeDisponibles
+                  ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
+                  : 'bg-[#eef0fb] text-[#151f66] dark:bg-indigo-950/30 dark:text-indigo-300'}`}
+                >
+                  <p><strong>{diasLaborablesPreview} día(s) laborables</strong> (excluye domingos) — {empSeleccionado ? `${disponiblesSeleccionado.toFixed(2)} disponible(s)` : ''}</p>
+                  {excedeDisponibles && (
+                    <p className="mt-1 flex items-center gap-1">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      Supera los días disponibles del empleado — se puede registrar igual, pero revisa el acumulado.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 border-t border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+              <button
+                onClick={() => setModalAbierto(false)}
+                className="rounded-lg px-4 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRegistrar}
+                disabled={!empSeleccionado || !fechaInicio || !fechaFin || fechaFin < fechaInicio}
+                className={`${BTN_PRIMARY} disabled:opacity-40 disabled:pointer-events-none`}
+              >
+                Registrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
     </div>
   )
 }

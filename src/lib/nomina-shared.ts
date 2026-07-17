@@ -34,7 +34,7 @@ export function resultadoRegalia(empleadoId: string, monto: number, anosServicio
     bonificaciones: 0, comisiones: 0, ingresosPersonalizados: 0, totalBruto: monto,
     salarioCotizable: 0,
     afpEmpleado: 0, sfsEmpleado: 0, isrMensual: 0, sfsDependientes: 0, otrosDescuentos: 0,
-    aporteVoluntarioAFPEmpleado: 0, totalDescuentos: 0,
+    aporteVoluntarioAFPEmpleado: 0, vacacionesGoce: 0, totalDescuentos: 0,
     grossingUpEmpresa: 0,
     saldoISRAplicado: 0,
     salarioNeto: monto,
@@ -132,6 +132,7 @@ export function descargarComprobantePDF(
     ...(nomina.importeNocturno > 0 ? [{ label: 'Recargo Nocturno (15%)', v: nomina.importeNocturno }] : []),
     ...(nomina.bonificaciones > 0 ? [{ label: 'Bonificaciones',    v: nomina.bonificaciones }] : []),
     ...(nomina.comisiones     > 0 ? [{ label: 'Comisiones',        v: nomina.comisiones }]     : []),
+    ...(nomina.vacacionesGoce > 0 ? [{ label: 'Vacaciones (Goce)', v: nomina.vacacionesGoce }] : []),
     ...(nomina.ingresosPersonalizados > 0 ? [{ label: 'Otros Ingresos', v: nomina.ingresosPersonalizados }] : []),
   ]
   const descuentos = [
