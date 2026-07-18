@@ -11,7 +11,6 @@ import { fullName } from '@/lib/utils'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { AgendaNomina } from '@/components/dashboard/AgendaNomina'
-import { CentroAlertas } from '@/components/dashboard/CentroAlertas'
 import { ChartSkeleton } from '@/components/charts/ChartSkeleton'
 
 const PayrollBarChart = dynamic(
@@ -212,12 +211,6 @@ export default function DashboardPage() {
         </div>
 
         <div className="p-4 md:p-6 space-y-4">
-
-          {/* Centro de Alertas — consolida en un solo lugar, ordenado por
-              severidad, las alertas que antes vivían dispersas: salario
-              mínimo, vencimiento de Bonificación/Regalía, préstamos con
-              gestión de cobro requerida, empleados fuera de banda salarial. */}
-          <CentroAlertas />
 
           {/* Selector de rango — comparte estado con las 3 chart cards de abajo */}
           <div className="flex flex-wrap items-center justify-between gap-2">

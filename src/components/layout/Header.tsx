@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { HelpCircle, Menu, LogOut, Settings, Search } from 'lucide-react'
 import { ThemeToggle } from '@/components/ui/ThemeToggle'
+import { NotificationBell } from '@/components/layout/NotificationBell'
 import { useAuth } from '@/lib/auth-context'
 import { useCommandPalette } from '@/lib/command-palette-context'
 
@@ -128,6 +129,7 @@ export function Header({ title, subtitle, actions }: HeaderProps) {
           <HelpCircle className="h-4 w-4" />
           Ayuda
         </Link>
+        <NotificationBell />
         <ThemeToggle />
         <UserMenu />
       </div>
