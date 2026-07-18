@@ -1,14 +1,9 @@
-(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[3144],{95137:function(t,e,n){"use strict";n.d(e,{Z:function(){return c}});/**
+(self.webpackChunk_N_E=self.webpackChunk_N_E||[]).push([[2689],{95137:function(t,e,n){"use strict";n.d(e,{Z:function(){return c}});/**
  * @license lucide-react v0.400.0 - ISC
  *
  * This source code is licensed under the ISC license.
  * See the LICENSE file in the root directory of this source tree.
- */let c=(0,n(78030).Z)("ArrowLeft",[["path",{d:"m12 19-7-7 7-7",key:"1l729n"}],["path",{d:"M19 12H5",key:"x3x0zl"}]])},71976:function(t,e,n){"use strict";n.d(e,{Z:function(){return c}});/**
- * @license lucide-react v0.400.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */let c=(0,n(78030).Z)("ArrowRight",[["path",{d:"M5 12h14",key:"1ays0h"}],["path",{d:"m12 5 7 7-7 7",key:"xquz4c"}]])},74232:function(t,e,n){"use strict";n.d(e,{Z:function(){return c}});/**
+ */let c=(0,n(78030).Z)("ArrowLeft",[["path",{d:"m12 19-7-7 7-7",key:"1l729n"}],["path",{d:"M19 12H5",key:"x3x0zl"}]])},74232:function(t,e,n){"use strict";n.d(e,{Z:function(){return c}});/**
  * @license lucide-react v0.400.0 - ISC
  *
  * This source code is licensed under the ISC license.
