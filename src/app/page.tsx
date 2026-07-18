@@ -2,14 +2,16 @@
 
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { ArrowRight, MoreHorizontal, Building2, AlertTriangle } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ArrowRight, Building2 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { useEmpleados } from '@/lib/empleados-context'
-import { calcularNomina, getSalarioMinimoAplicable } from '@/lib/dominican-labor'
-import { fullName, formatRD } from '@/lib/utils'
+import { calcularNomina } from '@/lib/dominican-labor'
+import { fullName } from '@/lib/utils'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { AgendaNomina } from '@/components/dashboard/AgendaNomina'
+import { CentroAlertas } from '@/components/dashboard/CentroAlertas'
 import { ChartSkeleton } from '@/components/charts/ChartSkeleton'
 
 const PayrollBarChart = dynamic(
@@ -39,34 +41,51 @@ function ChartCard({
   value,
   subtitle,
   delta,
-  period = 'Este mes',
   children,
 }: {
   label: string
   value: string
   subtitle: string
   delta?: { pct: number; positive: boolean }
-  period?: string
   children: React.ReactNode
 }) {
   return (
     <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-5 shadow-sm flex flex-col gap-3">
-      <div className="flex items-start justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{label}</p>
-        <button className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
-          {period} <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
-      </div>
+      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">{label}</p>
       <div>
         <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">{value}</p>
         <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{subtitle}</p>
         {delta && (
           <p className={`mt-1.5 text-xs font-semibold ${delta.positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
-            {delta.positive ? '↑' : '↓'} {Math.abs(delta.pct).toFixed(1)}% vs mes anterior
+            {delta.positive ? '↑' : '↓'} {Math.abs(delta.pct).toFixed(1)}% vs período anterior
           </p>
         )}
       </div>
       {children}
+    </div>
+  )
+}
+
+const RANGO_OPCIONES = [3, 6, 12] as const
+type RangoMeses = typeof RANGO_OPCIONES[number]
+
+function RangoSelector({ value, onChange }: { value: RangoMeses; onChange: (v: RangoMeses) => void }) {
+  return (
+    <div className="inline-flex items-center rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-0.5">
+      {RANGO_OPCIONES.map(opcion => (
+        <button
+          key={opcion}
+          type="button"
+          onClick={() => onChange(opcion)}
+          className={`rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+            value === opcion
+              ? 'bg-[#1B2980] text-white'
+              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+          }`}
+        >
+          {opcion}M
+        </button>
+      ))}
     </div>
   )
 }
@@ -95,31 +114,52 @@ export default function DashboardPage() {
 
   const periodo = `${MES_LARGO[hoy.getMonth()]} ${hoy.getFullYear()}`
 
-  // Build chart from real processed periods (monthly only, last 5)
-  const periodosReales = [...periodos]
-    .filter(p => p.tipo === 'mensual' && p.estado !== 'en_proceso')
-    .sort((a, b) => a.anio !== b.anio ? a.anio - b.anio : a.mes - b.mes)
-    .slice(-5)
+  // ── Historial de nómina para los gráficos ─────────────────────────────────
+  // Antes solo consideraba tipo==='mensual' — cualquier empresa en modalidad
+  // quincenal (Empresa.modalidadNomina==='quincenal') nunca tenía períodos
+  // 'mensual' reales, así que sus gráficos siempre caían al relleno sintético
+  // sin importar cuántos períodos hubiera procesado. Ahora se agregan ambos
+  // tipos, sumando las 2 quincenas de un mismo mes en un solo total mensual.
+  const [rangoMeses, setRangoMeses] = useState<RangoMeses>(6)
 
-  const BAR_DATA = periodosReales.length >= 2
-    ? periodosReales.map(p => ({
-        mes: MESES[p.mes - 1],
-        nomina: p.totales.bruto,
-        tss: p.totales.aportes,
-      }))
-    : [
-        { mes: MESES[(hoy.getMonth() - 4 + 12) % 12], nomina: Math.round(totalBruto * 0.88), tss: Math.round(totalTSSEmpleador * 0.88) },
-        { mes: MESES[(hoy.getMonth() - 3 + 12) % 12], nomina: Math.round(totalBruto * 0.91), tss: Math.round(totalTSSEmpleador * 0.91) },
-        { mes: MESES[(hoy.getMonth() - 2 + 12) % 12], nomina: Math.round(totalBruto * 0.95), tss: Math.round(totalTSSEmpleador * 0.95) },
-        { mes: MESES[(hoy.getMonth() - 1 + 12) % 12], nomina: Math.round(totalBruto * 0.98), tss: Math.round(totalTSSEmpleador * 0.98) },
-        { mes: MESES[hoy.getMonth()],                  nomina: totalBruto,                    tss: totalTSSEmpleador },
-      ]
+  const periodosPorMes = useMemo(() => {
+    const acumulado = new Map<string, { anio: number; mes: number; bruto: number; aportes: number }>()
+    for (const p of periodos) {
+      if (p.estado === 'en_proceso') continue
+      if (p.tipo !== 'mensual' && p.tipo !== 'quincenal') continue
+      const key = `${p.anio}-${p.mes}`
+      const fila = acumulado.get(key) ?? { anio: p.anio, mes: p.mes, bruto: 0, aportes: 0 }
+      fila.bruto   += p.totales.bruto
+      fila.aportes += p.totales.aportes
+      acumulado.set(key, fila)
+    }
+    return Array.from(acumulado.values()).sort((a, b) => a.anio !== b.anio ? a.anio - b.anio : a.mes - b.mes)
+  }, [periodos])
+
+  const periodosReales = periodosPorMes.slice(-rangoMeses)
+  // Distingue año en la etiqueta solo si el rango visible cruza más de un año
+  // calendario — evita ambigüedad tipo "Ene" repetido para 2025 y 2026 en un
+  // rango de 12 meses, sin ensuciar la etiqueta cuando no hace falta.
+  const multiAnio = new Set(periodosReales.map(p => p.anio)).size > 1
+  const labelMes = (p: { anio: number; mes: number }) => multiAnio ? `${MESES[p.mes - 1]} ${String(p.anio).slice(2)}` : MESES[p.mes - 1]
+
+  const BAR_DATA = periodosReales.length >= 1
+    ? periodosReales.map(p => ({ mes: labelMes(p), nomina: p.bruto, tss: p.aportes }))
+    : Array.from({ length: rangoMeses }, (_, i) => {
+        const offset = rangoMeses - 1 - i
+        const ratio  = 0.85 + (i / (rangoMeses - 1)) * 0.15
+        return {
+          mes: MESES[((hoy.getMonth() - offset) % 12 + 12) % 12],
+          nomina: Math.round(totalBruto * ratio),
+          tss: Math.round(totalTSSEmpleador * ratio),
+        }
+      })
 
   const netoRatio  = totalBruto > 0 ? totalNeto / totalBruto : 0
   const LINE_DATA  = BAR_DATA.map(d => ({ mes: d.mes, valor: Math.round(d.nomina * netoRatio) }))
 
-  // BAR_DATA/LINE_DATA pueden tener entre 2 y 5 elementos (según cuántos
-  // períodos mensuales reales existan) — nunca asumir 5 elementos fijos.
+  // BAR_DATA/LINE_DATA tienen entre 1 y `rangoMeses` elementos según cuántos
+  // períodos reales existan — nunca asumir una cantidad fija.
   const ultimoIdx  = BAR_DATA.length - 1
   const anteriorIdx = ultimoIdx - 1
   const prevBruto  = anteriorIdx >= 0 ? BAR_DATA[anteriorIdx].nomina : 0
@@ -139,14 +179,6 @@ export default function DashboardPage() {
   ]
 
   const maxBar = Math.max(...[afpEmpleador, sfsEmpleador, srlEmpleador, infotepEmpleador, totalISR, totalRegalia])
-
-  // ─── Alerta de salario mínimo (según categoría de empresa o zona franca) ───
-  const salarioMinimoAplicable = getSalarioMinimoAplicable(empresa)
-  const empleadosBajoMinimo = salarioMinimoAplicable
-    ? empleadosActivos.filter(e => e.salarioBase < salarioMinimoAplicable)
-    : []
-  const CATEGORIA_LABEL: Record<string, string> = { micro: 'Micro', pequeña: 'Pequeña', mediana: 'Mediana', grande: 'Grande' }
-  const categoriaAlertaLabel = empresa.zonaFranca ? 'Zona Franca' : (empresa.categoriaEmpresa ? CATEGORIA_LABEL[empresa.categoriaEmpresa] : '')
 
   return (
     <div className="flex flex-col overflow-hidden h-full">
@@ -181,43 +213,24 @@ export default function DashboardPage() {
 
         <div className="p-4 md:p-6 space-y-4">
 
-          {/* Alerta de salario mínimo */}
-          {empleadosBajoMinimo.length > 0 && salarioMinimoAplicable && (
-            <div className="rounded-xl border border-amber-300 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 px-5 py-4">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-                    {empleadosBajoMinimo.length} empleado{empleadosBajoMinimo.length !== 1 ? 's' : ''} por debajo del salario mínimo
-                  </p>
-                  <p className="mt-0.5 text-xs text-amber-700 dark:text-amber-400">
-                    {empresa.zonaFranca ? categoriaAlertaLabel : `Categoría ${categoriaAlertaLabel}`} — mínimo legal {formatRD(salarioMinimoAplicable)}/mes
-                  </p>
-                  <ul className="mt-2.5 space-y-1.5">
-                    {empleadosBajoMinimo.map(e => (
-                      <li key={e.id} className="flex items-center justify-between text-xs">
-                        <span className="text-amber-800 dark:text-amber-300">{fullName(e)}</span>
-                        <span className="tabular-nums font-semibold text-amber-800 dark:text-amber-300">
-                          {formatRD(e.salarioBase)}
-                          <span className="ml-1.5 font-normal text-amber-600 dark:text-amber-500">
-                            (faltan {formatRD(salarioMinimoAplicable - e.salarioBase)})
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-2.5 flex items-center gap-4">
-                    <Link href="/empleados" className="text-xs font-semibold text-amber-800 dark:text-amber-300 hover:underline">
-                      Ir a Empleados →
-                    </Link>
-                    <Link href="/configuracion" className="text-xs text-amber-600 dark:text-amber-500 hover:underline">
-                      ¿Categoría incorrecta? Cámbiala en Configuración
-                    </Link>
-                  </div>
-                </div>
-              </div>
+          {/* Centro de Alertas — consolida en un solo lugar, ordenado por
+              severidad, las alertas que antes vivían dispersas: salario
+              mínimo, vencimiento de Bonificación/Regalía, préstamos con
+              gestión de cobro requerida, empleados fuera de banda salarial. */}
+          <CentroAlertas />
+
+          {/* Selector de rango — comparte estado con las 3 chart cards de abajo */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">Historial de nómina</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                {periodosReales.length > 0
+                  ? `${periodosReales.length} período${periodosReales.length !== 1 ? 's' : ''} real${periodosReales.length !== 1 ? 'es' : ''} procesado${periodosReales.length !== 1 ? 's' : ''}`
+                  : 'Datos ilustrativos — aún no hay períodos procesados'}
+              </p>
             </div>
-          )}
+            <RangoSelector value={rangoMeses} onChange={setRangoMeses} />
+          </div>
 
           {/* Row 1 — 3 chart cards */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -225,7 +238,7 @@ export default function DashboardPage() {
               label="Nómina mensual"
               value={formatK(totalBruto)}
               subtitle="Salario bruto planilla activa"
-              delta={{ pct: deltaBruto, positive: deltaBruto >= 0 }}
+              delta={anteriorIdx >= 0 ? { pct: deltaBruto, positive: deltaBruto >= 0 } : undefined}
             >
               <PayrollBarChart data={BAR_DATA} />
               <div className="flex items-center gap-4 text-[10px] text-zinc-400 dark:text-zinc-500">
@@ -238,7 +251,7 @@ export default function DashboardPage() {
               label="Composición de costos"
               value={formatK(costoTotal)}
               subtitle="Costo total empresa este mes"
-              delta={{ pct: deltaCosto, positive: deltaCosto >= 0 }}
+              delta={anteriorIdx >= 0 ? { pct: deltaCosto, positive: deltaCosto >= 0 } : undefined}
             >
               <CostDonutChart data={DONUT_DATA} />
             </ChartCard>
@@ -247,7 +260,7 @@ export default function DashboardPage() {
               label="Nómina neta"
               value={formatK(totalNeto)}
               subtitle="Total a pagar a empleados"
-              delta={{ pct: deltaNeto, positive: deltaNeto >= 0 }}
+              delta={anteriorIdx >= 0 ? { pct: deltaNeto, positive: deltaNeto >= 0 } : undefined}
             >
               <TrendLineChart data={LINE_DATA} />
             </ChartCard>
@@ -258,12 +271,7 @@ export default function DashboardPage() {
 
             {/* Retenciones */}
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-5 shadow-sm">
-              <div className="flex items-start justify-between mb-4">
-                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Retenciones</p>
-                <button className="text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors">
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
-              </div>
+              <p className="mb-4 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">Retenciones</p>
               <p className="text-3xl font-bold text-zinc-900 dark:text-zinc-100 leading-none">{formatK(totalISR + totalTSSEmpleador)}</p>
               <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500 mb-4">Obligaciones del período</p>
               <div className="space-y-3">

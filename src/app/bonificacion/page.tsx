@@ -10,7 +10,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
-import { rangoEjercicioFiscal, mesesEnEjercicioFiscal, fechaLimitePagoBonificacion } from '@/lib/dominican-labor'
+import { rangoEjercicioFiscal, mesesEnEjercicioFiscal, getBonificacionesPendientes } from '@/lib/dominican-labor'
 import { resultadoBonificacion } from '@/lib/nomina-shared'
 import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
 import {
@@ -170,34 +170,13 @@ export default function BonificacionPage() {
     .sort((a, b) => b.anio - a.anio)
 
   // ── Alerta 🔔 de vencimiento legal de pago (Art. 224) ─────────────────────
-  // Ejercicios fiscales ya cerrados (fin <= hoy) que todavía no tienen un
-  // período de Bonificación pagado ('cerrada') — ordenados por urgencia
-  // (menor cantidad de días restantes primero; negativo = ya vencido).
-  // Acotado a ejercicios que se solapan con la antigüedad real de al menos
-  // un empleado conocido — sin este límite, una empresa recién migrada a
-  // Cielo Cloud (sin historial de bonificación cargado) vería "vencido hace
-  // miles de días" para ejercicios anteriores a que la empresa tuviera
-  // empleados, un falso positivo sin sentido práctico.
-  const primerIngresoConocido = useMemo(() => {
-    if (empleados.length === 0) return null
-    return new Date(Math.min(...empleados.map(e => new Date(e.fechaIngreso).getTime())))
-  }, [empleados])
-
-  const pendientesPago = useMemo(() => {
-    return ANIOS_FISCALES
-      .map(a => {
-        const { fin } = rangoEjercicioFiscal(a, cierreFiscal)
-        if (fin > hoy) return null
-        if (primerIngresoConocido && fin < primerIngresoConocido) return null
-        const pagado = periodos.some(p => p.tipo === 'bonificacion' && p.anio === a && p.estado === 'cerrada')
-        if (pagado) return null
-        const limite = fechaLimitePagoBonificacion(fin)
-        const diasRestantes = Math.ceil((limite.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
-        return { anio: a, fin, limite, diasRestantes }
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null)
-      .sort((a, b) => a.diasRestantes - b.diasRestantes)
-  }, [periodos, cierreFiscal, primerIngresoConocido])
+  // Reutiliza getBonificacionesPendientes() de dominican-labor.ts — misma
+  // regla exacta que consume el Centro de Alertas del Dashboard, sin
+  // duplicar la lógica de ventana fiscal en dos lugares.
+  const pendientesPago = useMemo(
+    () => getBonificacionesPendientes(empleados, periodos, cierreFiscal, ANIOS_FISCALES),
+    [empleados, periodos, cierreFiscal],
+  )
   const alertaPago = pendientesPago[0]
   const mostrarBannerUrgente = !!alertaPago && alertaPago.diasRestantes <= 45
 

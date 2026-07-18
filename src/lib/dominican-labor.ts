@@ -813,3 +813,45 @@ export function mesesEnEjercicioFiscal(
   const diasEjercicio  = (finEjercicio.getTime() - inicioEjercicio.getTime()) / msPorDia + 1
   return Math.max(0, Math.min(12, (diasTrabajados / diasEjercicio) * 12))
 }
+
+export interface BonificacionPendiente {
+  anio: number
+  fin: Date
+  limite: Date
+  diasRestantes: number   // negativo = ya vencido
+}
+
+// Ejercicios fiscales ya cerrados (fin <= hoy) que todavía no tienen un
+// período de Bonificación pagado ('cerrada') — ordenados por urgencia (menor
+// diasRestantes primero). Extraído de /bonificacion para que el Dashboard
+// (Centro de Alertas) pueda reutilizar exactamente la misma regla sin
+// duplicar la lógica de ventana fiscal. Acotado a ejercicios que se solapan
+// con la antigüedad del empleado más antiguo conocido — sin este límite, una
+// empresa recién migrada a Cielo Cloud (sin historial de bonificación
+// cargado) vería "vencido hace miles de días" para ejercicios anteriores a
+// que la empresa tuviera empleados, un falso positivo sin sentido práctico.
+export function getBonificacionesPendientes(
+  empleados: Pick<Empleado, 'fechaIngreso'>[],
+  periodos: Pick<PeriodoNomina, 'tipo' | 'anio' | 'estado'>[],
+  cierreFiscal: CierreFiscal,
+  aniosCandidatos: number[],
+): BonificacionPendiente[] {
+  const hoy = new Date()
+  const primerIngresoConocido = empleados.length > 0
+    ? new Date(Math.min(...empleados.map(e => new Date(e.fechaIngreso).getTime())))
+    : null
+
+  return aniosCandidatos
+    .map(a => {
+      const { fin } = rangoEjercicioFiscal(a, cierreFiscal)
+      if (fin > hoy) return null
+      if (primerIngresoConocido && fin < primerIngresoConocido) return null
+      const pagado = periodos.some(p => p.tipo === 'bonificacion' && p.anio === a && p.estado === 'cerrada')
+      if (pagado) return null
+      const limite = fechaLimitePagoBonificacion(fin)
+      const diasRestantes = Math.ceil((limite.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+      return { anio: a, fin, limite, diasRestantes }
+    })
+    .filter((x): x is BonificacionPendiente => x !== null)
+    .sort((a, b) => a.diasRestantes - b.diasRestantes)
+}
