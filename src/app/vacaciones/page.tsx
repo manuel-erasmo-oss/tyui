@@ -19,7 +19,7 @@ import {
 } from '@/lib/dominican-labor'
 import { useEmpresa } from '@/lib/empresa-context'
 import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY } from '@/lib/utils'
-import { CalendarDays, Users, Wallet, AlertCircle, Download, Plane, Plus, X, Trash2, Banknote } from 'lucide-react'
+import { CalendarDays, Users, Wallet, AlertCircle, Download, Plane, Plus, X, Trash2, Banknote, Search, RotateCcw } from 'lucide-react'
 
 export default function VacacionesPage() {
   const { empleadosEnNomina } = useEmpleados()
@@ -71,6 +71,22 @@ export default function VacacionesPage() {
   const totalValorNeto   = filas.reduce((s, f) => s + f.valorNetoEstimado, 0)
   const empleadosAptos   = filas.filter(f => f.puedeGozar).length
   const deVacacionesAhora = filas.filter(f => f.deVacacionesHoy).length
+
+  // ── Filtros (nombre, cédula, departamento) ────────────────────────────────
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroDepto, setFiltroDepto] = useState('todos')
+  const departamentos = Array.from(new Set(filas.map(f => f.empleado.departamento))).sort()
+  const q = busqueda.trim().toLowerCase()
+  const filasVisibles = filas.filter(f => {
+    if (filtroDepto !== 'todos' && f.empleado.departamento !== filtroDepto) return false
+    if (!q) return true
+    return fullName(f.empleado).toLowerCase().includes(q) || f.empleado.cedula.toLowerCase().includes(q)
+  })
+  const hayFiltrosActivos = busqueda.trim() !== '' || filtroDepto !== 'todos'
+  const totalDiasVisible        = filasVisibles.reduce((s, f) => s + f.diasAcumulados, 0)
+  const totalDisponiblesVisible = filasVisibles.reduce((s, f) => s + f.diasDisponibles, 0)
+  const totalValorVisible       = filasVisibles.reduce((s, f) => s + f.valorAcumulado, 0)
+  const totalValorNetoVisible   = filasVisibles.reduce((s, f) => s + f.valorNetoEstimado, 0)
 
   const disfrutesOrdenados = [...disfrutes].sort((a, b) => b.fechaRegistro.localeCompare(a.fechaRegistro))
 
@@ -247,6 +263,37 @@ export default function VacacionesPage() {
               (÷ 26 en régimen de trabajo intermitente). Días Disponibles resta lo ya tomado en Disfrutes registrados.
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+              <input
+                type="text"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre o cédula…"
+                className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 pl-8 pr-3 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+              />
+            </div>
+            <select
+              value={filtroDepto}
+              onChange={e => setFiltroDepto(e.target.value)}
+              className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+            >
+              <option value="todos">Todos los departamentos</option>
+              {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            {hayFiltrosActivos && (
+              <button
+                onClick={() => { setBusqueda(''); setFiltroDepto('todos') }}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Ver todos
+              </button>
+            )}
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 ml-auto">
+              {filasVisibles.length} de {filas.length} empleado(s)
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -281,7 +328,14 @@ export default function VacacionesPage() {
                     </td>
                   </tr>
                 )}
-                {filas.map(({ empleado, anos, diasAnuales, diasAcumulados, diasDisponibles, valorAcumulado, valorNetoEstimado, puedeGozar, deVacacionesHoy }) => (
+                {filas.length > 0 && filasVisibles.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="px-5 py-10 text-center text-sm text-zinc-400 dark:text-zinc-500">
+                      Ningún empleado coincide con el filtro.
+                    </td>
+                  </tr>
+                )}
+                {filasVisibles.map(({ empleado, anos, diasAnuales, diasAcumulados, diasDisponibles, valorAcumulado, valorNetoEstimado, puedeGozar, deVacacionesHoy }) => (
                   <tr key={empleado.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
@@ -349,11 +403,13 @@ export default function VacacionesPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
-                  <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">TOTAL</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-zinc-500 dark:text-zinc-400">{totalDias.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{totalDisponibles.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-zinc-500 dark:text-zinc-400">{formatRD(totalValor)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{formatRD(totalValorNeto)}</td>
+                  <td colSpan={3} className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-[#1B2980] dark:text-indigo-400">
+                    {hayFiltrosActivos ? 'TOTAL (filtrado)' : 'TOTAL'}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-zinc-500 dark:text-zinc-400">{totalDiasVisible.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{totalDisponiblesVisible.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-semibold text-zinc-500 dark:text-zinc-400">{formatRD(totalValorVisible)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums font-bold text-sky-700 dark:text-sky-300">{formatRD(totalValorNetoVisible)}</td>
                   <td colSpan={2} />
                 </tr>
               </tfoot>

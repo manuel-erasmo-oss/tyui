@@ -15,7 +15,7 @@ import { resultadoBonificacion } from '@/lib/nomina-shared'
 import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
 import {
   Percent, Users, Banknote, Info, Download, Send, Pencil, Check, X,
-  ArrowRight, CheckCircle2, History, Bell, Layers, ExternalLink,
+  ArrowRight, CheckCircle2, History, Bell, Layers, ExternalLink, Search, RotateCcw,
 } from 'lucide-react'
 import type { PeriodoNomina } from '@/types'
 
@@ -151,6 +151,20 @@ export default function BonificacionPage() {
   const totalRepartido = filas.reduce((s, f) => s + f.montoFinal, 0)
   const empleadosConTope = filas.filter(f => f.topeAplicado).length
   const empleadosLiquidados = filas.filter(f => f.liquidado).length
+
+  // ── Filtros (nombre, cédula, departamento) ────────────────────────────────
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroDepto, setFiltroDepto] = useState('todos')
+  const departamentos = Array.from(new Set(filas.map(f => f.empleado.departamento))).sort()
+  const q = busqueda.trim().toLowerCase()
+  const filasVisibles = filas.filter(f => {
+    if (filtroDepto !== 'todos' && f.empleado.departamento !== filtroDepto) return false
+    if (!q) return true
+    return fullName(f.empleado).toLowerCase().includes(q) || f.empleado.cedula.toLowerCase().includes(q)
+  })
+  const hayFiltrosActivos = busqueda.trim() !== '' || filtroDepto !== 'todos'
+  const totalRepartidoVisible = filasVisibles.reduce((s, f) => s + f.montoFinal, 0)
+  const totalProporcionalVisible = filasVisibles.reduce((s, f) => s + f.proporcional, 0)
 
   // ── Solicitar Liquidación de Bonificación ───────────────────────────────────
   // Igual mecanismo que Regalía Pascual: crea un período especial en Nómina
@@ -591,6 +605,37 @@ export default function BonificacionPage() {
               individual de 45 días (menos de 3 años) o 60 días (3+ años) de salario diario, también prorrateado.
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+              <input
+                type="text"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre o cédula…"
+                className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 pl-8 pr-3 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+              />
+            </div>
+            <select
+              value={filtroDepto}
+              onChange={e => setFiltroDepto(e.target.value)}
+              className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+            >
+              <option value="todos">Todos los departamentos</option>
+              {departamentos.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            {hayFiltrosActivos && (
+              <button
+                onClick={() => { setBusqueda(''); setFiltroDepto('todos') }}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Ver todos
+              </button>
+            )}
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 ml-auto">
+              {filasVisibles.length} de {filas.length} empleado(s)
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -624,7 +669,14 @@ export default function BonificacionPage() {
                     </td>
                   </tr>
                 )}
-                {filas.map(({ empleado, anos, liquidado, mesesTrabajados, diasTope, topeIndividual, proporcional, montoFinal, topeAplicado }) => (
+                {filas.length > 0 && filasVisibles.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-zinc-400 dark:text-zinc-500">
+                      Ningún empleado coincide con el filtro.
+                    </td>
+                  </tr>
+                )}
+                {filasVisibles.map(({ empleado, anos, liquidado, mesesTrabajados, diasTope, topeIndividual, proporcional, montoFinal, topeAplicado }) => (
                   <tr key={empleado.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
@@ -672,13 +724,13 @@ export default function BonificacionPage() {
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
                   <td colSpan={5} className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">
-                    TOTAL — {filas.length} empleado(s)
+                    {hayFiltrosActivos ? `TOTAL (filtrado) — ${filasVisibles.length} empleado(s)` : `TOTAL — ${filas.length} empleado(s)`}
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-600 dark:text-zinc-400">
-                    {formatRD(filas.reduce((s, f) => s + f.proporcional, 0))}
+                    {formatRD(totalProporcionalVisible)}
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
-                    {formatRD(totalRepartido)}
+                    {formatRD(totalRepartidoVisible)}
                   </td>
                 </tr>
               </tfoot>

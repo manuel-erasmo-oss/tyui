@@ -26,6 +26,7 @@ import {
   Search,
   Eye,
   Percent,
+  RotateCcw,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -571,6 +572,14 @@ export default function NominaPage() {
   const [filtroDepto, setFiltroDepto] = useState('todos')
   const [filtroIngresoDesde, setFiltroIngresoDesde] = useState('')
   const [filtroIngresoHasta, setFiltroIngresoHasta] = useState('')
+
+  // Búsqueda/filtro de la tabla de empleados del período — independiente del
+  // panel de "Filtros" de arriba (ese es un criterio de selección masiva,
+  // solo visible en_proceso; esto es para ubicar empleados en la tabla,
+  // visible sin importar el estado del período). Mismo patrón ya usado en
+  // Regalía Pascual.
+  const [busquedaEmpleado, setBusquedaEmpleado] = useState('')
+  const [filtroDeptoTabla, setFiltroDeptoTabla] = useState('todos')
 
   // Auditoría pre-cierre: ids en espera de confirmación antes de completar
   // el período (pasar de en_proceso a procesada)
@@ -1834,6 +1843,17 @@ export default function NominaPage() {
     resultado: resultadoDePeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual),
   }))
 
+  // Búsqueda/filtro de la tabla — no afecta los totales del período (esos
+  // siguen siendo el total real a pagar), solo qué filas se muestran.
+  const departamentosPeriodo = Array.from(new Set(empleadosPeriodo.map(e => e.departamento))).sort()
+  const qEmpleado = busquedaEmpleado.trim().toLowerCase()
+  const nominasVisibles = nominas.filter(({ empleado }) => {
+    if (filtroDeptoTabla !== 'todos' && empleado.departamento !== filtroDeptoTabla) return false
+    if (!qEmpleado) return true
+    return fullName(empleado).toLowerCase().includes(qEmpleado) || empleado.cedula.toLowerCase().includes(qEmpleado)
+  })
+  const hayFiltrosTabla = busquedaEmpleado.trim() !== '' || filtroDeptoTabla !== 'todos'
+
   const totales = {
     bruto:      nominas.reduce((s, n) => s + n.resultado.totalBruto, 0),
     descuentos: nominas.reduce((s, n) => s + n.resultado.totalDescuentos, 0),
@@ -1841,6 +1861,17 @@ export default function NominaPage() {
     aportes:    nominas.reduce((s, n) => s + n.resultado.totalAportesEmpleador, 0),
     isr:        nominas.reduce((s, n) => s + n.resultado.isrMensual, 0),
     costoTotal: nominas.reduce((s, n) => s + n.resultado.totalCostoEmpleador, 0),
+  }
+
+  // Totales del pie de tabla — siguen el subconjunto filtrado (mismo criterio
+  // ya usado en Regalía Pascual/Bonificación); las StatCards de arriba, en
+  // cambio, siempre muestran el total real del período completo.
+  const totalesVisibles = {
+    bruto:      nominasVisibles.reduce((s, n) => s + n.resultado.totalBruto, 0),
+    afpSfs:     nominasVisibles.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0),
+    isr:        nominasVisibles.reduce((s, n) => s + n.resultado.isrMensual, 0),
+    neto:       nominasVisibles.reduce((s, n) => s + n.resultado.salarioNeto, 0),
+    costoTotal: nominasVisibles.reduce((s, n) => s + n.resultado.totalCostoEmpleador, 0),
   }
 
   return (
@@ -2011,6 +2042,37 @@ export default function NominaPage() {
               </p>
             </div>
           )}
+          <div className="flex flex-wrap items-center gap-3 border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3">
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+              <input
+                type="text"
+                value={busquedaEmpleado}
+                onChange={e => setBusquedaEmpleado(e.target.value)}
+                placeholder="Buscar por nombre o cédula…"
+                className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 pl-8 pr-3 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+              />
+            </div>
+            <select
+              value={filtroDeptoTabla}
+              onChange={e => setFiltroDeptoTabla(e.target.value)}
+              className="rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] dark:text-zinc-200 px-2.5 py-1.5 text-xs focus:border-[#1B2980] focus:outline-none"
+            >
+              <option value="todos">Todos los departamentos</option>
+              {departamentosPeriodo.map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
+            {hayFiltrosTabla && (
+              <button
+                onClick={() => { setBusquedaEmpleado(''); setFiltroDeptoTabla('todos') }}
+                className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"
+              >
+                <RotateCcw className="h-3.5 w-3.5" /> Ver todos
+              </button>
+            )}
+            <span className="text-xs text-zinc-400 dark:text-zinc-500 ml-auto">
+              {nominasVisibles.length} de {nominas.length} empleado(s)
+            </span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -2040,7 +2102,14 @@ export default function NominaPage() {
                 </tr>
               </thead>
               <tbody>
-                {nominas.map(({ empleado, resultado }) => {
+                {nominasVisibles.length === 0 && (
+                  <tr>
+                    <td colSpan={esEnProceso ? 10 : 9} className="px-5 py-10 text-center text-sm text-zinc-400 dark:text-zinc-500">
+                      Ningún empleado coincide con el filtro.
+                    </td>
+                  </tr>
+                )}
+                {nominasVisibles.map(({ empleado, resultado }) => {
                   const ajustes      = ajustesPorEmp[empleado.id] ?? []
                   const isExpanded   = expandedEmpId === empleado.id
                   const isProcesado  = procesados.has(empleado.id)
@@ -2314,15 +2383,15 @@ export default function NominaPage() {
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
                   <td className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400" colSpan={esEnProceso ? 3 : 2}>
-                    TOTALES — {empleadosPeriodo.length} empleados
+                    {hayFiltrosTabla ? `TOTAL (filtrado) — ${nominasVisibles.length} empleados` : `TOTALES — ${empleadosPeriodo.length} empleados`}
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{fmt(totales.bruto)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-800 dark:text-zinc-200">{fmt(totalesVisibles.bruto)}</td>
                   <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                    {fmt(nominas.reduce((s, n) => s + n.resultado.afpEmpleado + n.resultado.sfsEmpleado, 0))}
+                    {fmt(totalesVisibles.afpSfs)}
                   </td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totales.isr)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">{fmt(totales.neto)}</td>
-                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totales.costoTotal)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totalesVisibles.isr)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">{fmt(totalesVisibles.neto)}</td>
+                  <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{fmt(totalesVisibles.costoTotal)}</td>
                   <td />
                 </tr>
               </tfoot>
