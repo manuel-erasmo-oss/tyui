@@ -104,6 +104,7 @@ function pdfHeader(
 
 function periodoLabel(p: PeriodoNomina): string {
   if (p.tipo === 'regalia') return `Regalía Pascual ${p.anio}`
+  if (p.tipo === 'bonificacion') return `Bonificación Utilidades ${p.anio}`
   const mes = MESES[p.mes - 1]
   if (p.tipo === 'quincenal') return `${p.quincena}ª Quincena ${mes} ${p.anio}`
   return `${mes} ${p.anio}`
@@ -134,7 +135,7 @@ function ReporteGerencial({
   const currentYear = new Date().getFullYear()
 
   const sortedPeriodos = useMemo(() =>
-    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
+    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia' && p.tipo !== 'bonificacion').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
     [periodos]
   )
   const ultimoPeriodo = sortedPeriodos[0]
@@ -504,7 +505,7 @@ function ReporteNomina({
   periodos: PeriodoNomina[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia').sort((a, b) =>
+    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia' && p.tipo !== 'bonificacion').sort((a, b) =>
       new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()
     ), [periodos])
 
@@ -1175,7 +1176,7 @@ function ReporteTSS({
   periodos: PeriodoNomina[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia').sort((a, b) =>
+    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia' && p.tipo !== 'bonificacion').sort((a, b) =>
       new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()
     ), [periodos])
 
@@ -1683,7 +1684,7 @@ function ReporteCostoPorDepto({
   periodos: PeriodoNomina[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
+    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia' && p.tipo !== 'bonificacion').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
     [periodos]
   )
   const [periodoId, setPeriodoId] = useState<string>(sorted[0]?.id ?? '')
@@ -1859,7 +1860,7 @@ function ReportePlanillaACH({
   periodos: PeriodoNomina[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
+    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia' && p.tipo !== 'bonificacion').sort((a, b) => new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()),
     [periodos]
   )
   const bancos = useMemo(() => Array.from(new Set(empleados.map(e => e.banco).filter(Boolean))).sort() as string[], [empleados])
@@ -3303,7 +3304,7 @@ function ReporteSinIngresos({
   liquidaciones: RegistroLiquidacion[]
 }) {
   const sorted = useMemo(() =>
-    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia').sort((a, b) =>
+    [...periodos].filter(p => p.estado !== 'en_proceso' && p.tipo !== 'regalia' && p.tipo !== 'bonificacion').sort((a, b) =>
       new Date(b.fechaGeneracion).getTime() - new Date(a.fechaGeneracion).getTime()
     ), [periodos])
 

@@ -16,7 +16,7 @@ export type Banco =
   | 'Banistmo'
   | 'Otro'
 
-export type TipoPeriodo = 'mensual' | 'quincenal' | 'regalia'
+export type TipoPeriodo = 'mensual' | 'quincenal' | 'regalia' | 'bonificacion'
 export type EstadoPeriodo = 'en_proceso' | 'procesada' | 'cerrada'
 
 export type ConceptoAjuste =
@@ -342,6 +342,22 @@ export interface PeriodoNomina {
   // sugerido antes de solicitar la liquidación (ajuste manual, ver Regalía
   // Pascual) — para dejar rastro de por qué difiere del cálculo automático.
   motivosAjusteRegalia?: Record<string, string>
+
+  // ─── Período especial de Bonificación por Utilidades (tipo === 'bonificacion') ─
+  // Se crea desde "Solicitar Liquidación" en /bonificacion, no desde el
+  // formulario normal de "Crear Período" — nace con el monto BRUTO ya
+  // calculado por empleado (proporcional al salario, con el tope de 45/60
+  // días de Art. 223 ya aplicado), no con ajustesPorEmpleado. A diferencia
+  // de la Regalía Pascual (100% exenta), la Bonificación por Utilidades SÍ
+  // es salario ordinario a efectos fiscales — lleva AFP/SFS/ISR normales,
+  // calculados tratando el monto como si fuera el salario del mes (mismo
+  // mecanismo que Vacaciones — ver resultadoBonificacion() en
+  // nomina-shared.ts). No hay campo de "acumulado" que reiniciar en
+  // Empleado — a diferencia de la Regalía Pascual, la Bonificación no se
+  // acumula mes a mes, se calcula una sola vez al año a partir de la
+  // utilidad neta que el usuario captura en /bonificacion.
+  montosBonificacion?: Record<string, number>
+  motivosAjusteBonificacion?: Record<string, string>
 }
 
 export interface ResumenNomina {

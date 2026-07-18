@@ -691,7 +691,7 @@ function resultadoVacio(empleadoId: string): ResultadoNomina {
 }
 
 export function calcularConPeriodo(emp: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
-  if (periodo.tipo === 'regalia') return resultadoVacio(emp.id)
+  if (periodo.tipo === 'regalia' || periodo.tipo === 'bonificacion') return resultadoVacio(emp.id)
   const params = ajustesToParams(ajustes)
   return periodo.tipo === 'quincenal'
     ? calcularNominaQuincenal(emp, periodo.quincena ?? 1, params)
@@ -715,11 +715,13 @@ export function calcularSalarioPromedioUltimos12Meses(
   haceUnAnio.setFullYear(haceUnAnio.getFullYear() - 1)
 
   const relevantes = periodos.filter(p =>
-    // La Regalía Pascual (Art. 219, 100% exenta) NUNCA es "salario ordinario"
-    // — incluirla aquí inflaría artificialmente el promedio usado para
-    // Cesantía/Preaviso/Asistencia Económica, sumando el pago anual de
-    // diciembre como si fuera salario adicional de ese mes.
-    p.tipo !== 'regalia' &&
+    // La Regalía Pascual (Art. 219, 100% exenta) y la Bonificación por
+    // Utilidades (Art. 223, pago anual único y discrecional según haya o no
+    // utilidades ese año) NUNCA son "salario ordinario" — incluirlas aquí
+    // inflaría artificialmente el promedio usado para Cesantía/Preaviso/
+    // Asistencia Económica, sumando un pago anual grande como si fuera
+    // salario adicional de ese mes puntual.
+    p.tipo !== 'regalia' && p.tipo !== 'bonificacion' &&
     (p.estado === 'procesada' || p.estado === 'cerrada') &&
     new Date(p.fechaGeneracion) >= haceUnAnio &&
     new Date(p.fechaGeneracion) <= fechaReferencia

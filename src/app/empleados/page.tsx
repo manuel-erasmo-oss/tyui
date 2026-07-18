@@ -194,6 +194,7 @@ const MESES_HIST = [
 
 function labelPeriodoHist(p: PeriodoNomina): string {
   if (p.tipo === 'regalia') return `Regalía Pascual ${p.anio}`
+  if (p.tipo === 'bonificacion') return `Bonificación Utilidades ${p.anio}`
   const mes = MESES_HIST[p.mes - 1]
   if (p.tipo === 'quincenal') {
     return `${p.quincena === 1 ? '1a Q' : '2a Q'} ${mes} ${p.anio}`
@@ -849,12 +850,12 @@ function EmpleadoDrawer({
               const fechaPeriodo = new Date(p.fechaGeneracion)
               const fechaIngreso = new Date(empleado.fechaIngreso)
               if (fechaIngreso > fechaPeriodo || p.estado === 'en_proceso') return false
-              // Un período de Regalía Pascual sin snapshot para este empleado
-              // significa que nunca formó parte del pago (acumulado en 0 al
-              // momento de liquidar) — se excluye en vez de caer al motor
-              // normal de nómina, que fabricaría un salario mensual completo
+              // Un período de Regalía Pascual o Bonificación por Utilidades sin
+              // snapshot para este empleado significa que nunca formó parte
+              // del pago — se excluye en vez de caer al motor normal de
+              // nómina, que fabricaría un salario mensual completo
               // inexistente bajo la etiqueta de ese período.
-              if (p.tipo === 'regalia' && !p.resultadosPorEmpleado?.[empleado.id]) return false
+              if ((p.tipo === 'regalia' || p.tipo === 'bonificacion') && !p.resultadosPorEmpleado?.[empleado.id]) return false
               return true
             })
             .map(p => {

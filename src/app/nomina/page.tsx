@@ -25,6 +25,7 @@ import {
   Gift,
   Search,
   Eye,
+  Percent,
 } from 'lucide-react'
 import { Toast } from '@/components/ui/Toast'
 import { Header } from '@/components/layout/Header'
@@ -43,7 +44,7 @@ import { useAuth } from '@/lib/auth-context'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams, getAnosServicio, getDivisorSalarioDiario, contarDiasLaborables } from '@/lib/dominican-labor'
 import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
 import { formatRD, fullName, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
-import { labelPeriodo, resultadoRegalia, descargarComprobantePDF } from '@/lib/nomina-shared'
+import { labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF } from '@/lib/nomina-shared'
 import type {
   Empleado,
   ResultadoNomina,
@@ -634,10 +635,12 @@ export default function NominaPage() {
   // monto nunca se pagó realmente. Al reabrir (desposteo) el estado vuelve a
   // en_proceso y el recálculo en vivo se reanuda correctamente.
   useEffect(() => {
-    // El período de Regalía Pascual (tipo 'regalia') nace con sus totales ya
-    // congelados desde montosRegalia — no usa ajustesPorEmpleado ni el motor
-    // normal de calcularNomina, así que este recálculo no aplica.
-    if (!periodoActual || periodoActual.estado !== 'en_proceso' || periodoActual.tipo === 'regalia') return
+    // El período de Regalía Pascual (tipo 'regalia') o de Bonificación por
+    // Utilidades (tipo 'bonificacion') nace con sus totales ya congelados
+    // desde montosRegalia/montosBonificacion — no usa ajustesPorEmpleado ni
+    // el motor normal de calcularNomina en este flujo, así que este
+    // recálculo no aplica a ninguno de los dos.
+    if (!periodoActual || periodoActual.estado !== 'en_proceso' || periodoActual.tipo === 'regalia' || periodoActual.tipo === 'bonificacion') return
     const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
     const rs = empleadosPeriodo.map(e =>
       conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual, disfrutes), periodoActual)
@@ -785,6 +788,27 @@ export default function NominaPage() {
     setToast(empIds.length === 1 ? 'Regalía procesada' : `${empIds.length} pago(s) de regalía procesados`)
   }
 
+  // Procesa el pago de Bonificación por Utilidades de uno o varios empleados
+  // dentro de un período tipo 'bonificacion': a diferencia de Regalía
+  // Pascual, SÍ calcula AFP/SFS/ISR reales (resultadoBonificacion) y no hay
+  // ningún acumulado en Empleado que reiniciar — la Bonificación no se
+  // acumula mes a mes, se calcula una sola vez al año en /bonificacion.
+  function handleProcesarBonificacion(empIds: string[]) {
+    if (!periodoActual || periodoActual.tipo !== 'bonificacion') return
+    const montos = periodoActual.montosBonificacion ?? {}
+    const resultados: Record<string, ResultadoNomina> = {}
+    for (const id of empIds) {
+      const emp = empleados.find(e => e.id === id)
+      if (!emp) continue
+      const monto = montos[id] ?? 0
+      resultados[id] = resultadoBonificacion(emp, monto)
+    }
+    if (Object.keys(resultados).length === 0) return
+    marcarProcesados(periodoActual.id, resultados)
+    setSelectedEmps(new Set())
+    setToast(empIds.length === 1 ? 'Bonificación procesada' : `${empIds.length} pago(s) de bonificación procesados`)
+  }
+
   // Export a Excel con TODO el detalle transaccional del período: una hoja
   // de resumen por empleado (mismos totales que ya se ven en la tabla) más
   // una segunda hoja con cada línea de ajuste individual (bonos, comisiones,
@@ -821,6 +845,37 @@ export default function NominaPage() {
         }],
       })
       setToast('Regalía Pascual exportada a Excel')
+      return
+    }
+
+    if (periodoActual.tipo === 'bonificacion') {
+      const montos = periodoActual.montosBonificacion ?? {}
+      const procesadosSet = new Set(periodoActual.empleadosProcesados ?? [])
+      const filas = Object.entries(montos).map(([empId, monto]) => {
+        const e = empleados.find(x => x.id === empId)
+        const r = e ? resultadoBonificacion(e, monto) : null
+        return [
+          e ? fullName(e) : empId, e?.cargo ?? '—', e?.departamento ?? '—',
+          monto, r?.afpEmpleado ?? 0, r?.sfsEmpleado ?? 0, r?.isrMensual ?? 0, r?.salarioNeto ?? monto,
+          procesadosSet.has(empId) ? 'Procesado' : 'Pendiente',
+        ]
+      })
+      const suma = (i: number) => filas.reduce((s, f) => s + (f[i] as number), 0)
+      await exportarExcel({
+        nombreArchivo: `bonificacion-utilidades-${periodoActual.anio}`,
+        empresa: empresa.nombre,
+        rnc: empresa.rnc,
+        hojas: [{
+          nombre: 'Bonificación Utilidades',
+          titulo: `Bonificación por Utilidades — ${periodoActualLabel}`,
+          subtitulo: `Art. 223 · ${filas.length} empleado(s) · con AFP/SFS/ISR`,
+          encabezados: ['Empleado', 'Cargo', 'Departamento', 'Monto Bruto', 'AFP', 'SFS', 'ISR', 'Neto a Pagar', 'Estado'],
+          filas,
+          totales: [`TOTAL — ${filas.length} empleado(s)`, '', '', suma(3), suma(4), suma(5), suma(6), suma(7), ''],
+          anchos: [26, 20, 18, 16, 14, 14, 14, 16, 14],
+        }],
+      })
+      setToast('Bonificación por Utilidades exportada a Excel')
       return
     }
 
@@ -1531,6 +1586,208 @@ export default function NominaPage() {
                           {esEnProcesoReg && !isProcesado && (
                             <button
                               onClick={e => { e.stopPropagation(); handleProcesarRegalia([empId]) }}
+                              className="rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                            >
+                              Procesar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
+        {detalleModal && (
+          <>
+            <div className="fixed inset-0 z-40 bg-zinc-900/40 dark:bg-black/60 backdrop-blur-sm animate-backdrop-in" />
+            <DetalleNomina
+              empleado={detalleModal.emp}
+              nomina={detalleModal.nom}
+              periodoLabel={periodoActualLabel}
+              mostrarUSD={mostrarUSD}
+              onClose={() => setDetalleModal(null)}
+            />
+          </>
+        )}
+      </div>
+    )
+  }
+
+  // ── VISTA: DETALLE — Bonificación por Utilidades (tipo 'bonificacion') ─────
+  // Vista independiente y deliberadamente más simple que la nómina normal —
+  // igual que Regalía Pascual: no hay ajustes editables, préstamos, filtros
+  // ni auditoría pre-cierre, cada empleado tiene un monto bruto ya congelado
+  // (montosBonificacion) desde "Solicitar Liquidación" en /bonificacion. A
+  // diferencia de Regalía, SÍ lleva AFP/SFS/ISR reales (Art. 223 es salario
+  // ordinario a efectos fiscales) — por eso la tabla muestra Bruto y Neto
+  // por separado, y cada fila abre el mismo modal DetalleNomina con el
+  // desglose completo de descuentos, en vez de un monto plano.
+  if (periodoActual.tipo === 'bonificacion') {
+    const montos = periodoActual.montosBonificacion ?? {}
+    const motivosAjuste = periodoActual.motivosAjusteBonificacion ?? {}
+    const procesadosBon = new Set(periodoActual.empleadosProcesados ?? [])
+    const filasBonificacion = Object.entries(montos)
+      .map(([empId, monto]) => ({ empleado: empleados.find(e => e.id === empId), empId, monto }))
+      .filter((f): f is { empleado: Empleado; empId: string; monto: number } => !!f.empleado)
+      .sort((a, b) => fullName(a.empleado).localeCompare(fullName(b.empleado)))
+    const totalBrutoBon = filasBonificacion.reduce((s, f) => s + f.monto, 0)
+    const pendientesBon = filasBonificacion.filter(f => !procesadosBon.has(f.empId))
+    const esEnProcesoBon = periodoActual.estado === 'en_proceso'
+    const esProcesadaBon = periodoActual.estado === 'procesada'
+
+    return (
+      <div className="flex flex-col overflow-hidden h-full">
+        <Header
+          title={periodoActualLabel}
+          subtitle={esEnProcesoBon ? 'En proceso' : esProcesadaBon ? 'Período procesado' : 'Período cerrado'}
+          actions={
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPeriodoAbierto(null)}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Períodos
+              </button>
+              {esEnProcesoBon && pendientesBon.length > 0 && (
+                <button
+                  onClick={() => {
+                    if (!confirm(`¿Procesar el pago de Bonificación por Utilidades de ${pendientesBon.length} empleado(s)?`)) return
+                    handleProcesarBonificacion(pendientesBon.map(f => f.empId))
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 px-3 py-2 text-sm font-semibold text-white transition-colors"
+                >
+                  <PlayCircle className="h-4 w-4" />
+                  Procesar Todo
+                </button>
+              )}
+              {esProcesadaBon && (
+                <button
+                  onClick={handleCerrarPeriodo}
+                  className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                >
+                  <Lock className="h-4 w-4" />
+                  Cerrar
+                </button>
+              )}
+              <button
+                onClick={handleExportar}
+                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Exportar Excel
+              </button>
+            </div>
+          }
+        />
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+            <StatCard
+              label="Total Bruto a Pagar"
+              value={formatRD(totalBrutoBon)}
+              sub="Antes de AFP/SFS/ISR"
+              icon={Percent}
+              iconColor="bg-[#eef0fb] text-[#1B2980] dark:bg-indigo-950/40 dark:text-indigo-400"
+            />
+            <StatCard
+              label="Empleados"
+              value={String(filasBonificacion.length)}
+              sub="Incluidos en esta liquidación"
+              icon={BarChart3}
+              iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
+            />
+            <StatCard
+              label={esEnProcesoBon ? 'Pendientes de Pago' : 'Estado'}
+              value={esEnProcesoBon ? String(pendientesBon.length) : (esProcesadaBon ? 'Procesado' : 'Cerrado')}
+              sub={esEnProcesoBon ? `de ${filasBonificacion.length} empleado(s)` : 'Todos los pagos registrados'}
+              icon={CheckCircle2}
+              iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
+            />
+          </div>
+
+          <div className="rounded-lg border border-[#1B2980]/15 bg-[#eef0fb] dark:bg-indigo-950/20 dark:border-indigo-800/30 px-4 py-3 text-xs text-[#1B2980] dark:text-indigo-300">
+            Bonificación por Participación en Utilidades (Art. 223, Código de Trabajo) — a diferencia de la
+            Regalía Pascual, SÍ es salario ordinario a efectos fiscales: lleva AFP, SFS e ISR normales,
+            calculados sobre el monto bruto como si fuera el salario del mes.
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+            <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Detalle por Empleado — {periodoActualLabel}
+              </h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e] text-left">
+                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Monto Bruto</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Neto a Pagar</th>
+                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filasBonificacion.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-10 text-center text-sm text-zinc-400 dark:text-zinc-500">
+                        Este período no tiene empleados con monto de bonificación asociado.
+                      </td>
+                    </tr>
+                  )}
+                  {filasBonificacion.map(({ empleado, empId, monto }) => {
+                    const isProcesado = procesadosBon.has(empId)
+                    const resultado = resultadoBonificacion(empleado, monto)
+                    const motivo = motivosAjuste[empId]
+                    return (
+                      <tr
+                        key={empId}
+                        onClick={() => setDetalleModal({ emp: empleado, nom: resultado })}
+                        className={`cursor-pointer border-b border-zinc-200 dark:border-[#252840] transition-colors ${
+                          isProcesado ? 'bg-emerald-50/40 dark:bg-emerald-950/10' : 'hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20'
+                        }`}
+                      >
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                              isProcesado
+                                ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-[#eef0fb] dark:bg-indigo-900/40 text-[#1B2980] dark:text-indigo-300'
+                            }`}>
+                              {empleado.nombre[0]}{empleado.apellido[0]}
+                            </div>
+                            <div>
+                              <p className="font-medium text-[#1B2980] dark:text-indigo-400 leading-tight">{fullName(empleado)}</p>
+                              <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-tight mt-0.5">
+                                {empleado.cedula} · {empleado.cargo}
+                                {motivo && <span title={motivo} className="ml-1.5 text-amber-500 dark:text-amber-400">· ajustado manualmente</span>}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                          {formatRD(monto)}
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">
+                          {formatRD(resultado.salarioNeto)}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {isProcesado
+                            ? <Badge variant="success"><CheckCircle2 className="mr-1 h-3 w-3" />Procesado</Badge>
+                            : <Badge variant="warning">Pendiente</Badge>}
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          {esEnProcesoBon && !isProcesado && (
+                            <button
+                              onClick={e => { e.stopPropagation(); handleProcesarBonificacion([empId]) }}
                               className="rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
                             >
                               Procesar

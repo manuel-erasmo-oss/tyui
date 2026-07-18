@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import { formatRD, fullName, formatCedula, formatDate } from '@/lib/utils'
+import { calcularNomina } from '@/lib/dominican-labor'
 import type { Empleado, Empresa, PeriodoNomina, ResultadoNomina } from '@/types'
 
 // Helpers compartidos entre Cálculo de Nómina (/nomina), Gestión de Envíos
@@ -14,6 +15,7 @@ export const MESES = [
 
 export function labelPeriodo(p: PeriodoNomina): string {
   if (p.tipo === 'regalia') return `Regalía Pascual ${p.anio}`
+  if (p.tipo === 'bonificacion') return `Bonificación Utilidades ${p.anio}`
   const mes = MESES[p.mes - 1]
   if (p.tipo === 'quincenal') {
     return `${p.quincena === 1 ? '1ª' : '2ª'} Quincena · ${mes} ${p.anio}`
@@ -44,6 +46,18 @@ export function resultadoRegalia(empleadoId: string, monto: number, anosServicio
     regaliaPascual: monto, vacacionesMensualesDias: 0, vacacionesMensualesValor: 0,
     anosServicio,
   }
+}
+
+// ── Resultado real para el período de Bonificación por Utilidades ────────────
+// A diferencia de la Regalía Pascual (100% exenta, resultado sintético en
+// cero), la Bonificación por Participación en Utilidades (Art. 223) SÍ es
+// salario ordinario a efectos fiscales — lleva AFP/SFS/ISR normales. Se
+// calcula tratando el monto bruto (ya con el tope de 45/60 días aplicado en
+// /bonificacion) como si fuera el salario del mes, reutilizando el motor
+// real de nómina — mismo mecanismo ya usado para "Vacaciones No Gozadas" en
+// Liquidación y "Vacaciones (Goce)/Vendidas" en Nómina.
+export function resultadoBonificacion(empleado: Empleado, montoBruto: number): ResultadoNomina {
+  return calcularNomina({ ...empleado, salarioBase: montoBruto })
 }
 
 // ── Comprobante PDF ───────────────────────────────────────────────────────────

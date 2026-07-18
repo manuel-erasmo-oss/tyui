@@ -10,7 +10,7 @@ import {
 import type { PlantillaComprobante } from '@/lib/comprobante-email'
 import { getAnosServicio, calcularConPeriodo } from '@/lib/dominican-labor'
 import { formatRD, fullName, formatDate, BTN_PRIMARY } from '@/lib/utils'
-import { labelPeriodo, resultadoRegalia, descargarComprobantePDF } from '@/lib/nomina-shared'
+import { labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF } from '@/lib/nomina-shared'
 import type { Empleado, PeriodoNomina, ResultadoNomina } from '@/types'
 
 // Empleados + resultado a mostrar en el modal — para cualquier período ya
@@ -41,6 +41,13 @@ function filasComprobante(
       return [{ empleado: e, resultado: resultadoRegalia(empId, monto, getAnosServicio(e.fechaIngreso)) }]
     })
   }
+  if (periodo.tipo === 'bonificacion') {
+    return Object.entries(periodo.montosBonificacion ?? {}).flatMap(([empId, monto]) => {
+      const e = empleados.find(x => x.id === empId)
+      if (!e) return []
+      return [{ empleado: e, resultado: resultadoBonificacion(e, monto) }]
+    })
+  }
   const ajustesPeriodo = periodo.ajustesPorEmpleado ?? {}
   const roster = periodo.empleadosProcesados
     ? periodo.empleadosProcesados.flatMap(id => {
@@ -66,9 +73,11 @@ export function EnvioComprobantesModal({
   const periodoLabel = labelPeriodo(periodo)
   const concepto = periodo.tipo === 'regalia'
     ? 'Regalía Pascual'
-    : periodo.tipo === 'quincenal'
-      ? `Nómina Quincenal (${periodo.quincena}ª quincena)`
-      : 'Nómina Mensual'
+    : periodo.tipo === 'bonificacion'
+      ? 'Bonificación por Utilidades'
+      : periodo.tipo === 'quincenal'
+        ? `Nómina Quincenal (${periodo.quincena}ª quincena)`
+        : 'Nómina Mensual'
   const filas = filasComprobante(periodo, empleados, empleadosEnNomina)
   const fechaPagoTexto = periodo.fechaPago ? formatDate(periodo.fechaPago) : ''
 
