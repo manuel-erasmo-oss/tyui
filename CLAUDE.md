@@ -2796,6 +2796,93 @@ bonificación ya pagados 2016-2024, dejando 2025 deliberadamente sin pagar):
 Sin errores de consola en ningún escenario. `tsc --noEmit` y `npm run build`
 limpios (19 rutas, sin cambio de conteo).
 
+## Dashboard — Centro de Alertas consolidado + gráficos con historial real
+
+Feedback directo del usuario: las alertas de vencimiento/cumplimiento que
+hoy viven dispersas módulo por módulo deberían "pasar por el Dashboard, en
+otro orden" (priorizadas, no solo la única alerta de salario mínimo que ya
+existía ahí); y los gráficos del Dashboard "solo se muestra el mes actual y
+anterior" — pidió hacerlos más funcionales.
+
+**Investigación del segundo punto — dos causas reales, no una sola:**
+1. `periodosReales` filtraba únicamente `tipo === 'mensual'`. Una empresa en
+   `modalidadNomina: 'quincenal'` (`Empresa`) nunca genera períodos de ese
+   tipo, así que sus gráficos SIEMPRE caían al relleno sintético sin importar
+   cuántas quincenas reales tuviera procesadas — un bug real, no solo
+   percepción.
+2. El botón "Este mes ⋯" en cada chart card no tenía `onClick` — era
+   puramente decorativo, sin ninguna forma real de ver más historial. El cap
+   de `.slice(-5)` tampoco era ajustable.
+
+**Fix de gráficos (`src/app/page.tsx`):**
+- `periodosPorMes` (nuevo `useMemo`) agrega tipo `'mensual'` Y `'quincenal'`
+  (sumando ambas quincenas de un mismo mes en un solo total), reemplazando
+  el filtro que solo consideraba mensual.
+- `RangoSelector` (3M/6M/12M) — nuevo control real y funcional, compartido
+  entre las 3 chart cards, reemplaza el botón decorativo sin `onClick`
+  (también removido el ícono `MoreHorizontal` sin acción de la card
+  "Retenciones" — mismo principio ya aplicado en la sesión de "affordance de
+  hover": ningún control debe aparentar ser clickeable sin serlo).
+- Umbral de datos reales bajado de `>= 2` a `>= 1` — antes, con solo 1
+  período real procesado, se descartaba por completo en favor de 5 meses
+  100% inventados; ahora se muestra ese único período real (honesto, aunque
+  disperso) en vez de fabricar datos.
+- Relleno sintético (solo cuando NO hay ningún período real) ahora se genera
+  dinámicamente según `rangoMeses` en vez de un array fijo de 5, y una nota
+  visible ("Datos ilustrativos — aún no hay períodos procesados" vs. "N
+  período(s) real(es) procesado(s)") aclara honestamente cuál es cuál — antes
+  no había forma de distinguir un gráfico con datos reales de uno inventado.
+- Etiquetas de mes incluyen el año ("Ene 25") solo cuando el rango visible
+  cruza más de un año calendario — evita ambigüedad en rangos de 12 meses
+  sin ensuciar la etiqueta en el caso común.
+
+**Centro de Alertas (`src/components/dashboard/CentroAlertas.tsx`, nuevo):**
+reemplaza el banner de salario mínimo (única alerta que existía en el
+Dashboard) por una lista consolidada y **ordenada por severidad**
+(danger → warning → info, no por orden de llegada) de 5 fuentes reales del
+sistema, cada una reutilizando la lógica de negocio ya existente en su
+módulo (sin duplicar reglas):
+- **Salario mínimo bajo** (`getSalarioMinimoAplicable`) — danger.
+- **Bonificación por Utilidades vencida/por vencer** (Art. 224) — reutiliza
+  `getBonificacionesPendientes()`, recién extraído de `/bonificacion` a
+  `dominican-labor.ts` para que ambas superficies (el módulo y el Dashboard)
+  compartan exactamente la misma regla de ventana fiscal — danger si ya
+  venció, warning si vence en ≤45 días.
+- **Regalía Pascual próxima a vencer** (20 de diciembre, Art. 219) — mismo
+  umbral de 30 días ya usado en `/regalia-pascual` — danger/warning.
+- **Préstamos que requieren gestión de cobro** (`Prestamo.requiereGestionCobro`,
+  3+ cuotas omitidas consecutivas) — warning.
+- **Empleados fuera de banda salarial** (`useBandasSalariales` +
+  `normalizarPosicion`) — info.
+Cada fila es un `Link` que navega directo al módulo correspondiente (el
+detalle completo vive ahí, el Centro de Alertas es un resumen priorizado,
+no un duplicado) — las dos alertas con más valor a simple vista (salario
+mínimo, préstamos) muestran además hasta 3 nombres de empleados afectados
+inline. Colapsable (`ChevronDown`), con badge de conteo total. Sin ninguna
+alerta aplicable, un estado positivo verde "Todo en orden" reemplaza la
+lista — mismo patrón ya establecido en el Resumen de Configuración.
+
+**Verificado en navegador con Playwright, 3 escenarios sembrados directo en
+localStorage:**
+1. Empresa con empleado bajo el mínimo, préstamo con gestión de cobro,
+   empleado fuera de banda, y 5 períodos mensuales reales → las 4 alertas
+   aparecen en el orden correcto (2 danger primero, luego warning, luego
+   info), cada click navega al módulo correcto; selector 3M/6M/12M cambia
+   la nota de "5 períodos reales" a "3 períodos reales" y viceversa sin
+   inventar los que faltan.
+2. Misma empresa en `modalidadNomina: 'quincenal'` con 3 meses × 2 quincenas
+   cada uno → nota confirma "3 períodos reales procesados" (agregados
+   correctamente), donde antes del fix habría caído sin remedio al relleno
+   sintético.
+3. Cuenta nueva sin ningún período ni préstamo ni banda, empleado con
+   antigüedad reciente (sin ejercicios fiscales pasados que reclamar) →
+   "Todo en orden" y "Datos ilustrativos — aún no hay períodos procesados",
+   confirmando que el estado vacío no fabrica una falsa sensación de alerta
+   ni de historial real.
+Verificado también en modo oscuro y viewport móvil (390×844) sin errores de
+consola. `tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de
+conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -2804,6 +2891,7 @@ limpios (19 rutas, sin cambio de conteo).
 
 | Hash | Descripción |
 |---|---|
+| `0e21450` | feat: Centro de Alertas en Dashboard + gráficos con historial real configurable |
 | `58e2a51` | fix: prorratear Bonificación de empleados liquidados a mitad del ejercicio fiscal |
 | `c1cbd0c` | feat: liquidación de Bonificación por Utilidades vía período especial en Nómina |
 | `06c579f` | feat: ampliar plantilla de Carga Inicial con identidad, contacto y datos bancarios |
