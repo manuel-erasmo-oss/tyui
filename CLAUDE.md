@@ -2972,6 +2972,23 @@ verdaderamente global; sin alertas, el badge desaparece y el popover muestra
 (390×844, incluyendo el fix del desbordamiento). `tsc --noEmit` y
 `npm run build` limpios (19 rutas, sin cambio de conteo).
 
+**Pregunta directa del usuario, respondida y verificada en vivo**: si se
+resuelve el problema que originó una alerta, ¿la notificación desaparece
+sola? Sí — `useAlertas()` no persiste ningún estado de "leído/pendiente",
+recalcula las alertas en cada render a partir de los datos reales
+(`useMemo` sobre `empleados`/`periodos`/`prestamos`/`bandas`), así que en
+cuanto deja de cumplirse la condición, la alerta deja de existir. Probado
+end-to-end sin recargar la página: se sembró un empleado con salario bajo
+el mínimo (aparece el badge + la alerta), se navegó a Empleados vía el
+propio link de la alerta, se subió el salario por encima del mínimo desde
+el formulario real de edición, y al reabrir la campana el badge ya había
+desaparecido y el popover mostraba "Todo en orden" — sin ningún refresh de
+por medio. Mismo mecanismo reactivo aplica a las demás alertas (Bonificación/
+Regalía se resuelven al cerrar el período de pago en Nómina; préstamos con
+gestión de cobro se resetean solos en `registrarPago()` en cuanto vuelve a
+cobrarse una cuota con normalidad; bandas salariales al ajustar el sueldo
+dentro del rango).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
