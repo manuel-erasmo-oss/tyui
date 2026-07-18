@@ -2621,6 +2621,65 @@ Popular/BanReservas/Scotiabank/BHD León/Banistmo/Otro", NO se creó su
 registro. Sin errores de consola en ningún paso. `tsc --noEmit` y
 `npm run build` limpios (19 rutas).
 
+## Bonificación por Utilidades — liquidación vía período especial en Nómina
+
+Pedido del usuario: "una vez toque liquidar la bonificación debe de crearse
+un periodo de cálculo de nomina especial, es algo muy parecido a lo que
+hicimos en regalía pascual". Antes de construirlo se confirmó con el
+usuario la decisión legal que más cambia el cálculo: a diferencia de la
+Regalía Pascual (100% exenta), la Bonificación por Participación en
+Utilidades (Art. 223) **sí lleva AFP/SFS/ISR** — igual tratamiento que
+Vacaciones.
+
+**Arquitectura — mismo patrón que Regalía Pascual, con la retención real:**
+- Nuevo valor `TipoPeriodo = 'bonificacion'` y `PeriodoNomina.montosBonificacion`/
+  `motivosAjusteBonificacion` (monto BRUTO por empleado, con el tope de
+  45/60 días de Art. 223 ya aplicado desde `/bonificacion`).
+- **`resultadoBonificacion(empleado, montoBruto)`** (nuevo, `nomina-shared.ts`)
+  — a diferencia de `resultadoRegalia()` (objeto sintético en cero), este
+  reutiliza el motor real: `calcularNomina({ ...empleado, salarioBase:
+  montoBruto })`, el mismo mecanismo ya usado para "Vacaciones No Gozadas"
+  en Liquidación y "Vacaciones (Goce)/Vendidas" en Nómina — trata el monto
+  como si fuera el salario del mes para calcular AFP/SFS/ISR normales.
+- **Excluido de los mismos lugares donde ya se excluye `'regalia'`** (mismo
+  bug class ya cazado en la sesión de Regalía Pascual, evitado desde el
+  inicio esta vez): `calcularSalarioPromedioUltimos12Meses` (no infla el
+  promedio de Cesantía/Preaviso), `calcularConPeriodo` (fallback en cero),
+  los 6 selectores de período de Reportería, y el filtro de snapshot en
+  Historial Nómina de Empleados.
+- **`nomina/page.tsx`**: vista de detalle dedicada para `tipo ===
+  'bonificacion'` (sin ajustes, préstamos, filtros ni auditoría pre-cierre,
+  igual que Regalía) — pero a diferencia de esa, la tabla muestra "Monto
+  Bruto" y "Neto a Pagar" por separado, y cada fila abre el mismo modal
+  `DetalleNomina` con el desglose completo de AFP/SFS/ISR/aportes, en vez
+  de un monto plano. `handleProcesarBonificacion()` no tiene ningún efecto
+  de "reinicio de acumulado" (a diferencia de Regalía) — la Bonificación no
+  se acumula mes a mes, se calcula una sola vez al año desde la utilidad
+  neta capturada en `/bonificacion`.
+- **`/bonificacion`**: nuevo selector de "Año Fiscal" (10 años atrás a 1
+  adelante), botón "Solicitar Liquidación" que abre un modal con ajuste
+  manual por empleado (motivo obligatorio, mismo patrón que Regalía),
+  bloqueo de una segunda solicitud mientras el período del año elegido siga
+  `en_proceso`/`procesada` (mismo guard que Regalía — banner "ya se
+  solicitó" + link a Nómina), y una tabla "Bonificaciones Liquidadas" con
+  el historial de años ya cerrados.
+
+Verificado en navegador con Playwright, datos demo reales: utilidad neta
+RD$5,000,000 → 10% distribuible RD$500,000 → "Solicitar Liquidación" (año
+fiscal 2026, sin ajustes manuales) → período "Bonificación Utilidades 2026"
+creado en Nómina con 8 empleados. Detalle de Ana Martínez Santos: bruto
+RD$37,303.66 → AFP RD$1,070.62 (2.87%) + SFS RD$1,134.03 (3.04%) + ISR
+RD$62.10 (sobre base anualizada tras exceder el tramo exento) = descuentos
+RD$2,266.75 → neto RD$35,036.91, matemática exacta. Total del período:
+RD$500,000.00 bruto → RD$435,602.78 neto. Procesado y cerrado sin
+problema — no aparece en el selector "Nómina por Período" de Reportería
+(mismo comportamiento ya confirmado para Regalía Pascual). De vuelta en
+`/bonificacion`, el banner "ya se solicitó" desaparece, "Solicitar
+Liquidación" vuelve a estar disponible, y aparece en "Bonificaciones
+Liquidadas" con el total bruto/neto correctos y link "Ver en Nómina". Sin
+errores de consola en ningún paso. `tsc --noEmit` y `npm run build`
+limpios (19 rutas).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
