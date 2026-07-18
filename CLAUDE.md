@@ -2680,6 +2680,122 @@ Liquidadas" con el total bruto/neto correctos y link "Ver en Nómina". Sin
 errores de consola en ningún paso. `tsc --noEmit` y `npm run build`
 limpios (19 rutas).
 
+## Bonificación por Utilidades — cierre fiscal configurable + prorrateo de empleados liquidados (Art. 223-227)
+
+El usuario señaló un hueco legal real en la liquidación de Bonificación
+recién construida: un empleado liquidado a mitad de año (ej. entra en enero,
+lo despiden en julio) sigue teniendo derecho a su bonificación proporcional
+— pagadera junto con la del resto de la plantilla una vez cierra el
+ejercicio económico de la empresa, no antes. El módulo anterior solo
+consideraba `empleadosActivos`, excluyendo por completo a cualquier
+liquidado. Se pidió explícitamente leer los Arts. 223-227, Título VIII del
+Código de Trabajo antes de implementar — confirmado vía fetch del texto
+literal:
+- **Art. 223**: reparto del 10% de utilidades netas, tope 45/60 días según
+  antigüedad; "cuando el trabajador no preste servicios durante todo el año...
+  la participación individual será proporcional al salario del tiempo
+  trabajado" — la ley no fija la fórmula exacta de esa proporción.
+- **Art. 224**: pago obligatorio **entre 90 y 120 días después del cierre
+  del ejercicio económico** — se usa el límite superior (120 días) como
+  fecha de vencimiento para la alerta.
+- **Art. 226**: exenciones (agrícolas/industriales/mineras en sus primeros 3
+  años, agrícolas pequeñas ≤RD$1,000,000 de capital, zona franca) — citadas
+  en la nota legal de la UI, no automatizadas (demasiado riesgo de
+  determinar mal una exención automáticamente).
+
+**Cierre de ejercicio fiscal configurable** — nuevo campo
+`Empresa.cierreFiscal?: CierreFiscal` (`'diciembre' | 'marzo' | 'junio' |
+'septiembre'`, los 4 cierres reconocidos por la DGII en RD), sin configurar
+se asume `'diciembre'` (año calendario, comportamiento idéntico al que ya
+existía, cero migración necesaria). Selector de 4 opciones (mismo patrón
+visual de tarjetas que `CATEGORIAS_EMPRESA`) agregado en dos superficies:
+`OnboardingWizard.tsx` (Paso 1, junto a zona franca) para que quede definido
+desde la creación de la cuenta, y Configuración → Empresa → Clasificación
+para Nómina (editable después).
+
+**Motor — 3 funciones puras nuevas en `dominican-labor.ts`**:
+- `rangoEjercicioFiscal(anioFiscal, cierreFiscal)` — el "año fiscal" se
+  nombra por su año de CIERRE (ej. con `cierreFiscal='junio'`, el año fiscal
+  2026 es el ejercicio del 01-jul-2025 al 30-jun-2026). Con `'diciembre'`
+  (default), año fiscal N = año calendario N exacto.
+- `fechaLimitePagoBonificacion(finEjercicio)` — fin + 120 días (Art. 224).
+- `mesesEnEjercicioFiscal(fechaIngreso, fechaSalida, inicioEjercicio,
+  finEjercicio)` — meses fraccionales (sin truncar) que un empleado trabajó
+  DENTRO de un ejercicio específico; cubre tanto ingreso a mitad de ejercicio
+  como salida a mitad de ejercicio (`fechaSalida = null` para un empleado
+  que sigue activo, tratado como si trabajara hasta el cierre).
+
+**`bonificacion/page.tsx` — reescritura de la elegibilidad**: en vez de
+`empleadosActivos.filter(tipoContrato==='fijo')`, ahora parte de `empleados`
+(roster completo, incluye inactivos — un liquidado nunca se borra) +
+`useLiquidaciones()` para obtener la `fechaTerminacion` real de cada
+inactivo. Un empleado liquidado sin registro de liquidación (dato
+inconsistente) se excluye por seguridad. Diseño de la fórmula (interpretación
+propia de Cielo Cloud, ya que el Art. 223 no la especifica):
+- **Peso proporcional = salario × (mesesTrabajados/12)** — un empleado con
+  solo 7 de 12 meses pesa 7/12 de su salario en el reparto total, en vez de
+  competir con el mismo peso que uno de año completo. Con `meses=12` para
+  todos (caso de siempre), la fórmula es matemáticamente idéntica a la
+  anterior — sin regresión para el caso ya verificado en la sesión previa.
+- **Tope individual también prorrateado**: `45/60 días × salarioDiario ×
+  (mesesTrabajados/12)` — un empleado de medio año no puede alcanzar el tope
+  completo.
+- **Antigüedad evaluada a la fecha de salida** (o al cierre del ejercicio
+  para un activo), no "a hoy" — irrelevante para un ejercicio ya pasado.
+- Nueva columna "Meses Trabaj." + badge "Liquidado" junto al nombre, tanto en
+  la tabla en pantalla como en el modal de Solicitar Liquidación y la
+  exportación a Excel (columnas "Estado"/"Meses Trabajados" nuevas).
+
+**Alerta 🔔 de vencimiento (Art. 224)** — `pendientesPago`: ejercicios
+fiscales ya cerrados (`fin <= hoy`) sin un período `tipo:'bonificacion'
+estado:'cerrada'` para ese año, ordenados por urgencia (más vencido primero).
+**Acotado a ejercicios que se solapan con la antigüedad del empleado más
+antiguo conocido** (`primerIngresoConocido`) — sin este límite, una empresa
+recién migrada a Cielo Cloud sin historial cargado vería "vencido hace miles
+de días" para ejercicios anteriores a que la empresa tuviera empleados, un
+falso positivo absurdo. Banner rojo/ámbar (🔔, con botón "Calcular ahora" que
+salta directo al año fiscal en cuestión) visible solo si `diasRestantes <=
+45` — evita alarmar antes de que el vencimiento se acerque de verdad; fuera
+de esa ventana, una StatCard "Próximo Vencimiento" siempre visible (verde
+"Al día" si no hay pendientes, ámbar/rojo/celeste según urgencia) mantiene
+la información disponible sin alarmar.
+
+**Redesign — prepantalla "¿Qué quieres ver?"**, mismo patrón exacto ya
+construido para Regalía Pascual (`pantalla: 'elegir'|'actual'|'historial'`,
+se salta la elección si no hay historial): 2 tarjetas grandes ("Cálculo de
+Bonificación" navy, "Historial de Liquidaciones" esmeralda) con degradado +
+halo + hover-lift; el historial de liquidaciones pasa a su propia pantalla
+con tabla dedicada (Ejercicio/Empleados/Total Bruto/Total Neto/Fecha de
+Pago/Estado/"Ver en Nómina"), separado de la calculadora.
+
+**Verificado con 3 escenarios simulados vía Playwright** (localStorage
+sembrado directo, empresa+4 empleados+2 liquidaciones+9 períodos de
+bonificación ya pagados 2016-2024, dejando 2025 deliberadamente sin pagar):
+1. **FY2026 (cierre diciembre, ejercicio en curso)**: Ana (activa todo el
+   año) → 12.0/12; Beto (entró 2026-01-01, liquidado 2026-07-15 — el
+   ejemplo exacto planteado por el usuario) → aparece con badge "Liquidado"
+   y 6.4/12 meses, RD$30,049.83 (vs. RD$69,950.17 de Ana); Cathy (se fue en
+   2025) correctamente ausente; banner 🔔 rojo "venció hace 79 día(s)" para
+   el ejercicio 2025 pendiente. Click "Calcular ahora" salta a FY2025 →
+   Cathy reaparece prorrateada (~2.0/12, se fue el 2025-03-01), Beto
+   ausente (aún no existía).
+2. **FY2027 (año siguiente a la salida de Beto)**: Beto ya NO reaparece
+   (su prorrateo fue exclusivo del ejercicio en que trabajó) — confirma que
+   la ventana de 12 meses no arrastra empleados de ejercicios ya cerrados.
+3. **Cambio de cierre fiscal a 'junio' vía Configuración (UI real, no
+   localStorage)**: persistencia confirmada; `/bonificacion` recalcula el
+   rango a "01 jul de 2025 – 30 jun de 2026"; Beto (mismo empleado) ahora
+   prorratea distinto (6.0/12, porque el ejercicio junio cierra ANTES de su
+   fecha de salida real) — confirma que el mismo empleado da un resultado
+   distinto según el cierre fiscal configurado; Cathy ausente en FY2026-junio
+   pero SÍ aparece en FY2025-junio (jul24-jun25, su salida de marzo 2025 cae
+   dentro de esa ventana) — confirma el desplazamiento correcto de la
+   ventana fiscal; el banner de vencimiento recalculó automáticamente contra
+   las nuevas fechas de cierre sin ninguna acción adicional.
+
+Sin errores de consola en ningún escenario. `tsc --noEmit` y `npm run build`
+limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -2688,6 +2804,7 @@ limpios (19 rutas).
 
 | Hash | Descripción |
 |---|---|
+| `58e2a51` | fix: prorratear Bonificación de empleados liquidados a mitad del ejercicio fiscal |
 | `c1cbd0c` | feat: liquidación de Bonificación por Utilidades vía período especial en Nómina |
 | `06c579f` | feat: ampliar plantilla de Carga Inicial con identidad, contacto y datos bancarios |
 | `7374260` | feat: Saldo ISR a Favor migrado — Carga Inicial ya no es decorativa |
