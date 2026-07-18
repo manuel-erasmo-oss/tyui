@@ -9,12 +9,13 @@ import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
-import { getAnosServicio } from '@/lib/dominican-labor'
+import { useLiquidaciones } from '@/lib/liquidaciones-context'
+import { rangoEjercicioFiscal, mesesEnEjercicioFiscal, fechaLimitePagoBonificacion } from '@/lib/dominican-labor'
 import { resultadoBonificacion } from '@/lib/nomina-shared'
-import { formatRD, formatAnosServicio, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
+import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
 import {
   Percent, Users, Banknote, Info, Download, Send, Pencil, Check, X,
-  ArrowRight, CheckCircle2, History,
+  ArrowRight, CheckCircle2, History, Bell, Layers, ExternalLink,
 } from 'lucide-react'
 import type { PeriodoNomina } from '@/types'
 
@@ -25,40 +26,131 @@ const hoy = new Date()
 const anioActualDefault = hoy.getFullYear()
 const ANIOS_FISCALES = Array.from({ length: 12 }, (_, i) => anioActualDefault - 10 + i)
 
+function formatDateObj(d: Date): string {
+  return d.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// ── Alerta 🔔 de vencimiento legal de pago (Art. 224 — 90 a 120 días
+// después del cierre del ejercicio) ─────────────────────────────────────────
+// Se muestra en ambas pantallas (prepantalla y cálculo) mientras el ejercicio
+// fiscal más urgente sin liquidar esté dentro de los 45 días previos a su
+// límite legal, o ya vencido — fuera de esa ventana no alarma al usuario.
+function BannerVencimiento({
+  alerta, onIrA,
+}: {
+  alerta: { anio: number; limite: Date; diasRestantes: number }
+  onIrA: () => void
+}) {
+  const vencido = alerta.diasRestantes < 0
+  return (
+    <div
+      className={cn(
+        'flex flex-wrap items-center justify-between gap-3 rounded-xl border px-5 py-3.5 text-sm',
+        vencido
+          ? 'border-rose-200 dark:border-rose-800/40 bg-rose-50 dark:bg-rose-950/20 text-rose-800 dark:text-rose-300'
+          : 'border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/20 text-amber-800 dark:text-amber-300',
+      )}
+    >
+      <div className="flex items-center gap-2.5">
+        <Bell className="h-4 w-4 shrink-0" />
+        <span>
+          🔔{' '}
+          {vencido ? (
+            <>
+              El plazo legal para pagar la Bonificación del ejercicio fiscal <strong>{alerta.anio}</strong> venció
+              hace {Math.abs(alerta.diasRestantes)} día(s) — límite: {formatDateObj(alerta.limite)} (Art. 224).
+            </>
+          ) : (
+            <>
+              Quedan <strong>{alerta.diasRestantes} día(s)</strong> para el límite legal de pago de la Bonificación
+              del ejercicio fiscal <strong>{alerta.anio}</strong> — {formatDateObj(alerta.limite)} (Art. 224).
+            </>
+          )}
+        </span>
+      </div>
+      <button onClick={onIrA} className="shrink-0 flex items-center gap-1 font-semibold hover:underline">
+        Calcular ahora <ArrowRight className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+}
+
 export default function BonificacionPage() {
-  const { empleadosActivos } = useEmpleados()
+  const { empleados } = useEmpleados()
   const { empresa } = useEmpresa()
   const { periodos, generar } = usePeriodos()
+  const { liquidaciones } = useLiquidaciones()
   const [utilidadNeta, setUtilidadNeta] = useState<string>('')
   const [anioFiscal, setAnioFiscal] = useState(anioActualDefault)
   const [toast, setToast] = useState<string | null>(null)
 
   const utilidad = parseFloat(utilidadNeta) || 0
   const distribuible = utilidad * 0.10
+  const cierreFiscal = empresa.cierreFiscal ?? 'diciembre'
 
-  // Elegibles: empleados de tiempo indefinido (fijo)
-  const elegibles = useMemo(
-    () => empleadosActivos.filter(e => e.tipoContrato === 'fijo'),
-    [empleadosActivos]
+  const { inicio: inicioEjercicio, fin: finEjercicio } = useMemo(
+    () => rangoEjercicioFiscal(anioFiscal, cierreFiscal),
+    [anioFiscal, cierreFiscal],
   )
 
-  const totalSalarios = elegibles.reduce((s, e) => s + e.salarioBase, 0)
-
+  // ── Elegibles del ejercicio fiscal seleccionado ───────────────────────────
+  // Art. 223: empleados de tiempo indefinido (fijo), incluyendo a quien se
+  // desvinculó A MITAD del ejercicio — su participación se prorratea según
+  // los meses realmente trabajados dentro de esa ventana de 12 meses. Por
+  // eso se parte de `empleados` (roster completo, incluye inactivos) en vez
+  // de `empleadosActivos` — un empleado liquidado sigue en el sistema con
+  // `activo: false`, nunca se borra.
   const filas = useMemo(() => {
-    return elegibles.map(e => {
-      const anos = getAnosServicio(e.fechaIngreso)
-      const diasTope = anos >= 3 ? 60 : 45
-      const salarioDiario = e.salarioBase / DIAS_MES
-      const topeIndividual = diasTope * salarioDiario
-      const proporcional = totalSalarios > 0 ? (e.salarioBase / totalSalarios) * distribuible : 0
-      const montoFinal = Math.min(proporcional, topeIndividual)
-      const topeAplicado = proporcional > topeIndividual
-      return { empleado: e, anos, diasTope, salarioDiario, topeIndividual, proporcional, montoFinal, topeAplicado }
-    }).sort((a, b) => b.montoFinal - a.montoFinal)
-  }, [elegibles, totalSalarios, distribuible])
+    const conMeses = empleados
+      .filter(e => e.tipoContrato === 'fijo')
+      .map(e => {
+        let fechaSalida: Date | null = null
+        let liquidado = false
+        if (!e.activo) {
+          const liq = liquidaciones.find(l => l.empleadoId === e.id)
+          if (!liq) return null   // inactivo sin registro de liquidación — no hay fecha de salida confiable
+          fechaSalida = new Date(liq.fechaTerminacion)
+          liquidado = true
+        }
+        const fechaIngreso = new Date(e.fechaIngreso)
+        const mesesTrabajados = mesesEnEjercicioFiscal(fechaIngreso, fechaSalida, inicioEjercicio, finEjercicio)
+        if (mesesTrabajados <= 0) return null
+        // Antigüedad evaluada a la fecha de salida (empleado liquidado) o al
+        // cierre del ejercicio (empleado activo) — determina el tope de
+        // 45/60 días, no la antigüedad "a hoy" (irrelevante para un ejercicio pasado).
+        const fechaReferencia = fechaSalida ?? finEjercicio
+        const anos = Math.max(0, (fechaReferencia.getTime() - fechaIngreso.getTime()) / (365.25 * 24 * 3600 * 1000))
+        return { empleado: e, mesesTrabajados, liquidado, anos }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+
+    // Peso proporcional = salario × fracción del ejercicio trabajada — así
+    // un empleado que solo trabajó 7 de 12 meses pesa 7/12 de su salario en
+    // el reparto, en vez de competir con el mismo peso que uno de año completo
+    // (interpretación propia de Cielo Cloud: la ley no fija la fórmula exacta,
+    // solo exige que la participación sea "proporcional al salario del tiempo
+    // trabajado", Art. 223).
+    const totalPeso = conMeses.reduce((s, f) => s + f.empleado.salarioBase * (f.mesesTrabajados / 12), 0)
+
+    return conMeses
+      .map(f => {
+        const diasTope = f.anos >= 3 ? 60 : 45
+        const salarioDiario = f.empleado.salarioBase / DIAS_MES
+        // El tope individual también se prorratea — un empleado con medio
+        // año trabajado no puede alcanzar el tope completo de 45/60 días.
+        const topeIndividual = diasTope * salarioDiario * (f.mesesTrabajados / 12)
+        const peso = f.empleado.salarioBase * (f.mesesTrabajados / 12)
+        const proporcional = totalPeso > 0 ? (peso / totalPeso) * distribuible : 0
+        const montoFinal = Math.min(proporcional, topeIndividual)
+        const topeAplicado = proporcional > topeIndividual
+        return { ...f, diasTope, salarioDiario, topeIndividual, proporcional, montoFinal, topeAplicado }
+      })
+      .sort((a, b) => b.montoFinal - a.montoFinal)
+  }, [empleados, liquidaciones, inicioEjercicio, finEjercicio, distribuible])
 
   const totalRepartido = filas.reduce((s, f) => s + f.montoFinal, 0)
   const empleadosConTope = filas.filter(f => f.topeAplicado).length
+  const empleadosLiquidados = filas.filter(f => f.liquidado).length
 
   // ── Solicitar Liquidación de Bonificación ───────────────────────────────────
   // Igual mecanismo que Regalía Pascual: crea un período especial en Nómina
@@ -76,6 +168,48 @@ export default function BonificacionPage() {
   const historialBonificacion = periodos
     .filter(p => p.tipo === 'bonificacion' && p.estado === 'cerrada')
     .sort((a, b) => b.anio - a.anio)
+
+  // ── Alerta 🔔 de vencimiento legal de pago (Art. 224) ─────────────────────
+  // Ejercicios fiscales ya cerrados (fin <= hoy) que todavía no tienen un
+  // período de Bonificación pagado ('cerrada') — ordenados por urgencia
+  // (menor cantidad de días restantes primero; negativo = ya vencido).
+  // Acotado a ejercicios que se solapan con la antigüedad real de al menos
+  // un empleado conocido — sin este límite, una empresa recién migrada a
+  // Cielo Cloud (sin historial de bonificación cargado) vería "vencido hace
+  // miles de días" para ejercicios anteriores a que la empresa tuviera
+  // empleados, un falso positivo sin sentido práctico.
+  const primerIngresoConocido = useMemo(() => {
+    if (empleados.length === 0) return null
+    return new Date(Math.min(...empleados.map(e => new Date(e.fechaIngreso).getTime())))
+  }, [empleados])
+
+  const pendientesPago = useMemo(() => {
+    return ANIOS_FISCALES
+      .map(a => {
+        const { fin } = rangoEjercicioFiscal(a, cierreFiscal)
+        if (fin > hoy) return null
+        if (primerIngresoConocido && fin < primerIngresoConocido) return null
+        const pagado = periodos.some(p => p.tipo === 'bonificacion' && p.anio === a && p.estado === 'cerrada')
+        if (pagado) return null
+        const limite = fechaLimitePagoBonificacion(fin)
+        const diasRestantes = Math.ceil((limite.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+        return { anio: a, fin, limite, diasRestantes }
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null)
+      .sort((a, b) => a.diasRestantes - b.diasRestantes)
+  }, [periodos, cierreFiscal, primerIngresoConocido])
+  const alertaPago = pendientesPago[0]
+  const mostrarBannerUrgente = !!alertaPago && alertaPago.diasRestantes <= 45
+
+  // ── Prepantalla: elegir cálculo vs. historial ─────────────────────────────
+  // Con historial existente, la primera vez que se abre el módulo se
+  // pregunta explícitamente qué se quiere ver (mismo patrón ya usado en
+  // Regalía Pascual) en vez de amontonar calculadora + historial en la misma
+  // pantalla. Sin historial (primera liquidación de la empresa) se salta la
+  // elección y se va directo a la calculadora.
+  const tieneHistorial = historialBonificacion.length > 0
+  const [pantalla, setPantalla] = useState<'elegir' | 'actual' | 'historial'>('elegir')
+  const vistaActual: 'elegir' | 'actual' | 'historial' = tieneHistorial ? pantalla : 'actual'
 
   const [solicitudAbierta, setSolicitudAbierta] = useState(false)
   const [overrides, setOverrides] = useState<Record<string, { monto: number; motivo: string }>>({})
@@ -162,33 +296,167 @@ export default function BonificacionPage() {
   async function handleExportarExcel() {
     if (filas.length === 0) return
     const { exportarExcel } = await import('@/lib/excel-export')
-    const filasExcel = filas.map(({ empleado, anos, diasTope, proporcional, montoFinal }) => [
+    const filasExcel = filas.map(({ empleado, anos, liquidado, mesesTrabajados, diasTope, proporcional, montoFinal }) => [
       fullName(empleado),
       formatAnosServicio(anos),
+      liquidado ? 'Liquidado' : 'Activo',
       empleado.salarioBase,
+      Number(mesesTrabajados.toFixed(2)),
       diasTope,
       proporcional,
       montoFinal,
     ])
     await exportarExcel({
-      nombreArchivo: `bonificacion-utilidades-${new Date().toISOString().slice(0, 10)}`,
+      nombreArchivo: `bonificacion-utilidades-${anioFiscal}`,
       empresa: empresa.nombre,
       rnc: empresa.rnc,
       hojas: [{
         nombre: 'Bonificación',
-        titulo: 'Bonificación por Participación en Utilidades',
-        subtitulo: `Art. 223 · Utilidad Neta: ${formatRD(utilidad)} · 10% Distribuible: ${formatRD(distribuible)}`,
-        encabezados: ['Empleado', 'Antigüedad', 'Salario Base', 'Tope (días)', 'Proporcional', 'Monto a Pagar'],
+        titulo: `Bonificación por Participación en Utilidades — Ejercicio Fiscal ${anioFiscal}`,
+        subtitulo: `Art. 223-224 · Utilidad Neta: ${formatRD(utilidad)} · 10% Distribuible: ${formatRD(distribuible)} · Ejercicio: ${formatDateObj(inicioEjercicio)} – ${formatDateObj(finEjercicio)}`,
+        encabezados: ['Empleado', 'Antigüedad', 'Estado', 'Salario Base', 'Meses Trabajados', 'Tope (días)', 'Proporcional', 'Monto a Pagar'],
         filas: filasExcel,
         totales: [
-          `TOTAL — ${filas.length} empleado(s)`, '', '',
-          '', filas.reduce((s, f) => s + f.proporcional, 0), totalRepartido,
+          `TOTAL — ${filas.length} empleado(s)`, '', '', '',
+          '', '', filas.reduce((s, f) => s + f.proporcional, 0), totalRepartido,
         ],
-        anchos: [26, 16, 16, 14, 16, 18],
-        columnasEnteras: [3],
+        anchos: [26, 16, 12, 16, 15, 12, 16, 18],
+        columnasEnteras: [5],
       }],
     })
     setToast('Bonificación por utilidades exportada a Excel')
+  }
+
+  // ── Prepantalla: elegir cálculo vs. historial ─────────────────────────────
+  if (vistaActual === 'elegir') {
+    const masReciente = historialBonificacion[0]
+    return (
+      <div className="flex flex-col overflow-hidden h-full">
+        <Header title="Bonificación por Utilidades" subtitle="Art. 223 · Código de Trabajo · Ley 16-92" />
+        <div className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-[#0d0f1a] p-6 md:p-10">
+          <div className="mx-auto max-w-3xl space-y-5">
+            {mostrarBannerUrgente && alertaPago && (
+              <BannerVencimiento alerta={alertaPago} onIrA={() => { setAnioFiscal(alertaPago.anio); setPantalla('actual') }} />
+            )}
+            <div className="text-center">
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">¿Qué quieres ver?</h1>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+                Elige si quieres calcular la bonificación de un ejercicio fiscal o revisar liquidaciones ya pagadas.
+              </p>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setPantalla('actual')}
+                className="group relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 text-left shadow-sm dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-[#1B2980]/10"
+              >
+                <div className="relative mb-4 h-12 w-12">
+                  <div className="absolute inset-0 rounded-2xl bg-[#1B2980] blur-lg opacity-30 group-hover:opacity-50 transition-opacity" />
+                  <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md" style={{ backgroundImage: 'linear-gradient(135deg, #1B2980, #2f3fa8)' }}>
+                    <Percent className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">Cálculo de Bonificación</p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Reparto del 10% de utilidades por ejercicio fiscal</p>
+                <div className="mt-4 flex items-baseline justify-between rounded-lg bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2.5">
+                  <span className="text-[11px] text-zinc-400 dark:text-zinc-500">Ejercicio en curso</span>
+                  <span className="text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">{anioActualDefault}</span>
+                </div>
+                <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-[#1B2980] dark:text-indigo-400">
+                  Ir a calcular <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPantalla('historial')}
+                className="group relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-6 text-left shadow-sm dark:shadow-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-emerald-500/10"
+              >
+                <div className="relative mb-4 h-12 w-12">
+                  <div className="absolute inset-0 rounded-2xl bg-emerald-600 blur-lg opacity-30 group-hover:opacity-50 transition-opacity" />
+                  <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md" style={{ backgroundImage: 'linear-gradient(135deg, #059669, #34d399)' }}>
+                    <History className="h-5 w-5" />
+                  </div>
+                </div>
+                <p className="text-base font-bold text-zinc-900 dark:text-zinc-100">Historial de Liquidaciones</p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {historialBonificacion.length} ejercicio{historialBonificacion.length !== 1 ? 's' : ''} ya pagado{historialBonificacion.length !== 1 ? 's' : ''}
+                </p>
+                {masReciente && (
+                  <div className="mt-4 flex items-baseline justify-between rounded-lg bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2.5">
+                    <span className="text-[11px] text-zinc-400 dark:text-zinc-500">Último ejercicio — {masReciente.anio}</span>
+                    <span className="text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-400">{formatRD(masReciente.totales.bruto)}</span>
+                  </div>
+                )}
+                <div className="mt-4 flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                  Ver historial <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Pantalla: Historial de Liquidaciones ───────────────────────────────────
+  if (vistaActual === 'historial') {
+    return (
+      <div className="flex flex-col overflow-hidden h-full">
+        <Header
+          title="Historial de Liquidaciones"
+          subtitle="Bonificación por Utilidades · Ejercicios ya liquidados y pagados"
+          actions={
+            <button
+              onClick={() => setPantalla('elegir')}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+            >
+              <Layers className="h-4 w-4" />
+              Cambiar de vista
+            </button>
+          }
+        />
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
+          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Ejercicio Fiscal</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleados</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Bruto</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Neto</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fecha de Pago</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Estado</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
+                  {historialBonificacion.map(p => (
+                    <tr key={p.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
+                      <td className="px-5 py-3.5 font-semibold text-zinc-900 dark:text-zinc-100">Bonificación {p.anio}</td>
+                      <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400">{p.totalEmpleados}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(p.totales.bruto)}</td>
+                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(p.totales.neto)}</td>
+                      <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{p.pagada && p.fechaPago ? formatDate(p.fechaPago) : '—'}</td>
+                      <td className="px-4 py-3.5"><Badge variant="success">Pagada</Badge></td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Link
+                          href="/nomina"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" /> Ver en Nómina
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -198,6 +466,15 @@ export default function BonificacionPage() {
         subtitle="Art. 223 · Código de Trabajo · Ley 16-92"
         actions={
           <div className="flex items-center gap-2">
+            {tieneHistorial && (
+              <button
+                onClick={() => setPantalla('elegir')}
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                <Layers className="h-4 w-4" />
+                Cambiar de vista
+              </button>
+            )}
             <button
               onClick={handleExportarExcel}
               disabled={filas.length === 0}
@@ -229,6 +506,10 @@ export default function BonificacionPage() {
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">
 
+        {mostrarBannerUrgente && alertaPago && (
+          <BannerVencimiento alerta={alertaPago} onIrA={() => setAnioFiscal(alertaPago.anio)} />
+        )}
+
         {periodoBonifExistente && (
           <div className="flex items-center justify-between rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50 dark:bg-emerald-950/20 px-5 py-3.5 text-sm">
             <div className="flex items-center gap-2.5 text-emerald-800 dark:text-emerald-300">
@@ -246,7 +527,9 @@ export default function BonificacionPage() {
           <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Utilidad Neta Anual</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Ingrese la utilidad neta anual de la empresa para calcular el 10% distribuible entre los empleados
+              Ingrese la utilidad neta del ejercicio fiscal para calcular el 10% distribuible entre los empleados.
+              Ejercicio {anioFiscal}: {formatDateObj(inicioEjercicio)} – {formatDateObj(finEjercicio)}
+              {cierreFiscal !== 'diciembre' && ' (cierre configurado en Configuración → Nómina)'}
             </p>
           </div>
           <div className="px-5 py-4">
@@ -264,9 +547,9 @@ export default function BonificacionPage() {
                   className="w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 tabular-nums focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none"
                 />
               </div>
-              <div className="w-32 space-y-1.5">
+              <div className="w-40 space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Año Fiscal
+                  Ejercicio Fiscal
                 </label>
                 <select
                   value={anioFiscal}
@@ -281,7 +564,7 @@ export default function BonificacionPage() {
         </div>
 
         {/* ── Stat cards ───────────────────────────────────────────────── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             label="10% Distribuible"
             value={formatRD(distribuible)}
@@ -292,7 +575,7 @@ export default function BonificacionPage() {
           <StatCard
             label="Total a Repartir"
             value={formatRD(totalRepartido)}
-            sub={`${filas.length} empleado(s) de tiempo indefinido`}
+            sub={`${filas.length} empleado(s)${empleadosLiquidados > 0 ? ` · ${empleadosLiquidados} liquidado(s)` : ''}`}
             icon={Banknote}
             iconColor="bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400"
           />
@@ -303,14 +586,30 @@ export default function BonificacionPage() {
             icon={Users}
             iconColor="bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400"
           />
+          <StatCard
+            label="Próximo Vencimiento"
+            value={alertaPago ? (alertaPago.diasRestantes < 0 ? 'Vencido' : `${alertaPago.diasRestantes} días`) : 'Al día'}
+            sub={alertaPago ? `Ejercicio ${alertaPago.anio} · límite ${formatDateObj(alertaPago.limite)}` : 'Sin pagos pendientes de ejercicios cerrados'}
+            icon={Bell}
+            iconColor={
+              !alertaPago
+                ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                : alertaPago.diasRestantes < 0
+                  ? 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
+                  : alertaPago.diasRestantes <= 45
+                    ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400'
+                    : 'bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400'
+            }
+          />
         </div>
 
         {/* ── Table ────────────────────────────────────────────────────── */}
         <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
           <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Distribución por Empleado</h2>
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Distribución por Empleado — Ejercicio {anioFiscal}</h2>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-              Reparto proporcional al salario, respetando el tope individual de 45 días (menos de 3 años) o 60 días (3+ años) de salario diario.
+              Reparto proporcional al salario y a los meses trabajados dentro del ejercicio, respetando el tope
+              individual de 45 días (menos de 3 años) o 60 días (3+ años) de salario diario, también prorrateado.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -319,6 +618,7 @@ export default function BonificacionPage() {
                 <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Antigüedad</th>
+                  <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Meses Trabaj.</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Salario Base</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tope (días)</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Proporcional</th>
@@ -328,24 +628,24 @@ export default function BonificacionPage() {
               <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filas.length === 0 && (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <div className="flex flex-col items-center justify-center py-16 text-center">
                         <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eef0fb] dark:bg-indigo-950/30">
                           <Percent className="h-8 w-8 text-[#1B2980] dark:text-indigo-400" />
                         </div>
                         <p className="text-base font-semibold text-zinc-800 dark:text-zinc-200">
-                          {empleadosActivos.length === 0 ? 'Sin empleados activos' : 'Sin empleados elegibles'}
+                          {empleados.length === 0 ? 'Sin empleados registrados' : 'Sin empleados elegibles en este ejercicio'}
                         </p>
                         <p className="mt-1 max-w-sm text-sm text-zinc-500 dark:text-zinc-400">
-                          {empleadosActivos.length === 0
+                          {empleados.length === 0
                             ? 'Registra empleados en la sección de Empleados para calcular la bonificación.'
-                            : 'Solo los empleados de contrato Fijo (tiempo indefinido) tienen derecho a esta bonificación.'}
+                            : 'Solo los empleados de contrato Fijo (tiempo indefinido) que trabajaron dentro del ejercicio seleccionado tienen derecho a esta bonificación.'}
                         </p>
                       </div>
                     </td>
                   </tr>
                 )}
-                {filas.map(({ empleado, anos, diasTope, topeIndividual, proporcional, montoFinal, topeAplicado }) => (
+                {filas.map(({ empleado, anos, liquidado, mesesTrabajados, diasTope, topeIndividual, proporcional, montoFinal, topeAplicado }) => (
                   <tr key={empleado.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-3">
@@ -353,12 +653,20 @@ export default function BonificacionPage() {
                           {empleado.nombre[0]}{empleado.apellido[0]}
                         </div>
                         <div>
-                          <p className="font-medium text-[#1B2980] dark:text-indigo-400">{fullName(empleado)}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="font-medium text-[#1B2980] dark:text-indigo-400">{fullName(empleado)}</p>
+                            {liquidado && <Badge variant="neutral">Liquidado</Badge>}
+                          </div>
                           <p className="text-xs text-zinc-400 dark:text-zinc-500">{empleado.cargo}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400 text-xs">{formatAnosServicio(anos)}</td>
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                        {mesesTrabajados.toFixed(1)}/12
+                      </span>
+                    </td>
                     <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(empleado.salarioBase)}</td>
                     <td className="px-4 py-3.5 text-center">
                       <span className="rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-400">
@@ -384,7 +692,7 @@ export default function BonificacionPage() {
               </tbody>
               <tfoot>
                 <tr className="border-t-2 border-[#c7cef0] dark:border-[#252840] bg-[#eef0fb] dark:bg-[#1a1d2e]">
-                  <td colSpan={4} className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">
+                  <td colSpan={5} className="px-5 py-3.5 text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">
                     TOTAL — {filas.length} empleado(s)
                   </td>
                   <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-600 dark:text-zinc-400">
@@ -399,58 +707,25 @@ export default function BonificacionPage() {
           </div>
         </div>
 
-        {/* ── Historial de liquidaciones ───────────────────────────────── */}
-        {historialBonificacion.length > 0 && (
-          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
-            <div className="flex items-center gap-2 border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4">
-              <History className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Bonificaciones Liquidadas</h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
-                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Año Fiscal</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleados</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Bruto</th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Neto</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Fecha de Pago</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
-                  {historialBonificacion.map(p => (
-                    <tr key={p.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
-                      <td className="px-5 py-3.5 font-medium text-zinc-900 dark:text-zinc-100">{p.anio}</td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{p.totalEmpleados}</td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(p.totales.bruto)}</td>
-                      <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(p.totales.neto)}</td>
-                      <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-400">{p.pagada && p.fechaPago ? p.fechaPago : '—'}</td>
-                      <td className="px-4 py-3.5 text-right">
-                        <Link href="/nomina" className="text-xs font-medium text-[#1B2980] dark:text-indigo-400 hover:underline">
-                          Ver en Nómina
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
         {/* ── Legal note ─────────────────────────────────────────────────── */}
         <div className="rounded-xl border border-indigo-100 dark:border-indigo-900/40 bg-[#eef0fb] dark:bg-indigo-950/30 px-5 py-4">
           <div className="flex items-start gap-3">
             <Info className="mt-0.5 h-4 w-4 text-[#1B2980] dark:text-indigo-300 shrink-0" />
             <div className="text-xs text-[#151f66] dark:text-indigo-200 space-y-1">
-              <p className="font-semibold">Art. 223 — Código de Trabajo, República Dominicana</p>
+              <p className="font-semibold">Art. 223-227, Título VIII — Código de Trabajo, República Dominicana</p>
               <p>
                 El empleador debe repartir el <strong>10% de sus utilidades netas anuales</strong> entre los empleados
                 de tiempo indefinido, con un tope individual de <strong>45 días de salario</strong> (empleados con menos
                 de 3 años en la empresa) o <strong>60 días de salario</strong> (empleados con 3 años o más de antigüedad).
-                Esta bonificación es distinta de la Regalía Pascual (Art. 219). A diferencia de esta última, la
-                Bonificación por Utilidades sí es salario ordinario a efectos fiscales — lleva AFP, SFS e ISR normales.
+                El pago debe efectuarse <strong>entre 90 y 120 días después del cierre del ejercicio económico</strong> (Art. 224).
+                El empleado que no trabajó el ejercicio completo recibe su participación <strong>proporcional al tiempo
+                trabajado</strong> (Art. 223) — incluye a quien se desvinculó a mitad del ejercicio, cuya bonificación se
+                liquida junto con la del resto del personal una vez cerrado ese ejercicio. Empresas agrícolas,
+                agroindustriales, industriales, forestales y mineras en sus primeros 3 años, agrícolas pequeñas
+                (capital ≤ RD$1,000,000) y de zona franca están exentas de esta obligación (Art. 226) — la app no
+                aplica esta exención automáticamente, es responsabilidad del usuario confirmarla. Esta bonificación es
+                distinta de la Regalía Pascual (Art. 219): sí es salario ordinario a efectos fiscales, lleva AFP, SFS
+                e ISR normales.
               </p>
             </div>
           </div>
@@ -523,14 +798,17 @@ export default function BonificacionPage() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
-                            {filasSolicitud.map(({ empleado, montoFinal }) => {
+                            {filasSolicitud.map(({ empleado, montoFinal, liquidado }) => {
                               const monto = montoDe(empleado.id, montoFinal)
                               const ov = overrides[empleado.id]
                               const editando = editandoId === empleado.id
                               return (
                                 <tr key={empleado.id}>
                                   <td className="px-3 py-2.5 font-medium text-zinc-800 dark:text-zinc-200">
-                                    {fullName(empleado)}
+                                    <div className="flex items-center gap-1.5">
+                                      {fullName(empleado)}
+                                      {liquidado && <Badge variant="neutral">Liquidado</Badge>}
+                                    </div>
                                     {ov && (
                                       <p className="mt-0.5 text-[10px] font-normal text-amber-600 dark:text-amber-400" title={ov.motivo}>
                                         Ajustado: {ov.motivo}

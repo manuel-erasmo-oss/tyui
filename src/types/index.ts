@@ -379,6 +379,13 @@ export type CategoriaEmpresa = 'micro' | 'pequeña' | 'mediana' | 'grande'
 // Sector principal de operación — determina la categoría SRL por defecto de los empleados
 export type SectorEmpresa = 'oficinas_comercio' | 'industria_liviana' | 'industria_pesada' | 'construccion_mineria'
 
+// ─── Cierre de ejercicio fiscal ──────────────────────────────────────────────
+// Determina la ventana de 12 meses sobre la que se calcula la Bonificación
+// por Participación en Utilidades (Art. 223-224, Código de Trabajo) y el
+// plazo legal de pago (90-120 días después del cierre, Art. 224). Los 4
+// valores son los cierres fiscales reconocidos por la DGII en RD.
+export type CierreFiscal = 'diciembre' | 'marzo' | 'junio' | 'septiembre'
+
 // Rol de quien administra el sistema — personaliza copy/enfoque, no restringe acceso
 export type RolUsuario = 'dueño' | 'contador' | 'rrhh' | 'otro'
 
@@ -396,6 +403,12 @@ export interface Empresa {
   logo?: string // base64 data URL
   categoriaEmpresa?: CategoriaEmpresa // define el salario mínimo aplicable (Res. 079-2025)
   sectorEmpresa?: SectorEmpresa
+  // Mes en que cierra el ejercicio económico de la empresa — determina la
+  // ventana de 12 meses de la Bonificación por Utilidades y su plazo legal
+  // de pago (Art. 223/224). Sin configurar, se asume 'diciembre' (año
+  // calendario), el caso más común y el comportamiento ya existente antes
+  // de este campo.
+  cierreFiscal?: CierreFiscal
   numeroEmpleadosAprox?: RangoEmpleados
   zonaFranca?: boolean // opera bajo régimen de zona franca — salario mínimo distinto
   rolUsuario?: RolUsuario

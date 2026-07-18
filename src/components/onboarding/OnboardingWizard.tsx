@@ -5,7 +5,7 @@ import { Building2, Users, UserCircle, Check, ArrowRight, ArrowLeft } from 'luci
 import { useEmpresa } from '@/lib/empresa-context'
 import { SALARIO_MINIMO } from '@/lib/dominican-labor'
 import { formatRD } from '@/lib/utils'
-import type { CategoriaEmpresa, RangoEmpleados, RolUsuario, SectorEmpresa } from '@/types'
+import type { CategoriaEmpresa, CierreFiscal, RangoEmpleados, RolUsuario, SectorEmpresa } from '@/types'
 
 const SECTORES: { value: SectorEmpresa; label: string; descripcion: string }[] = [
   { value: 'oficinas_comercio',    label: 'Oficinas y Comercio',        descripcion: 'Servicios, retail, oficinas administrativas' },
@@ -26,6 +26,13 @@ const CATEGORIAS: { value: CategoriaEmpresa; label: string; salario: number }[] 
   { value: 'pequeña', label: 'Pequeña', salario: SALARIO_MINIMO.pequeñasEmpresas },
   { value: 'mediana', label: 'Mediana', salario: SALARIO_MINIMO.medianaEmpresa },
   { value: 'grande',  label: 'Grande',  salario: SALARIO_MINIMO.grandesEmpresas },
+]
+
+const CIERRES_FISCALES: { value: CierreFiscal; label: string; descripcion: string }[] = [
+  { value: 'diciembre',  label: '31 de diciembre', descripcion: 'Año calendario — el más común' },
+  { value: 'marzo',      label: '31 de marzo',      descripcion: 'Ejercicio abril–marzo' },
+  { value: 'junio',      label: '30 de junio',      descripcion: 'Ejercicio julio–junio' },
+  { value: 'septiembre', label: '30 de septiembre', descripcion: 'Ejercicio octubre–septiembre' },
 ]
 
 const ROLES: { value: RolUsuario; label: string; descripcion: string }[] = [
@@ -74,6 +81,7 @@ export function OnboardingWizard() {
   const [ciudad, setCiudad]     = useState(empresa.ciudad ?? '')
   const [sector, setSector]     = useState<SectorEmpresa | null>(empresa.sectorEmpresa ?? null)
   const [zonaFranca, setZonaFranca] = useState(empresa.zonaFranca ?? false)
+  const [cierreFiscal, setCierreFiscal] = useState<CierreFiscal>(empresa.cierreFiscal ?? 'diciembre')
 
   const [rango, setRango]           = useState<RangoEmpleados | null>(empresa.numeroEmpleadosAprox ?? null)
   const [categoria, setCategoria]   = useState<CategoriaEmpresa | null>(empresa.categoriaEmpresa ?? null)
@@ -99,6 +107,7 @@ export function OnboardingWizard() {
       ciudad: ciudad.trim(),
       sectorEmpresa: sector ?? undefined,
       zonaFranca,
+      cierreFiscal,
       numeroEmpleadosAprox: rango ?? undefined,
       categoriaEmpresa: categoria ?? undefined,
       modalidadNomina: modalidad,
@@ -168,6 +177,21 @@ export function OnboardingWizard() {
                 <input type="checkbox" checked={zonaFranca} onChange={e => setZonaFranca(e.target.checked)} className="h-4 w-4 rounded accent-[#1B2980]" />
                 <span className="text-sm text-zinc-700 dark:text-zinc-300">Mi empresa opera bajo régimen de zona franca</span>
               </label>
+
+              <div>
+                <label className="mb-2 block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Cierre de ejercicio fiscal
+                </label>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                  {CIERRES_FISCALES.map(c => (
+                    <OptionCard key={c.value} active={cierreFiscal === c.value} onClick={() => setCierreFiscal(c.value)} title={c.label} subtitle={c.descripcion} />
+                  ))}
+                </div>
+                <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  Determina la ventana de la Bonificación por Utilidades y su plazo legal de pago
+                  (90–120 días después del cierre, Art. 223/224).
+                </p>
+              </div>
             </div>
           </div>
         )}

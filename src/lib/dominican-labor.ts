@@ -1,4 +1,4 @@
-import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, ConceptoAjuste, Empleado, Empresa, MotivoLiquidacion, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa, TipoPeriodo } from '@/types'
+import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, CierreFiscal, ConceptoAjuste, Empleado, Empresa, MotivoLiquidacion, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa, TipoPeriodo } from '@/types'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -754,4 +754,62 @@ export function calcularSalarioPromedioUltimos12Meses(
   const sumaTotal = [...totalPorMes.values()].reduce((s, v) => s + v, 0)
   const promedio   = sumaTotal / totalPorMes.size
   return Math.max(promedio, empleado.salarioBase)
+}
+
+// ─── Bonificación por Utilidades — ejercicio fiscal (Art. 223-224, Código de
+// Trabajo) ───────────────────────────────────────────────────────────────────
+// El mes de cierre del ejercicio (Empresa.cierreFiscal) determina la ventana
+// de 12 meses sobre la que se reparte el 10% de utilidades netas. "Año
+// fiscal N" se nombra por su año de CIERRE — ej. con cierreFiscal='junio',
+// el año fiscal 2026 es el ejercicio del 01-jul-2025 al 30-jun-2026. Con el
+// valor por defecto 'diciembre', el año fiscal N es simplemente el año
+// calendario N (comportamiento idéntico al que ya existía antes de este
+// campo, sin necesidad de migrar datos).
+const MES_CIERRE: Record<CierreFiscal, number> = {
+  // 0-indexado (Date.getMonth()) — mes en que CIERRA el ejercicio
+  diciembre: 11, marzo: 2, junio: 5, septiembre: 8,
+}
+
+export function rangoEjercicioFiscal(anioFiscal: number, cierreFiscal: CierreFiscal = 'diciembre'): { inicio: Date; fin: Date } {
+  const mesCierre = MES_CIERRE[cierreFiscal]
+  const fin = new Date(anioFiscal, mesCierre + 1, 0)  // último día del mes de cierre
+  const inicio = new Date(fin)
+  inicio.setFullYear(inicio.getFullYear() - 1)
+  inicio.setDate(inicio.getDate() + 1)
+  return { inicio, fin }
+}
+
+// Fecha límite legal de pago de la Bonificación — Art. 224: "a más tardar
+// entre los noventa y los ciento veinte días después del cierre de cada
+// ejercicio económico." Se usa el límite superior (120 días) como fecha de
+// vencimiento para la alerta — el margen 90-120 es una ventana permitida,
+// no dos fechas distintas a advertir por separado.
+export function fechaLimitePagoBonificacion(finEjercicio: Date): Date {
+  const limite = new Date(finEjercicio)
+  limite.setDate(limite.getDate() + 120)
+  return limite
+}
+
+// Meses (fraccionales, sin truncar) que un empleado trabajó DENTRO de un
+// ejercicio fiscal específico — usado para prorratear tanto el peso en el
+// reparto proporcional como el tope individual de 45/60 días cuando el
+// empleado no trabajó el ejercicio completo. Cubre dos casos reales: (1)
+// ingresó a mitad del ejercicio (fechaSalida = null, sigue activo), y (2) se
+// desvinculó a mitad del ejercicio (fechaSalida = fecha de terminación) —
+// Art. 223: "Cuando el trabajador no preste servicios durante todo el año...
+// la participación individual será proporcional al salario del tiempo
+// trabajado." La ley no especifica la fórmula exacta de proporción; aquí se
+// usa días trabajados dentro del ejercicio ÷ días totales del ejercicio × 12
+// (interpretación propia de Cielo Cloud, consistente con cómo ya se
+// prorratea Regalía Pascual/vacaciones en el resto del sistema).
+export function mesesEnEjercicioFiscal(
+  fechaIngreso: Date, fechaSalida: Date | null, inicioEjercicio: Date, finEjercicio: Date,
+): number {
+  const inicioEfectivo = fechaIngreso > inicioEjercicio ? fechaIngreso : inicioEjercicio
+  const finEfectivo = fechaSalida && fechaSalida < finEjercicio ? fechaSalida : finEjercicio
+  if (inicioEfectivo > finEfectivo) return 0
+  const msPorDia = 24 * 3600 * 1000
+  const diasTrabajados = (finEfectivo.getTime() - inicioEfectivo.getTime()) / msPorDia + 1
+  const diasEjercicio  = (finEjercicio.getTime() - inicioEjercicio.getTime()) / msPorDia + 1
+  return Math.max(0, Math.min(12, (diasTrabajados / diasEjercicio) * 12))
 }

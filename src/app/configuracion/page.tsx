@@ -22,7 +22,7 @@ import { ConfiguracionInicialFlow } from '@/components/carga-inicial/Configuraci
 import { PLACEHOLDERS_COMPROBANTE, plantillaComprobanteDefault } from '@/lib/comprobante-email'
 import {
   UMBRAL_ENDEUDAMIENTO_DEFAULT, UMBRAL_VARIACION_BRUTO_DEFAULT,
-  type Empresa, type CategoriaEmpresa, type SectorEmpresa, type RolUsuario, type ConceptoPersonalizado,
+  type Empresa, type CategoriaEmpresa, type SectorEmpresa, type RolUsuario, type ConceptoPersonalizado, type CierreFiscal,
 } from '@/types'
 
 // ─── Parámetros legales de referencia (solo lectura) ───────────────────────
@@ -164,6 +164,13 @@ const SECTORES_EMPRESA: { value: SectorEmpresa; label: string; descripcion: stri
   { value: 'industria_liviana',    label: 'Industria Liviana',      descripcion: 'SRL Cat. II — 1.15%' },
   { value: 'industria_pesada',     label: 'Industria Pesada',       descripcion: 'SRL Cat. III — 1.20%' },
   { value: 'construccion_mineria', label: 'Construcción y Minería', descripcion: 'SRL Cat. IV — 1.30%' },
+]
+
+const CIERRES_FISCALES: { value: CierreFiscal; label: string; descripcion: string }[] = [
+  { value: 'diciembre',  label: '31 de diciembre', descripcion: 'Año calendario — el más común' },
+  { value: 'marzo',      label: '31 de marzo',      descripcion: 'Ejercicio abril–marzo' },
+  { value: 'junio',      label: '30 de junio',      descripcion: 'Ejercicio julio–junio' },
+  { value: 'septiembre', label: '30 de septiembre', descripcion: 'Ejercicio octubre–septiembre' },
 ]
 
 const ROLES_USUARIO: { value: RolUsuario; label: string }[] = [
@@ -1023,6 +1030,34 @@ export default function ConfiguracionPage() {
                               </div>
                               <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
                                 Define la categoría de riesgo laboral (SRL) sugerida por defecto para los nuevos empleados que agregues.
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className={LABEL_CLASS}>Cierre de ejercicio fiscal</label>
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                {CIERRES_FISCALES.map(c => (
+                                  <button
+                                    key={c.value}
+                                    type="button"
+                                    onClick={() => setForm(prev => ({ ...prev, cierreFiscal: c.value }))}
+                                    className={cn(
+                                      'rounded-lg border px-3 py-2 text-left transition-colors',
+                                      (form.cierreFiscal ?? 'diciembre') === c.value
+                                        ? 'border-[#1B2980] dark:border-indigo-500 bg-[#eef0fb] dark:bg-indigo-950/30'
+                                        : 'border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] hover:bg-zinc-50 dark:hover:bg-[#252840]',
+                                    )}
+                                  >
+                                    <p className={cn('text-xs font-semibold', (form.cierreFiscal ?? 'diciembre') === c.value ? 'text-[#1B2980] dark:text-indigo-300' : 'text-zinc-700 dark:text-zinc-300')}>
+                                      {c.label}
+                                    </p>
+                                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500">{c.descripcion}</p>
+                                  </button>
+                                ))}
+                              </div>
+                              <p className="mt-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                                Determina la ventana de la Bonificación por Utilidades (Art. 223) y su plazo legal
+                                de pago — 90 a 120 días después del cierre (Art. 224).
                               </p>
                             </div>
                           </div>
