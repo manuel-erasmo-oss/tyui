@@ -2688,6 +2688,7 @@ limpios (19 rutas).
 
 | Hash | Descripción |
 |---|---|
+| `c1cbd0c` | feat: liquidación de Bonificación por Utilidades vía período especial en Nómina |
 | `06c579f` | feat: ampliar plantilla de Carga Inicial con identidad, contacto y datos bancarios |
 | `7374260` | feat: Saldo ISR a Favor migrado — Carga Inicial ya no es decorativa |
 | `f32d2cf` | fix: acumulación de vacaciones ahora compone múltiples años + venta de vacaciones |
