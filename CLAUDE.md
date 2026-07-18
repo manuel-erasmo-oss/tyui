@@ -2883,6 +2883,40 @@ Verificado también en modo oscuro y viewport móvil (390×844) sin errores de
 consola. `tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de
 conteo).
 
+## Centro de Alertas — pulido visual premium
+
+Feedback directo del usuario tras ver el Centro de Alertas recién agregado:
+"me gustaría que el centro de alerta se ve más profesional". Rediseño del
+componente (`src/components/dashboard/CentroAlertas.tsx`), mismo contenido y
+lógica, tratamiento visual acorde al resto del sistema:
+- Ícono de cada fila en badge `rounded-xl` con degradado por severidad
+  (rose/amber/sky) + halo `blur-md` detrás — mismo lenguaje ya usado en
+  Configuración Inicial y las tarjetas de Regalía Pascual/Bonificación,
+  aplicado aquí por primera vez a una lista de alertas en vez de tarjetas
+  grandes.
+- Franja izquierda de color (`border-l-2`) por severidad — patrón estándar
+  de listas de alertas en dashboards profesionales (Linear, Vercel), permite
+  escanear la urgencia sin leer el texto.
+- Etiqueta de severidad explícita ("URGENTE"/"ADVERTENCIA"/"INFORMATIVO") en
+  mayúsculas junto al título — antes la severidad solo se comunicaba por
+  color, ahora también por texto (accesibilidad, no depender solo del color).
+- Header con ícono navy degradado + resumen de conteos por severidad con
+  puntos de color inline ("2 urgentes · 1 advertencia · 1 informativo") en
+  vez de solo el badge de conteo total — comunica la composición de un
+  vistazo antes de expandir.
+- Detalle de empleados/préstamos afectados como chips `rounded-full` en vez
+  de líneas de texto plano, con "+N más" cuando hay más de 3.
+- Estado positivo "Todo en orden" también recibe el mismo tratamiento de
+  ícono degradado (esmeralda) + halo, en vez del banner plano anterior.
+- Micro-interacción: el ícono de cada fila escala levemente (`scale-105`) y
+  su halo aparece al hover, junto con la flecha del CTA desplazándose — ya
+  no es una fila estática.
+
+Verificado en navegador con Playwright, mismo dataset multi-alerta de la
+sesión anterior, en modo claro y oscuro — contraste correcto en ambos,
+franjas de severidad y chips de detalle legibles, sin errores de consola.
+`tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -2891,6 +2925,7 @@ conteo).
 
 | Hash | Descripción |
 |---|---|
+| `a5717a8` | polish: Centro de Alertas con tratamiento visual premium |
 | `0e21450` | feat: Centro de Alertas en Dashboard + gráficos con historial real configurable |
 | `58e2a51` | fix: prorratear Bonificación de empleados liquidados a mitad del ejercicio fiscal |
 | `c1cbd0c` | feat: liquidación de Bonificación por Utilidades vía período especial en Nómina |
