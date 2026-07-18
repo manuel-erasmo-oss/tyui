@@ -2917,6 +2917,61 @@ sesión anterior, en modo claro y oscuro — contraste correcto en ambos,
 franjas de severidad y chips de detalle legibles, sin errores de consola.
 `tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de conteo).
 
+## Centro de Alertas → campanita de notificaciones en el Header
+
+El usuario, tras ver el Centro de Alertas recién pulido, propuso un cambio
+de forma explícito: no un banner grande fijo en el Dashboard, sino una
+campanita 🔔 (patrón Gmail/Slack/Linear) que solo ocupe espacio cuando hay
+algo pendiente, y que cada notificación lleve directo a donde hay que
+accionar. Se confirmó el enfoque con el usuario antes de implementar
+(ubicarla en el `Header` compartido, visible en TODA la app y no solo en el
+Dashboard, ya que las alertas son relevantes sin importar en qué módulo se
+esté) y luego se implementó.
+
+- **`src/lib/alertas.ts`** (nuevo) — la lógica de negocio de
+  `CentroAlertas.tsx` (salario mínimo, vencimiento de Bonificación/Regalía,
+  préstamos con gestión de cobro, empleados fuera de banda) se extrajo a un
+  hook `useAlertas()` reutilizable, desacoplado de cualquier presentación
+  visual — necesario porque ahora la consume un componente del `Header`
+  (montado en cada página) en vez de una sola página del Dashboard.
+- **`src/components/layout/NotificationBell.tsx`** (nuevo) — ícono de
+  campana con badge de conteo (color según la severidad más alta presente:
+  rojo si hay alguna urgente, ámbar si solo advertencias, celeste si solo
+  informativas; sin badge cuando no hay ninguna). Al hacer click abre un
+  popover (mismo patrón de click-outside-to-close que `UserMenu` en
+  `Header.tsx`) con la lista completa — mismo tratamiento visual premium ya
+  usado en el Centro de Alertas (íconos con degradado por severidad, franja
+  de color lateral, etiqueta de severidad, chips de detalle) pero en formato
+  compacto de dropdown. Cada fila es un `Link` que navega Y cierra el
+  popover (`onClick={() => setOpen(false)}`).
+- **`Header.tsx`** — se agregó `<NotificationBell />` junto a
+  `ThemeToggle`/`UserMenu`, así que la campana aparece en la barra superior
+  de cada página de la app (no solo el Dashboard) sin necesidad de que cada
+  página la registre individualmente.
+- **`src/app/page.tsx`** (Dashboard) — se retiró `<CentroAlertas />` del
+  cuerpo de la página; el componente `CentroAlertas.tsx` se eliminó por
+  completo (reemplazado, no duplicado — toda su lógica vive ahora en
+  `useAlertas()`).
+- **Bug real encontrado y corregido durante la verificación en móvil**: el
+  popover usaba `absolute right-0` (posicionado relativo al botón de la
+  campana) con un ancho fijo de `22rem` — en un viewport angosto, con la
+  campana cerca del borde derecho, el popover se salía por el borde
+  IZQUIERDO de la pantalla, cortando el texto ("Notificaciones" se veía como
+  "icaciones"). Fix: por debajo de `sm:` el popover usa `fixed inset-x-4
+  top-14` (anclado al viewport con margen a los lados, no al botón),
+  volviendo a `sm:absolute sm:right-0 sm:top-10 sm:w-[22rem]` en pantallas
+  más anchas donde sí cabe anclado al botón sin desbordarse.
+
+Verificado en navegador con Playwright: badge muestra el conteo correcto y
+el color de la severidad más alta; el popover lista las alertas con el
+mismo detalle que antes tenía el banner; click en una fila navega al módulo
+Y cierra el popover; click afuera también lo cierra; la campana está
+presente y funcional en `/empleados` (no solo en `/`), confirmando que es
+verdaderamente global; sin alertas, el badge desaparece y el popover muestra
+"Todo en orden"; verificado también en modo oscuro y en viewport móvil
+(390×844, incluyendo el fix del desbordamiento). `tsc --noEmit` y
+`npm run build` limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -2925,6 +2980,7 @@ franjas de severidad y chips de detalle legibles, sin errores de consola.
 
 | Hash | Descripción |
 |---|---|
+| `ee0d37a` | redesign: Centro de Alertas como campanita de notificaciones en el Header |
 | `a5717a8` | polish: Centro de Alertas con tratamiento visual premium |
 | `0e21450` | feat: Centro de Alertas en Dashboard + gráficos con historial real configurable |
 | `58e2a51` | fix: prorratear Bonificación de empleados liquidados a mitad del ejercicio fiscal |
