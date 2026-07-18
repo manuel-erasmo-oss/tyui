@@ -2989,6 +2989,53 @@ gestión de cobro se resetean solos en `registrarPago()` en cuanto vuelve a
 cobrarse una cuota con normalidad; bandas salariales al ajustar el sueldo
 dentro del rango).
 
+## Filtros de búsqueda (nombre/cédula/departamento) en Nómina, Vacaciones y Bonificación
+
+Pedido explícito del usuario: poder filtrar la tabla de empleados por
+nombre, cédula o departamento al abrir un período de nómina, y llevar lo
+mismo a Vacaciones y Bonificación. El patrón (buscador + `<select>` de
+departamento + botón "Ver todos" + contador "X de Y empleado(s)") ya
+existía en Regalía Pascual desde una sesión anterior — se replicó tal cual
+en las 3 páginas para mantener consistencia visual y de comportamiento en
+toda la app.
+
+- **`nomina/page.tsx`** — el período abierto YA tenía un panel de "Filtros"
+  (Departamento + rango de Fecha de Ingreso), pero solo alimentaba
+  "Seleccionar Coincidencias" (selección masiva para procesar) — la tabla
+  visible siempre mostraba TODOS los empleados sin filtrar. Se agregó una
+  barra de búsqueda/filtro **independiente y siempre visible** (nuevo estado
+  `busquedaEmpleado`/`filtroDeptoTabla`, separado de `filtroDepto` que sigue
+  siendo exclusivo del panel de selección masiva en_proceso) que si filtra
+  las filas realmente renderizadas (`nominasVisibles`), sin importar el
+  estado del período (en_proceso/procesada/cerrada) — a diferencia del panel
+  de selección, que sigue restringido a en_proceso porque procesar solo
+  aplica ahí.
+- **`vacaciones/page.tsx`** y **`bonificacion/page.tsx`** — no tenían ningún
+  filtro; se agregó el mismo patrón desde cero (`busqueda`/`filtroDepto`/
+  `filasVisibles`/`hayFiltrosActivos`), insertado entre el encabezado de la
+  tabla y el `<table>`.
+- **Totales del pie de tabla siguen el filtro, las StatCards de arriba NO**
+  — mismo criterio ya usado en Regalía Pascual: cuando hay un filtro activo,
+  el footer de la tabla se relabela "TOTAL (filtrado)" y suma solo las filas
+  visibles; las tarjetas de resumen al inicio de cada página siguen
+  mostrando el total real e íntegro del período/planilla, para que nunca
+  parezca que el filtro cambió cuánto hay que pagar de verdad.
+- Estado vacío nuevo ("Ningún empleado coincide con el filtro") distinto del
+  estado vacío ya existente ("Sin empleados activos"/"Sin empleados
+  elegibles") — se muestra solo cuando SÍ hay empleados pero ninguno
+  coincide con la búsqueda actual.
+
+Verificado en navegador con Playwright, 4 empleados sembrados en 3
+departamentos distintos: en Nómina (período `en_proceso` real), la búsqueda
+por nombre ("Beto") y por cédula (número exacto) aíslan correctamente a un
+solo empleado con contador "1 de 4"; el filtro de departamento
+"Administración" muestra 2 de 4 con el footer "TOTAL (filtrado)" reflejando
+solo esos 2, mientras los StatCards de arriba (Total Bruto, etc.) se
+mantienen con el total real de los 4; "Ver todos" restaura la lista
+completa. Mismo comportamiento confirmado en Vacaciones y Bonificación.
+Verificado también en modo oscuro. `tsc --noEmit` y `npm run build`
+limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
