@@ -3036,6 +3036,42 @@ completa. Mismo comportamiento confirmado en Vacaciones y Bonificación.
 Verificado también en modo oscuro. `tsc --noEmit` y `npm run build`
 limpios (19 rutas, sin cambio de conteo).
 
+## Fix — falsa alerta "Bonificación 2016 vencida" en cuenta nueva sin empleados
+
+El usuario reportó (con captura de pantalla) que una cuenta recién creada,
+sin ningún dato cargado, mostraba en la campanita de notificaciones "1
+alerta" — "Bonificación 2016 vencida hace 3366 día(s) — URGENTE". Antes de
+diagnosticar se confirmó primero que el patrón general de la prepantalla
+"¿Qué quieres ver?" (Regalía Pascual/Bonificación) seguía intacto —
+verificado en navegador con Playwright que aparece correctamente cuando SÍ
+hay historial y se salta a la calculadora cuando NO lo hay, descartando esa
+hipótesis inicial del usuario. El bug real estaba un nivel más abajo, en la
+propia alerta de vencimiento.
+
+**Causa raíz**: `getBonificacionesPendientes()` (`dominican-labor.ts`) ya
+tenía un guard para no alertar sobre ejercicios fiscales anteriores a la
+antigüedad del empleado más viejo conocido (`primerIngresoConocido`,
+agregado en la sesión del fix de prorrateo) — pero ese guard calculaba
+`primerIngresoConocido` como `null` cuando `empleados.length === 0` (cuenta
+recién creada, sin ningún empleado todavía). Con `primerIngresoConocido`
+en `null`, la condición `if (primerIngresoConocido && fin < primerIngresoConocido)
+return null` nunca se cumple — el guard queda **desactivado por completo**
+en vez de bloquear todo, dejando pasar los 12 años del rango
+`ANIOS_FISCALES` (10 atrás a 1 adelante) como "pendientes", con el más
+antiguo (2016) apareciendo como el más urgente por ser el más vencido.
+
+**Fix**: `if (empleados.length === 0) return []` al inicio de la función —
+sin ningún empleado conocido, no hay absolutamente nada que la empresa
+pudiera deberle a nadie por Bonificación, así que la lista de pendientes
+debe estar vacía, no sin acotar.
+
+Verificado en navegador con Playwright, simulando exactamente el escenario
+del usuario (empresa recién creada, `cielo-empleados: []`,
+`cielo-periodos: []`): la campanita ya no muestra badge, el popover
+muestra "Todo en orden", y `/bonificacion` ya no muestra ningún banner de
+vencimiento falso. `tsc --noEmit` y `npm run build` limpios (19 rutas, sin
+cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
