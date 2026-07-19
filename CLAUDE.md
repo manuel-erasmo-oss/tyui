@@ -3143,6 +3143,45 @@ subida de documento de soporte (certificado médico/acta), y trazabilidad
 de reclamos de subsidio ante SISALRIL/ARL (estado "por reclamar/reclamado/
 reembolsado").
 
+## Badge "De Licencia" en Empleados — estado derivado, sin campo persistido
+
+Dos preguntas de seguimiento del usuario tras la integración Licencias-
+Nómina: (1) ¿se retienen AFP/SFS/ISR normalmente durante una licencia (ej.
+maternidad), como le pasó a su esposa? — confirmado que sí, ya funcionaba
+así antes de esta sesión: la maternidad (y el resto de licencias salvo
+enfermedad/accidente sin disfrute) no toca `diasTrabajados`, así que el
+salario bruto completo fluye por `calcularNomina` sin ninguna excepción,
+con AFP/SFS/ISR normales. (2) Sugirió que el estado del empleado debería
+reflejar visualmente que está de licencia — implementado.
+
+**`licencias-context.tsx`**: nuevas `licenciaActiva(empleadoId, fecha?)` /
+`estaDeLicencia(empleadoId, fecha?)`, mismo patrón exacto que
+`disfruteActivo`/`estaDeVacaciones` en `vacaciones-context.tsx` — puramente
+derivado de `fechaInicio`/`fechaFin` contra la fecha actual, **sin ningún
+campo persistido en `Empleado`** (a diferencia de `suspendido`/
+`salidaPendiente`, que sí son campos reales) — se actualiza solo con el
+paso del tiempo, sin necesidad de una acción manual de "cerrar" la licencia.
+
+**`empleados/page.tsx`**: badge "De Licencia" (`variant="info"`, celeste)
+en la tabla y en el header del drawer, junto a Activo/Suspendido/Salida
+Pendiente — con precedencia explícita: si el empleado está suspendido o
+con salida pendiente, esos badges priman y "De Licencia" no se muestra
+(mismo criterio de precedencia ya aplicado en el motor de nómina). En el
+drawer, un subtexto muestra el tipo de licencia (`labelLicencia`) + fecha
+de fin + link "Ver en Licencias". `estadoEmpleadoLabel()` (usado en la
+exportación a Excel) ahora recibe `estaDeLicencia(e.id)` como segundo
+parámetro para incluir "De Licencia" en el estado exportado.
+
+Verificado en navegador con Playwright, 4 escenarios: empleado con licencia
+de maternidad vigente hoy → badge visible en tabla y drawer, subtexto
+"Maternidad — hasta el [fecha] — Ver en Licencias" (el link navega
+correctamente a `/licencias`); empleado sin ninguna licencia → sin badge;
+empleado con una licencia YA terminada (fechaFin en el pasado) → sin badge,
+confirmando que es puramente derivado de la fecha actual; empleado
+suspendido que además tiene una licencia activa → solo muestra
+"Suspendido", confirmando la precedencia. `tsc --noEmit` y `npm run build`
+limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
