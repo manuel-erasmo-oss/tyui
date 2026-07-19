@@ -3182,6 +3182,92 @@ suspendido que además tiene una licencia activa → solo muestra
 "Suspendido", confirmando la precedencia. `tsc --noEmit` y `npm run build`
 limpios (19 rutas, sin cambio de conteo).
 
+## Prorrateo por reajuste salarial a mitad de período + alerta de pago retroactivo pendiente
+
+Pedido del usuario ("Dale", aprobando la opción que yo mismo recomendé al
+preguntar "¿con qué seguimos?"), retomando el último ítem pendiente de
+🔴 Alta prioridad del backlog SPN: "Prorrateo por reajuste salarial a mitad
+de período + retroactivo por ingreso tardío" — dos huecos del mismo tipo
+(algo con fecha de efectividad cae dentro de un período ya abierto) que se
+resolvieron con dos mecanismos independientes.
+
+**Reajuste salarial a mitad de período — salario ponderado por días:**
+- Nuevo campo opcional `RegistroAumento.fechaEfectiva` (fecha ISO, distinta
+  de `fechaSolicitud`/`fechaAprobacion`/`fechaAplicacion`, que solo registran
+  CUÁNDO ocurrió cada paso del workflow, nunca desde cuándo debería regir el
+  nuevo salario). Capturado en `aumentos/page.tsx` como un campo de fecha
+  opcional en el formulario de solicitud, con nota inline explicando el
+  mecanismo. Sin este campo, el comportamiento es 100% idéntico al anterior
+  (retrocompatible).
+- **`salarioEfectivoEnPeriodo()`** (nuevo, `nomina/page.tsx`) — para un
+  empleado con un `RegistroAumento` `estado: 'aplicado'` cuya `fechaEfectiva`
+  cae dentro del rango de fechas de un período todavía `en_proceso`, calcula
+  un **salario base ponderado por días** (`(díasAntesDelCambio ×
+  salarioAnterior + díasDesdeElCambio × salarioNuevo) / díasDelPeriodo`) y lo
+  inyecta como si fuera `Empleado.salarioBase` antes de llamar a
+  `calcularNomina` — reutiliza exactamente el mismo truco ya validado para
+  Vacaciones Goce/Vendidas y Bonificación ("tratar un monto calculado como si
+  fuera el salario del mes"), en vez de sumar dos llamadas separadas a
+  `calcularNomina` (que arriesgaría toparse dos veces contra los topes
+  cotizables de TSS o cruzar tramos de ISR de forma incorrecta).
+- **Deliberadamente NO retroactivo**: solo aplica mientras el período sigue
+  `en_proceso` — un período ya `cerrada` con un reajuste posterior no se
+  corrige solo (requeriría "Reabrir"/desposteo explícito, ya existente para
+  otros casos). Mismo criterio que ya rige el resto del sistema (snapshot
+  histórico inmutable salvo desposteo).
+- Wireado en el mismo choke point `calcularParaPeriodo()` que ya centraliza
+  suspensión/salida/licencia-sin-sueldo/vacaciones (precedencia: suspensión →
+  salida → licencia sin sueldo → **reajuste salarial ya aplicado sobre el
+  empleado antes de vacaciones** → vacaciones) — propagado por los mismos 6
+  call sites ya documentados para licencias. Toast al crear un período ahora
+  también menciona "N empleado(s) con reajuste salarial en este período".
+  Sin nota dedicada en el modal `DetalleNomina` — mismo criterio ya usado
+  para el prorrateo de suspensión (silencioso, solo se refleja en el propio
+  número de S. Bruto).
+
+**Alerta de posible pago retroactivo pendiente (ingreso tardío):**
+- Nueva señal en `useAlertas()` (`src/lib/alertas.ts`), reutilizando la
+  misma lógica de "candidatos" que ya usa el reporte "Empleados Sin
+  Ingresos" de Reportería (fecha de ingreso dentro del mes de un período ya
+  `cerrada`, cruzando `RegistroLiquidacion.fechaTerminacion` para no excluir
+  a alguien desvinculado después de ese mes) — aplicada aquí de forma
+  proactiva sobre TODOS los períodos cerrados, no solo el que el usuario
+  elija revisar manualmente. Severidad `warning`, enlaza a `/reportes` (sin
+  deep-link a la pestaña específica — `output: 'export'` exige envolver
+  `useSearchParams` en Suspense, fuera de alcance de esta pasada).
+
+**Bug real encontrado durante la verificación (no relacionado con la lógica
+de negocio en sí): la campanita de notificaciones nunca mostraba
+`detalle`/`detalleTotal`.** Al extraer `NotificationBell.tsx` del extinto
+`CentroAlertas.tsx` (sesión anterior), el JSX del popover se quedó solo con
+`titulo`/`descripcion`/`linkLabel` — los chips de detalle (nombres de
+empleados afectados) que la documentación de esa sesión decía haber
+preservado en realidad nunca se migraron al nuevo componente. Esto afectaba
+silenciosamente TODAS las alertas con `detalle` (salario mínimo, préstamos
+con gestión de cobro, y ahora pago retroactivo), no solo la nueva — un
+usuario nunca podía ver DESDE la campanita a qué empleado se refería una
+alerta, solo el conteo total en el título. Encontrado porque el propio test
+de esta feature esperaba ver "Jun 2026" en el popover y no aparecía en
+ningún lado de la página. Fix: `NotificationBell.tsx` ahora renderiza
+`item.detalle` como chips `rounded-full` (mismo lenguaje visual ya usado en
+el resto de la app para chips de detalle) con "+N más" cuando
+`detalleTotal` excede lo mostrado.
+
+Verificado en navegador con Playwright, matemática exacta: empleado con
+salario RD$50,000→RD$55,000 efectivo el 16 de julio (mes de 31 días) → S.
+Bruto exacto RD$52,580.65 (=(15×50,000+16×55,000)/31); empleado control sin
+reajuste sin cambios. Misma prueba en 2ª quincena (16-31, reajuste efectivo
+el 24, RD$44,000→RD$50,000) → S. Bruto exacto RD$23,500.00
+(=((8×44,000+8×50,000)/16)/2), confirmando que el halving quincenal no se
+aplica dos veces sobre el salario ya ponderado. Toast al crear un período de
+agosto con un reajuste efectivo el 10 → menciona "reajuste salarial"
+correctamente. Alerta de pago retroactivo: empleado con `fechaIngreso`
+2026-06-10 ausente de `empleadosProcesados` de un período de junio ya
+cerrado → badge de la campana aparece, popover muestra "1 caso de posible
+pago retroactivo pendiente" con el chip "Nuevo IngresoTardio — Jun 2026"
+visible (confirmando el fix del bug de chips faltantes). `tsc --noEmit` y
+`npm run build` limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3190,6 +3276,7 @@ limpios (19 rutas, sin cambio de conteo).
 
 | Hash | Descripción |
 |---|---|
+| `7d5e156` | feat: prorrateo por reajuste salarial a mitad de período + alerta de pago retroactivo |
 | `ee0d37a` | redesign: Centro de Alertas como campanita de notificaciones en el Header |
 | `a5717a8` | polish: Centro de Alertas con tratamiento visual premium |
 | `0e21450` | feat: Centro de Alertas en Dashboard + gráficos con historial real configurable |
