@@ -836,16 +836,21 @@ export function getBonificacionesPendientes(
   cierreFiscal: CierreFiscal,
   aniosCandidatos: number[],
 ): BonificacionPendiente[] {
+  // Sin ningún empleado conocido no hay nada que pudiera deberse — evita el
+  // caso borde de una cuenta recién creada: `primerIngresoConocido` sería
+  // `null`, lo que DESACTIVA el guard de abajo (`primerIngresoConocido &&
+  // ...`) en vez de bloquear todo, mostrando ejercicios fiscales "vencidos"
+  // de hace años antes de que la empresa tuviera un solo empleado.
+  if (empleados.length === 0) return []
+
   const hoy = new Date()
-  const primerIngresoConocido = empleados.length > 0
-    ? new Date(Math.min(...empleados.map(e => new Date(e.fechaIngreso).getTime())))
-    : null
+  const primerIngresoConocido = new Date(Math.min(...empleados.map(e => new Date(e.fechaIngreso).getTime())))
 
   return aniosCandidatos
     .map(a => {
       const { fin } = rangoEjercicioFiscal(a, cierreFiscal)
       if (fin > hoy) return null
-      if (primerIngresoConocido && fin < primerIngresoConocido) return null
+      if (fin < primerIngresoConocido) return null
       const pagado = periodos.some(p => p.tipo === 'bonificacion' && p.anio === a && p.estado === 'cerrada')
       if (pagado) return null
       const limite = fechaLimitePagoBonificacion(fin)
