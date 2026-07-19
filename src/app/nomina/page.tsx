@@ -41,6 +41,7 @@ import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { useFeriados } from '@/lib/feriados-context'
 import { useVacaciones } from '@/lib/vacaciones-context'
+import { useLicencias } from '@/lib/licencias-context'
 import { useAuth } from '@/lib/auth-context'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams, getAnosServicio, getDivisorSalarioDiario, contarDiasLaborables } from '@/lib/dominican-labor'
 import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
@@ -57,6 +58,7 @@ import type {
   AjusteLinea,
   Empresa,
   DisfruteVacaciones,
+  Licencia,
 } from '@/types'
 import { UMBRAL_ENDEUDAMIENTO_DEFAULT, UMBRAL_VARIACION_BRUTO_DEFAULT } from '@/types'
 import { Wallet, TrendingUp, Receipt, BarChart3 } from 'lucide-react'
@@ -249,6 +251,49 @@ function diasVacacionEnPeriodo(
   }
 }
 
+// ── Licencia sin sueldo dentro de un período ────────────────────────────────
+// Solo enfermedad_comun/accidente_laboral SIN disfrute de sueldo reducen los
+// días trabajados. El resto de las licencias (matrimonial/fallecimiento/
+// alumbramiento, maternidad, y enfermedad/accidente CON disfrute de sueldo)
+// NO se tocan aquí — en esos casos el salario del empleado sigue corriendo
+// sin interrupción por ley o por decisión de la empresa, así que el sueldo
+// mensual normal (sin prorratear) ya cubre esos días correctamente, igual
+// que ya sucede hoy sin ningún cambio.
+//
+// Cuando NO hay disfrute de sueldo, la empresa no paga nada por esos días
+// (el subsidio de SISALRIL/ARL se paga directo al empleado, fuera de
+// nómina) — sin este prorrateo, el empleado recibiría su sueldo completo
+// por nómina Y el subsidio de TSS por los mismos días de ausencia, un doble
+// pago silencioso. Mismo mecanismo de solape/clamp que diasVacacionEnPeriodo,
+// pero sin monto que calcular — solo reduce diasTrabajados, igual que
+// diasCorteEnPeriodo hace para suspensión.
+function diasLicenciaSinSueldoEnPeriodo(
+  empleado: Empleado, licencias: Licencia[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { diasTrabajados: number; diasLaborablesMes: number } | null {
+  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
+  const msPorDia = 24 * 3600 * 1000
+  const propias = licencias.filter(l =>
+    l.empleadoId === empleado.id &&
+    (l.tipo === 'enfermedad_comun' || l.tipo === 'accidente_laboral') &&
+    !l.disfruteSueldo
+  )
+
+  let diasLicenciaCalendario = 0
+  for (const l of propias) {
+    const lInicio = new Date(l.fechaInicio)
+    const lFin    = new Date(l.fechaFin)
+    const solapInicio = lInicio < inicio ? inicio : lInicio
+    const solapFin    = lFin > fin ? fin : lFin
+    if (solapInicio > solapFin) continue
+    diasLicenciaCalendario += Math.floor((solapFin.getTime() - solapInicio.getTime()) / msPorDia) + 1
+  }
+  if (diasLicenciaCalendario === 0) return null
+
+  const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
+  const diasTrabajados    = Math.max(0, diasLaborablesMes - diasLicenciaCalendario)
+  return { diasTrabajados, diasLaborablesMes }
+}
+
 // Lista de empleados que participan de un período específico: los normales
 // (empleadosEnNomina) más cualquier empleado suspendido o con salida
 // pendiente (pago "por nómina") cuya fecha de corte cae dentro de este
@@ -288,22 +333,25 @@ function sugerirProximoPeriodo(
 }
 
 // Envoltorio de conveniencia: calcula la nómina de un empleado para un
-// período específico, aplicando automáticamente el prorrateo por suspensión
-// o salida pendiente si corresponde — evita tener que acordarse de calcular
-// diasSuspensionEnPeriodo/diasSalidaEnPeriodo en cada call-site.
+// período específico, aplicando automáticamente el prorrateo por suspensión,
+// salida pendiente o licencia sin sueldo si corresponde — evita tener que
+// acordarse de calcular diasSuspensionEnPeriodo/diasSalidaEnPeriodo/
+// diasLicenciaSinSueldoEnPeriodo en cada call-site.
 function calcularParaPeriodo(
   empleado: Empleado, ajustes: AjusteLinea[],
   periodo: { mes: number; anio: number; tipo: TipoPeriodo; quincena?: 1 | 2 },
   disfrutes: DisfruteVacaciones[] = [],
+  licencias: Licencia[] = [],
 ): ResultadoNomina {
   const quincena = periodo.quincena ?? 1
   const dias = diasSuspensionEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasSalidaEnPeriodo(empleado, periodo.mes, periodo.anio, periodo.tipo, quincena)
-  // Suspensión/salida tienen prioridad — un empleado suspendido no debería
-  // tener a la vez un disfrute de vacaciones vigente en la práctica; si
-  // ambos existieran por error de captura, se respeta el prorrateo por
-  // suspensión (ya excluye al empleado de nómina normal) y se ignora el
-  // disfrute para ese período.
+    ?? diasLicenciaSinSueldoEnPeriodo(empleado, licencias, periodo.mes, periodo.anio, periodo.tipo, quincena)
+  // Suspensión/salida/licencia sin sueldo tienen prioridad sobre vacaciones
+  // — un empleado no debería tener a la vez un disfrute de vacaciones
+  // vigente en la práctica; si ambos existieran por error de captura, se
+  // respeta el prorrateo por suspensión/salida/licencia (ya excluye al
+  // empleado de nómina normal) y se ignora el disfrute para ese período.
   if (dias) return calcularConAjustes(empleado, ajustes, periodo.tipo, quincena, dias)
   const vac = diasVacacionEnPeriodo(empleado, disfrutes, periodo.mes, periodo.anio, periodo.tipo, quincena)
   return calcularConAjustes(
@@ -506,6 +554,7 @@ export default function NominaPage() {
   const { saldos: saldosISR, getSaldosActivos, getMontoAplicadoEnPeriodo, aplicar: aplicarSaldoISR } = useSaldoISR()
   const { getFeriados } = useFeriados()
   const { disfrutes } = useVacaciones()
+  const { licencias } = useLicencias()
   const { user } = useAuth()
   const { conceptosActivos: conceptosPersonalizados, getConcepto: getConceptoPersonalizado } = useConceptosPersonalizados()
 
@@ -531,7 +580,7 @@ export default function NominaPage() {
   function resultadoDePeriodo(empleado: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
     const snapshot = periodo.resultadosPorEmpleado?.[empleado.id]
     if (snapshot) return snapshot
-    return conSaldoISR(empleado, calcularParaPeriodo(empleado, ajustes, periodo, disfrutes), periodo)
+    return conSaldoISR(empleado, calcularParaPeriodo(empleado, ajustes, periodo, disfrutes, licencias), periodo)
   }
 
   // View state
@@ -652,7 +701,7 @@ export default function NominaPage() {
     if (!periodoActual || periodoActual.estado !== 'en_proceso' || periodoActual.tipo === 'regalia' || periodoActual.tipo === 'bonificacion') return
     const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
     const rs = empleadosPeriodo.map(e =>
-      conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual, disfrutes), periodoActual)
+      conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual, disfrutes, licencias), periodoActual)
     )
     const round = (n: number) => Math.round(n * 100) / 100
     const nuevos = {
@@ -672,7 +721,7 @@ export default function NominaPage() {
   function calcularTotalesRapido(ajustesPorEmp: Record<string, AjusteLinea[]> = {}) {
     const empleadosNuevoPeriodo = empleadosDelPeriodo(empleados, empleadosEnNomina, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
     const rs = empleadosNuevoPeriodo.map(e =>
-      calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], { mes: nuevoMes, anio: nuevoAnio, tipo: nuevoTipo, quincena: nuevaQuincena }, disfrutes)
+      calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], { mes: nuevoMes, anio: nuevoAnio, tipo: nuevoTipo, quincena: nuevaQuincena }, disfrutes, licencias)
     )
     return {
       bruto:      rs.reduce((s, r) => s + r.totalBruto, 0),
@@ -743,14 +792,22 @@ export default function NominaPage() {
     })
     setPeriodoAbierto(nuevo.id)
     setSelectedEmps(new Set())
-    // El goce de vacaciones (Disfrute registrado en /vacaciones) se aplica
-    // automáticamente al calcular cada empleado — no es un AjusteLinea, así
+    // El goce de vacaciones (Disfrute registrado en /vacaciones) y el
+    // prorrateo por licencia sin sueldo (Licencias) se aplican
+    // automáticamente al calcular cada empleado — no son un AjusteLinea, así
     // que no hay nada que pre-cargar aquí, solo avisar si aplica a alguien.
     const conVacaciones = empleadosNuevoPeriodo.filter(e =>
       diasVacacionEnPeriodo(e, disfrutes, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
     ).length
-    setToast(conVacaciones > 0
-      ? `Período creado · Cuotas de préstamos pre-cargadas · ${conVacaciones} empleado(s) con vacaciones en este período`
+    const conLicenciaSinSueldo = empleadosNuevoPeriodo.filter(e =>
+      diasLicenciaSinSueldoEnPeriodo(e, licencias, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
+    ).length
+    const avisos = [
+      conVacaciones > 0 ? `${conVacaciones} empleado(s) con vacaciones` : null,
+      conLicenciaSinSueldo > 0 ? `${conLicenciaSinSueldo} empleado(s) con licencia sin sueldo` : null,
+    ].filter(Boolean)
+    setToast(avisos.length > 0
+      ? `Período creado · Cuotas de préstamos pre-cargadas · ${avisos.join(' · ')} en este período`
       : 'Período creado · Cuotas de préstamos pre-cargadas')
   }
 
@@ -1012,7 +1069,7 @@ export default function NominaPage() {
     if (!periodoActual) return null
     const emp = empleadosPeriodo.find(e => e.id === empId)
     if (!emp) return null
-    const base = calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes)
+    const base = calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes, licencias)
     const saldo = getSaldosActivos(emp.id)[0]
     const { resultado, montoAplicado } = aplicarSaldoISRFavor(base, saldo?.saldoPendiente ?? 0, emp.grossingUpPct)
     if (saldo && montoAplicado > 0) {
@@ -1036,14 +1093,14 @@ export default function NominaPage() {
     if (!periodoActual) return { ajustesFinales: ajustes, omitido: null }
     const emp = empleadosPeriodo.find(e => e.id === empId)
     if (!emp) return { ajustesFinales: ajustes, omitido: null }
-    const resultado = conSaldoISR(emp, calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes), periodoActual)
+    const resultado = conSaldoISR(emp, calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes, licencias), periodoActual)
     if (resultado.salarioNeto >= 0) return { ajustesFinales: ajustes, omitido: null }
 
     const ajustesPrestamo = ajustes.filter(a => a.concepto === 'prestamo' && a.prestamoId)
     if (ajustesPrestamo.length === 0) return { ajustesFinales: ajustes, omitido: null }
 
     const ajustesSinPrestamo = ajustes.filter(a => !(a.concepto === 'prestamo' && a.prestamoId))
-    const resultadoSinPrestamo = conSaldoISR(emp, calcularParaPeriodo(emp, ajustesSinPrestamo, periodoActual, disfrutes), periodoActual)
+    const resultadoSinPrestamo = conSaldoISR(emp, calcularParaPeriodo(emp, ajustesSinPrestamo, periodoActual, disfrutes, licencias), periodoActual)
     if (resultadoSinPrestamo.salarioNeto < 0) return { ajustesFinales: ajustes, omitido: null } // no es solo el préstamo — se deja para la auditoría
 
     actualizarAjustes(periodoActual.id, empId, ajustesSinPrestamo)
