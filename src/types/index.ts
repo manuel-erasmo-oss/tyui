@@ -555,6 +555,14 @@ export type TipoLicencia =
   | 'matrimonial' | 'fallecimiento' | 'alumbramiento'
   | 'enfermedad_comun' | 'accidente_laboral' | 'maternidad'
 
+// Trazabilidad del reclamo/reembolso del subsidio ante SISALRIL/ARL — solo
+// aplica a licencias con montoSubsidioEstimado definido. Para maternidad es
+// dinero que la EMPRESA recupera (adelantó el 100% del salario); para
+// enfermedad_comun/accidente_laboral el subsidio lo recibe el empleado
+// directo, pero igual conviene rastrear si ya se sometió/resolvió el
+// reclamo para dar seguimiento administrativo — ver nota en licencias-context.tsx.
+export type EstadoReclamoSubsidio = 'por_reclamar' | 'reclamado' | 'reembolsado'
+
 export interface Licencia {
   id: string
   empleadoId: string
@@ -569,6 +577,17 @@ export interface Licencia {
   modalidadEnfermedad?: 'ambulatoria' | 'hospitalaria'  // solo enfermedad_comun — define 60%/40%
   disfruteSueldo?: boolean        // beneficio adicional: el empleador decide pagar el sueldo completo
   montoSubsidioEstimado?: number  // estimado de lo que SISALRIL/ARL paga o reembolsa — informativo
+
+  // Documento de soporte (certificado médico, acta de matrimonio/defunción/
+  // nacimiento, según el tipo) — mismo patrón base64 que
+  // Prestamo.documentoSolicitud/documentoNombre.
+  documentoSoporte?: string   // base64
+  documentoNombre?: string    // nombre original del archivo
+
+  estadoReclamo?: EstadoReclamoSubsidio  // default 'por_reclamar' al registrar si conSubsidio
+  fechaReclamo?: string      // ISO — cuándo se sometió el reclamo ante SISALRIL/ARL
+  fechaReembolso?: string    // ISO — cuándo se resolvió/recibió el reembolso
+  montoReembolsado?: number  // monto real recibido — puede diferir del estimado
 }
 
 // ─── Disfrute de vacaciones ───────────────────────────────────────────────────

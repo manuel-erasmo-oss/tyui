@@ -56,6 +56,8 @@ interface RegistrarOpciones {
   modalidadEnfermedad?: 'ambulatoria' | 'hospitalaria'    // solo enfermedad_comun
   disfruteSueldo?: boolean                                // solo enfermedad_comun / accidente_laboral
   notas?: string
+  documentoSoporte?: string  // base64 — certificado médico/acta adjunto
+  documentoNombre?: string   // nombre original del archivo
 }
 
 interface LicenciasCtx {
@@ -70,6 +72,9 @@ interface LicenciasCtx {
   eliminar: (licenciaId: string) => void
   licenciaActiva: (empleadoId: string, fecha?: Date) => Licencia | null
   estaDeLicencia: (empleadoId: string, fecha?: Date) => boolean
+  marcarReclamado: (licenciaId: string, fecha: string) => void
+  marcarReembolsado: (licenciaId: string, fecha: string, monto?: number) => void
+  revertirEstadoReclamo: (licenciaId: string) => void
 }
 
 const Ctx = createContext<LicenciasCtx>({
@@ -78,6 +83,9 @@ const Ctx = createContext<LicenciasCtx>({
   eliminar: () => {},
   licenciaActiva: () => null,
   estaDeLicencia: () => false,
+  marcarReclamado: () => {},
+  marcarReembolsado: () => {},
+  revertirEstadoReclamo: () => {},
 })
 
 export function LicenciasProvider({ children }: { children: ReactNode }) {
@@ -146,6 +154,9 @@ export function LicenciasProvider({ children }: { children: ReactNode }) {
       modalidadEnfermedad: tipo === 'enfermedad_comun' ? opciones.modalidadEnfermedad : undefined,
       disfruteSueldo: conSubsidio && tipo !== 'maternidad' ? (opciones.disfruteSueldo ?? false) : undefined,
       montoSubsidioEstimado,
+      documentoSoporte: opciones.documentoSoporte,
+      documentoNombre: opciones.documentoNombre,
+      estadoReclamo: conSubsidio ? 'por_reclamar' : undefined,
     }
     setLicencias(prev => {
       const next = [nueva, ...prev]
@@ -181,8 +192,49 @@ export function LicenciasProvider({ children }: { children: ReactNode }) {
     return licenciaActiva(empleadoId, fecha) !== null
   }
 
+  // ── Trazabilidad de reclamo/reembolso del subsidio (SISALRIL/ARL) ────────
+  // por_reclamar → reclamado → reembolsado, con reversión de un paso a la
+  // vez (deshacer un error de captura sin perder el registro anterior).
+  function marcarReclamado(licenciaId: string, fecha: string) {
+    setLicencias(prev => {
+      const next = prev.map(l => l.id === licenciaId ? { ...l, estadoReclamo: 'reclamado' as const, fechaReclamo: fecha } : l)
+      persist(next)
+      return next
+    })
+  }
+
+  function marcarReembolsado(licenciaId: string, fecha: string, monto?: number) {
+    setLicencias(prev => {
+      const next = prev.map(l => l.id === licenciaId
+        ? { ...l, estadoReclamo: 'reembolsado' as const, fechaReembolso: fecha, montoReembolsado: monto ?? l.montoSubsidioEstimado }
+        : l)
+      persist(next)
+      return next
+    })
+  }
+
+  function revertirEstadoReclamo(licenciaId: string) {
+    setLicencias(prev => {
+      const next = prev.map(l => {
+        if (l.id !== licenciaId) return l
+        if (l.estadoReclamo === 'reembolsado') {
+          return { ...l, estadoReclamo: 'reclamado' as const, fechaReembolso: undefined, montoReembolsado: undefined }
+        }
+        if (l.estadoReclamo === 'reclamado') {
+          return { ...l, estadoReclamo: 'por_reclamar' as const, fechaReclamo: undefined }
+        }
+        return l
+      })
+      persist(next)
+      return next
+    })
+  }
+
   return (
-    <Ctx.Provider value={{ licencias, registrar, eliminar, licenciaActiva, estaDeLicencia }}>
+    <Ctx.Provider value={{
+      licencias, registrar, eliminar, licenciaActiva, estaDeLicencia,
+      marcarReclamado, marcarReembolsado, revertirEstadoReclamo,
+    }}>
       {children}
     </Ctx.Provider>
   )
