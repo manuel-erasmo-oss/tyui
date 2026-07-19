@@ -20,6 +20,7 @@ import {
 import { usePeriodos } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
+import { useLicencias, labelLicencia } from '@/lib/licencias-context'
 import {
   getPais, formatDocNumber, labelTipoDoc, calcularEdad, downloadBase64,
   EMPTY_EMP_FORM, toEmpForm, formToEmpleado, validateEmpForm,
@@ -204,12 +205,15 @@ function labelPeriodoHist(p: PeriodoNomina): string {
 
 // Estado combinado de un empleado para el listado exportado — refleja las
 // mismas condiciones que ya muestran los badges de la tabla/drawer
-// (Activo/Inactivo, y Suspendido/Salida Pendiente cuando aplica sobre un
-// empleado activo).
-function estadoEmpleadoLabel(e: Empleado): string {
+// (Activo/Inactivo, Suspendido/Salida Pendiente/De Licencia cuando aplica
+// sobre un empleado activo). "De Licencia" es puramente derivado (¿hoy cae
+// dentro de fechaInicio/fechaFin de alguna licencia?), no un campo
+// persistido en Empleado — por eso se recibe aparte, no viene en `e`.
+function estadoEmpleadoLabel(e: Empleado, deLicencia = false): string {
   const partes = [e.activo ? 'Activo' : 'Inactivo']
   if (e.activo && e.suspendido) partes.push('Suspendido')
   if (e.activo && e.salidaPendiente) partes.push('Salida Pendiente')
+  if (e.activo && deLicencia) partes.push('De Licencia')
   return partes.join(' / ')
 }
 
@@ -245,6 +249,8 @@ function EmpleadoDrawer({
   const { periodos } = usePeriodos()
   const { empresa } = useEmpresa()
   const { registrar: registrarSaldoISR, getSaldosActivos, getMontoAplicadoEnPeriodo } = useSaldoISR()
+  const { licenciaActiva } = useLicencias()
+  const licenciaVigente = licenciaActiva(empleado.id)
   const router = useRouter()
   const [showSaldoISRForm, setShowSaldoISRForm] = useState(false)
   const [saldoISRMonto, setSaldoISRMonto] = useState('')
@@ -360,6 +366,9 @@ function EmpleadoDrawer({
               {empleado.activo && empleado.salidaPendiente && (
                 <Badge variant="danger">Salida Pendiente</Badge>
               )}
+              {empleado.activo && !empleado.suspendido && !empleado.salidaPendiente && licenciaVigente && (
+                <Badge variant="info">De Licencia</Badge>
+              )}
               {pais && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 dark:bg-[#252840] px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-300">
                   <FlagImg code={pais.code} className="h-3.5 w-5" /> {pais.nombre}
@@ -383,6 +392,19 @@ function EmpleadoDrawer({
                   className="font-semibold underline underline-offset-2 hover:text-rose-800 dark:hover:text-rose-300"
                 >
                   Ir a Liquidación
+                </button>
+              </p>
+            )}
+            {empleado.activo && !empleado.suspendido && !empleado.salidaPendiente && licenciaVigente && (
+              <p className="mt-1.5 text-xs text-sky-700 dark:text-sky-400">
+                {labelLicencia(licenciaVigente.tipo)} — hasta el {formatDate(licenciaVigente.fechaFin)}
+                {' — '}
+                <button
+                  type="button"
+                  onClick={() => router.push('/licencias')}
+                  className="font-semibold underline underline-offset-2 hover:text-sky-800 dark:hover:text-sky-300"
+                >
+                  Ver en Licencias
                 </button>
               </p>
             )}
@@ -1219,6 +1241,7 @@ function EmpleadoDrawer({
 export default function EmpleadosPage() {
   const { empleados, add, update, remove } = useEmpleados()
   const { empresa } = useEmpresa()
+  const { estaDeLicencia } = useLicencias()
   const [busqueda, setBusqueda]             = useState('')
   const [departamento, setDepartamento]     = useState('Todos')
   const [mostrarInactivos, setMostrarInactivos] = useState(false)
@@ -1282,7 +1305,7 @@ export default function EmpleadosPage() {
       contratoLabel(e.tipoContrato),
       formatDate(e.fechaIngreso),
       e.salarioBase,
-      estadoEmpleadoLabel(e),
+      estadoEmpleadoLabel(e, estaDeLicencia(e.id)),
       e.banco ?? '—',
       e.numeroCuenta ?? '—',
       e.email ?? '—',
@@ -1417,6 +1440,7 @@ export default function EmpleadosPage() {
                           <Badge variant={emp.activo ? 'success' : 'neutral'}>{emp.activo ? 'Activo' : 'Inactivo'}</Badge>
                           {emp.activo && emp.suspendido && <Badge variant="warning">Suspendido</Badge>}
                           {emp.activo && emp.salidaPendiente && <Badge variant="danger">Salida Pendiente</Badge>}
+                          {emp.activo && !emp.suspendido && !emp.salidaPendiente && estaDeLicencia(emp.id) && <Badge variant="info">De Licencia</Badge>}
                         </div>
                       </td>
                       <td className="px-4 py-3.5">

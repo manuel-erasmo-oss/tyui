@@ -68,12 +68,16 @@ interface LicenciasCtx {
     opciones?: RegistrarOpciones,
   ) => Licencia
   eliminar: (licenciaId: string) => void
+  licenciaActiva: (empleadoId: string, fecha?: Date) => Licencia | null
+  estaDeLicencia: (empleadoId: string, fecha?: Date) => boolean
 }
 
 const Ctx = createContext<LicenciasCtx>({
   licencias: [],
   registrar: () => { throw new Error('LicenciasProvider not mounted') },
   eliminar: () => {},
+  licenciaActiva: () => null,
+  estaDeLicencia: () => false,
 })
 
 export function LicenciasProvider({ children }: { children: ReactNode }) {
@@ -159,8 +163,26 @@ export function LicenciasProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  // Licencia vigente HOY (o en `fecha`) para un empleado — puramente
+  // derivado de fechaInicio/fechaFin, sin ningún estado persistido en
+  // Empleado (mismo patrón que disfruteActivo/estaDeVacaciones en
+  // vacaciones-context.tsx). Se actualiza solo con el paso del tiempo, sin
+  // necesidad de una acción manual de "cerrar" la licencia.
+  function licenciaActiva(empleadoId: string, fecha: Date = new Date()): Licencia | null {
+    const f = fecha.getTime()
+    return licencias.find(l =>
+      l.empleadoId === empleadoId &&
+      new Date(l.fechaInicio).getTime() <= f &&
+      new Date(l.fechaFin).getTime() >= f
+    ) ?? null
+  }
+
+  function estaDeLicencia(empleadoId: string, fecha?: Date): boolean {
+    return licenciaActiva(empleadoId, fecha) !== null
+  }
+
   return (
-    <Ctx.Provider value={{ licencias, registrar, eliminar }}>
+    <Ctx.Provider value={{ licencias, registrar, eliminar, licenciaActiva, estaDeLicencia }}>
       {children}
     </Ctx.Provider>
   )
