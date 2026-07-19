@@ -768,4 +768,13 @@ export interface RegistroAumento {
   aprobadoPor?: string            // nombre capturado en el campo de confirmación explícita al aprobar
   motivoRechazo?: string          // solo si estado === 'rechazado'
   fechaAplicacion?: string        // ISO timestamp — se fija cuando aplicar() sobreescribe salarioBase
+  // Fecha en la que el reajuste debe tomar efecto — DISTINTA de
+  // fechaSolicitud/fechaAprobacion/fechaAplicacion, que solo registran cuándo
+  // ocurrió cada paso del workflow, nunca desde cuándo debería regir el nuevo
+  // salario. Opcional para no romper registros previos a este campo (se
+  // asume fechaAplicacion como fallback). Cuando cae dentro de un período de
+  // Nómina todavía en_proceso, el motor calcula un salario ponderado por
+  // días (ver salarioEfectivoEnPeriodo() en nomina/page.tsx) en vez de
+  // aplicar el salario nuevo completo desde el día 1 del período.
+  fechaEfectiva?: string          // ISO date string (solo fecha, no timestamp)
 }

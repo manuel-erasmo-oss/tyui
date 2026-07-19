@@ -132,6 +132,23 @@ export function NotificationBell() {
                         <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200">{item.titulo}</p>
                       </div>
                       <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">{item.descripcion}</p>
+                      {item.detalle && item.detalle.length > 0 && (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {item.detalle.map((d, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2 py-0.5 text-[10px] font-medium text-zinc-600 dark:text-zinc-400"
+                            >
+                              {d}
+                            </span>
+                          ))}
+                          {item.detalleTotal !== undefined && item.detalleTotal > item.detalle.length && (
+                            <span className="inline-flex items-center rounded-full bg-zinc-100 dark:bg-[#1a1d2e] px-2 py-0.5 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
+                              +{item.detalleTotal - item.detalle.length} más
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div className="mt-1.5 flex items-center justify-between">
                         <span className={cn('text-[10px] font-bold uppercase tracking-wide', SEVERIDAD_TEXTO[item.severidad])}>
                           {SEVERIDAD_LABEL[item.severidad]}

@@ -45,6 +45,7 @@ export default function AumentosPage() {
   const [tipoAjuste, setTipoAjuste] = useState<'porcentaje' | 'fijo'>('porcentaje')
   const [valor, setValor] = useState('')
   const [motivo, setMotivo] = useState('')
+  const [fechaEfectiva, setFechaEfectiva] = useState('')
   const [filtroDepto, setFiltroDepto] = useState<string>('todos')
   const [filtroFechaIngresoAntes, setFiltroFechaIngresoAntes] = useState('')
   const [filtroSinAumentoDesde, setFiltroSinAumentoDesde] = useState('')
@@ -145,6 +146,7 @@ export default function AumentosPage() {
         motivo: motivo.trim(),
         solicitadoPor: user?.email ?? undefined,
         origen: 'manual',
+        fechaEfectiva: fechaEfectiva || undefined,
       })
       enviados++
     })
@@ -153,6 +155,7 @@ export default function AumentosPage() {
     setSeleccionados(new Set())
     setValor('')
     setMotivo('')
+    setFechaEfectiva('')
   }
 
   const canSolicitar = valorNum > 0 && seleccionados.size > 0 && motivo.trim() !== ''
@@ -408,6 +411,24 @@ export default function AumentosPage() {
                   placeholder="Ej. Ajuste anual por desempeño, revisión de mercado, promoción..."
                   className="mt-1.5 w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] focus:outline-none"
                 />
+              </div>
+
+              {/* Fecha efectiva */}
+              <div className="px-5 pb-4">
+                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">Fecha Efectiva (opcional)</label>
+                <input
+                  type="date"
+                  value={fechaEfectiva}
+                  onChange={e => setFechaEfectiva(e.target.value)}
+                  className="mt-1.5 w-full max-w-xs rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:border-[#1B2980] focus:outline-none"
+                />
+                <p className="mt-1.5 flex items-start gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500">
+                  <Info className="h-3 w-3 shrink-0 mt-0.5" />
+                  Si cae dentro de un período de Nómina todavía en proceso, el sistema calcula un salario
+                  ponderado por días (parte al salario anterior, parte al nuevo) en vez de aplicar el
+                  salario nuevo completo desde el día 1. Sin fecha, se asume que rige desde el momento en
+                  que se aplique el aumento.
+                </p>
               </div>
 
               {filtroSinAumentoDesde && (

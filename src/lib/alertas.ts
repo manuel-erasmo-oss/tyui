@@ -2,14 +2,17 @@
 
 import { useMemo } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { ShieldAlert, Wallet, Percent, Gift, BarChart3 } from 'lucide-react'
+import { ShieldAlert, Wallet, Percent, Gift, BarChart3, History } from 'lucide-react'
 import { useEmpleados } from './empleados-context'
 import { useEmpresa } from './empresa-context'
 import { usePeriodos } from './periodos-context'
 import { usePrestamos } from './prestamos-context'
+import { useLiquidaciones } from './liquidaciones-context'
 import { useBandasSalariales, normalizarPosicion } from './bandas-salariales-context'
 import { getSalarioMinimoAplicable, getBonificacionesPendientes } from './dominican-labor'
 import { fullName, formatRD } from './utils'
+
+const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
 export type Severidad = 'danger' | 'warning' | 'info'
 
@@ -47,6 +50,7 @@ export function useAlertas(): AlertaItem[] {
   const { empresa } = useEmpresa()
   const { periodos } = usePeriodos()
   const { prestamos } = usePrestamos()
+  const { liquidaciones } = useLiquidaciones()
   const { bandas } = useBandasSalariales()
 
   return useMemo(() => {
@@ -149,6 +153,51 @@ export function useAlertas(): AlertaItem[] {
       }
     }
 
+    // ── Posible pago retroactivo pendiente (ingreso tardío) ──────────────
+    // Reutiliza la misma señal principal que el reporte "Empleados Sin
+    // Ingresos" de Reportería (candidatos = empleados cuya fechaIngreso cae
+    // dentro del mes de un período YA CERRADO, cruzando liquidaciones para
+    // no excluir a alguien que se desvinculó después de ese mes) — aplicada
+    // aquí de forma proactiva sobre TODOS los períodos cerrados, no solo el
+    // que el usuario elija revisar manualmente en el reporte. No repite la
+    // señal secundaria de "bruto cero" del reporte (exigiría recalcular el
+    // resultado histórico completo) — esta alerta se queda con la señal
+    // principal y más barata: el empleado ni siquiera figura entre los
+    // procesados de ese período.
+    const periodosCerrados = periodos.filter(p => p.estado === 'cerrada' && p.tipo !== 'regalia' && p.tipo !== 'bonificacion')
+    const gapsRetroactivos: { nombre: string; periodoLabel: string }[] = []
+    for (const p of periodosCerrados) {
+      if (p.empleadosProcesados === undefined) continue // sin tracking — no se puede evaluar con confianza
+      const finMes = new Date(p.anio, p.mes, 0, 23, 59, 59, 999)
+      for (const e of empleados) {
+        if (e.suspendido) continue
+        const ingreso = new Date(e.fechaIngreso)
+        if (ingreso > finMes) continue
+        let elegible = e.activo
+        if (!elegible) {
+          const liq = liquidaciones.find(l => l.empleadoId === e.id)
+          elegible = !!liq && new Date(liq.fechaTerminacion) > finMes
+        }
+        if (!elegible) continue
+        if (!p.empleadosProcesados.includes(e.id)) {
+          gapsRetroactivos.push({ nombre: fullName(e), periodoLabel: `${MESES_CORTO[p.mes - 1]} ${p.anio}` })
+        }
+      }
+    }
+    if (gapsRetroactivos.length > 0) {
+      items.push({
+        id: 'pago-retroactivo',
+        severidad: 'warning',
+        icon: History,
+        titulo: `${gapsRetroactivos.length} caso${gapsRetroactivos.length !== 1 ? 's' : ''} de posible pago retroactivo pendiente`,
+        descripcion: 'Empleados con fecha de ingreso dentro de un período ya cerrado, pero ausentes de los procesados de ese período',
+        detalle: gapsRetroactivos.slice(0, 3).map(g => `${g.nombre} — ${g.periodoLabel}`),
+        detalleTotal: gapsRetroactivos.length,
+        href: '/reportes',
+        linkLabel: 'Ver "Empleados Sin Ingresos" en Reportería',
+      })
+    }
+
     return items.sort((a, b) => SEVERIDAD_ORDEN[a.severidad] - SEVERIDAD_ORDEN[b.severidad])
-  }, [empleadosActivos, empleados, empresa, periodos, prestamos, bandas])
+  }, [empleadosActivos, empleados, empresa, periodos, prestamos, liquidaciones, bandas])
 }
