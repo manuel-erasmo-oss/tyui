@@ -3072,6 +3072,77 @@ muestra "Todo en orden", y `/bonificacion` ya no muestra ningún banner de
 vencimiento falso. `tsc --noEmit` y `npm run build` limpios (19 rutas, sin
 cambio de conteo).
 
+## Integración Licencias ↔ Nómina — evita doble pago en enfermedad/accidente sin disfrute de sueldo
+
+El usuario pidió analizar si el módulo de Licencias se podía hacer "mejor y
+más productivo". Antes de tocar código se auditó el motor completo (qué
+pasa hoy con cada uno de los 6 tipos de licencia al calcular nómina) y se
+descubrió que el pedido original ("reflejar `montoPagado` como un ajuste de
+nómina, igual que vacaciones") **no aplicaba a la mayoría de los casos**:
+
+- **Matrimonial/fallecimiento/alumbramiento, maternidad, y enfermedad/
+  accidente CON disfrute de sueldo**: el salario del empleado sigue
+  corriendo sin interrupción (por ley o por decisión de la empresa) — el
+  sueldo mensual normal, sin prorratear, YA cubre esos días. No hay nada
+  que sumar ni que tocar; así ya funcionaba correctamente.
+- **Enfermedad común / accidente laboral SIN disfrute de sueldo** (el
+  default): aquí sí había un hueco real. La empresa no paga nada por esos
+  días (el subsidio de SISALRIL/ARL se paga directo al empleado, fuera de
+  nómina) — pero el motor nunca reducía los días trabajados del período,
+  así que el empleado recibía su sueldo completo por nómina **y** el
+  subsidio de TSS por los mismos días de ausencia — un doble pago
+  silencioso que la empresa ni se enteraba.
+
+**Fix — `nomina/page.tsx`**: nueva función `diasLicenciaSinSueldoEnPeriodo()`,
+mismo mecanismo exacto de solape/clamp que `diasVacacionEnPeriodo()` (clampa
+`fechaInicio`/`fechaFin` de cada licencia contra el rango del período,
+`rangoPeriodo()`), pero sin monto que calcular — solo reduce
+`diasTrabajados`, igual que `diasCorteEnPeriodo()` ya hace para suspensión.
+Filtra únicamente licencias `enfermedad_comun`/`accidente_laboral` con
+`disfruteSueldo !== true`.
+
+Wireado en `calcularParaPeriodo()` (el choke point usado en los 6 call
+sites ya documentados para vacaciones) con la misma precedencia que
+suspensión/salida — antes de vacaciones:
+```
+diasSuspensionEnPeriodo() ?? diasSalidaEnPeriodo() ?? diasLicenciaSinSueldoEnPeriodo()
+```
+`useLicencias()` se agregó junto a `useVacaciones()` y el array `licencias`
+se propagó por los 6 call sites existentes (`resultadoDePeriodo`, el
+`useEffect` de recálculo de totales, `calcularTotalesRapido`,
+`congelarYCalcular`, y los 2 cálculos de `manejarInsuficienciaFondos`).
+
+El toast al crear un período ahora también menciona licencias sin sueldo
+detectadas, mismo patrón ya usado para vacaciones ("N empleado(s) con
+vacaciones · N empleado(s) con licencia sin sueldo en este período").
+
+**Verificado en navegador con Playwright, matemática exacta** (salario base
+RD$46,000, julio 2026 = 31 días):
+1. Empleado con enfermedad común 10 días (10-19 jul) **sin** disfrute →
+   S. Bruto exacto RD$31,161.29 (=46,000 × 21/31, prorrateado).
+2. Mismo caso pero **con** disfrute de sueldo activado → S. Bruto
+   RD$46,000.00 completo, sin prorratear.
+3. Licencia matrimonial (fija) → S. Bruto completo, sin cambios.
+4. Maternidad → S. Bruto completo, sin cambios (empresa paga 100% y
+   reclama a SISALRIL por separado).
+5. Empleado control sin ninguna licencia → sin cambios.
+6. **2ª quincena de julio** (16-31, 16 días) con 5 días de enfermedad común
+   sin disfrute (20-24 jul) → S. Bruto exacto RD$15,812.50
+   (=46,000 × 11/16 ÷ 2), confirmando que el halving quincenal no se aplica
+   dos veces sobre el mismo prorrateo.
+7. Toast al crear un período nuevo con una licencia sin sueldo pendiente
+   menciona correctamente "1 empleado(s) con licencia sin sueldo en este
+   período".
+
+`tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de conteo).
+
+**No implementado en esta pasada** (quedó fuera de alcance, priorizado
+como próximo paso por el propio usuario): filtros de búsqueda en
+`/licencias` (mismo patrón ya usado en Nómina/Vacaciones/Bonificación),
+subida de documento de soporte (certificado médico/acta), y trazabilidad
+de reclamos de subsidio ante SISALRIL/ARL (estado "por reclamar/reclamado/
+reembolsado").
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
