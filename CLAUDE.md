@@ -3268,6 +3268,61 @@ pago retroactivo pendiente" con el chip "Nuevo IngresoTardio — Jun 2026"
 visible (confirmando el fix del bug de chips faltantes). `tsc --noEmit` y
 `npm run build` limpios (19 rutas, sin cambio de conteo).
 
+## Licencias — filtros, documento de soporte, trazabilidad de reclamo SISALRIL/ARL
+
+Cierre de las 3 mejoras que habían quedado deliberadamente fuera de alcance
+en la sesión de integración Licencias-Nómina, ahora priorizadas por el
+usuario ("Filtros de búsqueda... Adjuntar certificado médico/acta...
+Trazabilidad de reclamos SISALRIL/ARL").
+
+- **Filtros de búsqueda** — mismo patrón exacto ya usado en Nómina/
+  Vacaciones/Bonificación: buscador por nombre/cédula + `<select>` de
+  departamento + botón "Ver todos" + contador "X de Y licencia(s)". El
+  footer de totales se relabela "TOTAL (filtrado)" y suma solo las filas
+  visibles; las StatCards del encabezado (incluida la nueva "Pendiente de
+  Reclamar") se mantienen a nivel de toda la empresa, mismo criterio ya
+  establecido en Regalía Pascual/Bonificación.
+- **Documento de soporte** — nuevos campos `Licencia.documentoSoporte`
+  (base64) / `documentoNombre`, mismo mecanismo que
+  `Prestamo.documentoSolicitud`/`documentoNombre`. A diferencia de
+  Préstamos (que solo acepta PDF de la solicitud aprobada), aquí el
+  documento puede ser certificado médico O acta (matrimonio/defunción/
+  nacimiento, según el tipo de licencia) — el selector de archivo acepta
+  PDF e imágenes (`.pdf,.jpg,.jpeg,.png,image/*`), y la descarga reutiliza
+  `downloadBase64()`/`getMime()` de `empleado-form.ts` (detecta el MIME
+  real por extensión) en vez del helper de Préstamos que asume
+  `application/pdf` fijo. Columna "Doc." en la tabla con ícono descargable.
+- **Trazabilidad de reclamo SISALRIL/ARL** — nuevo tipo
+  `EstadoReclamoSubsidio = 'por_reclamar' | 'reclamado' | 'reembolsado'` +
+  `Licencia.fechaReclamo`/`fechaReembolso`/`montoReembolsado`. Se aplica a
+  **cualquier licencia con `montoSubsidioEstimado`** (enfermedad_comun,
+  accidente_laboral, maternidad) — decisión deliberada de alcance, no solo
+  a maternidad: aunque el subsidio de enfermedad/accidente lo recibe el
+  empleado directo (no la empresa, según el modelo ya documentado), en la
+  práctica RRHH suele gestionar/dar seguimiento al reclamo en nombre del
+  empleado, así que vale la pena rastrear si ya se sometió/resolvió aunque
+  el dinero no entre a la cuenta de la empresa. Nueva columna "Reclamo" en
+  la tabla — el propio `Badge` de estado es un botón que avanza al
+  siguiente paso con un solo click (`por_reclamar → reclamado →
+  reembolsado`, estampando la fecha de hoy automáticamente y, al
+  reembolsar, el monto estimado como default), más un link "deshacer" para
+  revertir un paso a la vez. Nueva StatCard "Pendiente de Reclamar" (suma
+  de `montoSubsidioEstimado` de todas las licencias `por_reclamar`,
+  histórico completo, no solo el mes actual) — es el número más accionable
+  ("no perder de vista dinero que la empresa puede recuperar", como lo
+  planteó el usuario). Export a Excel ganó las columnas "Estado Reclamo" y
+  "Doc. Adjunto".
+
+Verificado en navegador con Playwright: licencia matrimonial con PDF
+adjunto (`acta-matrimonio.pdf`) → ícono de documento descargable aparece en
+la fila; licencia de enfermedad común registrada → badge "Por Reclamar" por
+defecto y StatCard "Pendiente de Reclamar" refleja el monto; click en el
+badge avanza correctamente a "Reclamado" y luego a "Reembolsado", "deshacer"
+revierte un paso; filtro por nombre y por departamento aíslan la fila
+correcta con el contador y el footer "TOTAL (filtrado)" exactos. Sin errores
+de consola. `tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio
+de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3276,6 +3331,7 @@ visible (confirmando el fix del bug de chips faltantes). `tsc --noEmit` y
 
 | Hash | Descripción |
 |---|---|
+| `ab8bcd0` | feat: filtros, documento de soporte y trazabilidad de reclamo en Licencias |
 | `7d5e156` | feat: prorrateo por reajuste salarial a mitad de período + alerta de pago retroactivo |
 | `ee0d37a` | redesign: Centro de Alertas como campanita de notificaciones en el Header |
 | `a5717a8` | polish: Centro de Alertas con tratamiento visual premium |
