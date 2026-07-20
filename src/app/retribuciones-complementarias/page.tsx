@@ -12,7 +12,7 @@ import { TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES, fechaLimiteIR17 } from '@/lib/
 import { formatRD, formatDate, fullName } from '@/lib/utils'
 import {
   Landmark, Percent, CalendarClock, Plus, Trash2, Info, Download,
-  ChevronLeft, ChevronRight, CheckCircle2, Undo2, History,
+  ChevronLeft, ChevronRight, CheckCircle2, Undo2, History, Users,
 } from 'lucide-react'
 
 const MESES = [
@@ -108,6 +108,25 @@ export default function RetribucionesComplementariasPage() {
     return Array.from(grupos.values()).sort((a, b) => (b.anio - a.anio) || (b.mes - a.mes))
   }, [retribuciones])
 
+  // ── Acumulado por empleado — histórico completo (todos los meses), no solo
+  // el mes en vista. Permite a RRHH ver de un vistazo quién ha recibido más
+  // beneficios en especie a lo largo del tiempo, sin tener que revisar mes
+  // por mes. Las líneas sin empleado asignado se agrupan aparte, al final.
+  const acumuladoPorEmpleado = useMemo(() => {
+    const grupos = new Map<string, { empleadoId?: string; total: number; meses: Set<string>; conceptos: number }>()
+    for (const r of retribuciones) {
+      const key = r.empleadoId ?? '__general__'
+      const g = grupos.get(key) ?? { empleadoId: r.empleadoId, total: 0, meses: new Set<string>(), conceptos: 0 }
+      g.total += r.valorMensual
+      g.meses.add(`${r.anio}-${r.mes}`)
+      g.conceptos += 1
+      grupos.set(key, g)
+    }
+    return Array.from(grupos.values())
+      .map(g => ({ ...g, meses: g.meses.size }))
+      .sort((a, b) => b.total - a.total)
+  }, [retribuciones])
+
   async function handleExportarExcel() {
     if (retribuciones.length === 0) return
     const { exportarExcel } = await import('@/lib/excel-export')
@@ -122,6 +141,13 @@ export default function RetribucionesComplementariasPage() {
       g.total,
       g.total * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES,
       g.declarada ? `Declarado${g.fecha ? ` (${formatDate(g.fecha)})` : ''}` : 'Pendiente',
+    ])
+    const filasAcumulado = acumuladoPorEmpleado.map(g => [
+      g.empleadoId && empMap[g.empleadoId] ? fullName(empMap[g.empleadoId]) : 'General / sin asignar',
+      g.meses,
+      g.conceptos,
+      g.total,
+      g.total * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES,
     ])
     await exportarExcel({
       nombreArchivo: `retribuciones-complementarias-${anioSel}-${String(mesSel).padStart(2, '0')}`,
@@ -144,6 +170,15 @@ export default function RetribucionesComplementariasPage() {
           encabezados: ['Mes', 'Valor Total (RD$)', 'Impuesto Sustitutivo 27%', 'Estado'],
           filas: filasHistorial,
           anchos: [20, 20, 22, 26],
+        },
+        {
+          nombre: 'Acumulado por Empleado',
+          titulo: 'Acumulado Histórico por Empleado',
+          subtitulo: 'Impuesto Sustitutivo sobre Retribuciones Complementarias — DGII',
+          encabezados: ['Empleado', 'Meses', 'Conceptos', 'Total Histórico (RD$)', 'Impuesto Sustitutivo Total'],
+          filas: filasAcumulado,
+          anchos: [28, 10, 12, 22, 24],
+          columnasEnteras: [1, 2],
         },
       ],
     })
@@ -448,6 +483,56 @@ export default function RetribucionesComplementariasPage() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ── Acumulado por empleado ───────────────────────────────────── */}
+        {acumuladoPorEmpleado.length > 0 && (
+          <div className="overflow-hidden rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+            <div className="border-b border-zinc-100 dark:border-[#1d2035] px-5 py-4 flex items-center gap-2">
+              <Users className="h-4 w-4 text-zinc-400" />
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Acumulado por Empleado</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Histórico completo — quién ha recibido beneficios en especie y cuánto, sin importar el mes
+                </p>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                    <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Meses</th>
+                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Conceptos</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total Histórico</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Impuesto Sustitutivo Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
+                  {acumuladoPorEmpleado.map(g => {
+                    const emp = g.empleadoId ? empMap[g.empleadoId] : undefined
+                    return (
+                      <tr key={g.empleadoId ?? '__general__'} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
+                        <td className="px-5 py-3.5">
+                          {emp
+                            ? <p className="font-medium text-[#1B2980] dark:text-indigo-400">{fullName(emp)}</p>
+                            : <span className="text-zinc-400 dark:text-zinc-500">General / sin asignar</span>}
+                        </td>
+                        <td className="px-4 py-3.5 text-center tabular-nums text-zinc-500 dark:text-zinc-400">{g.meses}</td>
+                        <td className="px-4 py-3.5 text-center tabular-nums text-zinc-500 dark:text-zinc-400">{g.conceptos}</td>
+                        <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-zinc-600 dark:text-zinc-400">
+                          {formatRD(g.total)}
+                        </td>
+                        <td className="px-4 py-3.5 text-right tabular-nums font-bold text-[#1B2980] dark:text-indigo-300">
+                          {formatRD(g.total * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES)}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
