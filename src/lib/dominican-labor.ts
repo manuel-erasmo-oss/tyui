@@ -1,4 +1,4 @@
-import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, CierreFiscal, ConceptoAjuste, Empleado, Empresa, MotivoLiquidacion, ParametrosNomina, PeriodoNomina, ResultadoNomina, SectorEmpresa, TipoPeriodo } from '@/types'
+import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, CierreFiscal, ConceptoAjuste, Empleado, Empresa, MotivoLiquidacion, ParametrosNomina, PeriodoNomina, ResultadoNomina, RetribucionComplementaria, SectorEmpresa, TipoPeriodo } from '@/types'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -859,4 +859,60 @@ export function getBonificacionesPendientes(
     })
     .filter((x): x is BonificacionPendiente => x !== null)
     .sort((a, b) => a.diasRestantes - b.diasRestantes)
+}
+
+// ─── Retribuciones Complementarias — Impuesto Sustitutivo 27% (Formulario
+// IR-17) ─────────────────────────────────────────────────────────────────
+export const TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES = 0.27
+
+// Fecha límite de declaración/pago del IR-17 para las retribuciones
+// complementarias otorgadas en un mes/año dado — vence el día 10 del mes
+// SIGUIENTE, junto con las demás retenciones del mes (Guía del Contribuyente
+// No.14, DGII). Si el día 10 cae sábado o domingo se traslada al siguiente
+// día hábil (lunes) — la guía no detalla el manejo de feriados nacionales,
+// así que esta función solo ajusta fines de semana, no feriados.
+export function fechaLimiteIR17(mes: number, anio: number): Date {
+  let mesSig = mes + 1
+  let anioSig = anio
+  if (mesSig > 12) { mesSig = 1; anioSig += 1 }
+  const fecha = new Date(anioSig, mesSig - 1, 10)
+  const dow = fecha.getDay()  // 0 = domingo, 6 = sábado
+  if (dow === 6) fecha.setDate(fecha.getDate() + 2)
+  if (dow === 0) fecha.setDate(fecha.getDate() + 1)
+  return fecha
+}
+
+export interface RetribucionPendiente {
+  mes: number
+  anio: number
+  total: number
+  impuesto: number
+  limite: Date
+  diasRestantes: number  // negativo = ya vencido
+}
+
+// Meses/años con retribuciones registradas cuya declaración IR-17 todavía no
+// se marcó como sometida — ordenados por urgencia (menor diasRestantes
+// primero). Un mes cuenta como "declarado" solo si TODAS sus líneas lo
+// están (una sola declaración mensual cubre todos los conceptos del mes).
+export function getRetribucionesPendientes(
+  lineas: Pick<RetribucionComplementaria, 'mes' | 'anio' | 'valorMensual' | 'declarada'>[],
+): RetribucionPendiente[] {
+  const grupos = new Map<string, { mes: number; anio: number; total: number; declarada: boolean }>()
+  for (const l of lineas) {
+    const key = `${l.anio}-${l.mes}`
+    const g = grupos.get(key) ?? { mes: l.mes, anio: l.anio, total: 0, declarada: true }
+    g.total += l.valorMensual
+    if (!l.declarada) g.declarada = false
+    grupos.set(key, g)
+  }
+  const hoy = new Date()
+  const pendientes: RetribucionPendiente[] = []
+  for (const g of grupos.values()) {
+    if (g.declarada || g.total <= 0) continue
+    const limite = fechaLimiteIR17(g.mes, g.anio)
+    const diasRestantes = Math.ceil((limite.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+    pendientes.push({ mes: g.mes, anio: g.anio, total: g.total, impuesto: g.total * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES, limite, diasRestantes })
+  }
+  return pendientes.sort((a, b) => a.diasRestantes - b.diasRestantes)
 }

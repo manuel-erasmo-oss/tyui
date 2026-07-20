@@ -797,3 +797,26 @@ export interface RegistroAumento {
   // aplicar el salario nuevo completo desde el día 1 del período.
   fechaEfectiva?: string          // ISO date string (solo fecha, no timestamp)
 }
+
+// ─── Retribuciones Complementarias — Impuesto Sustitutivo 27% (DGII) ──────────
+// A diferencia de Regalía/Bonificación (dinero pagado AL empleado vía un
+// período especial de Nómina), este es un impuesto que la EMPRESA paga a la
+// DGII sobre el valor de beneficios en especie otorgados — nunca pasa por el
+// motor de nómina. Se declara mensualmente vía Formulario IR-17 ("Otras
+// Retenciones y Retribuciones Complementarias"), a más tardar el día 10 del
+// mes siguiente (Guía del Contribuyente No.14, DGII — Código Tributario Ley
+// 11-92 y sus modificaciones).
+export interface RetribucionComplementaria {
+  id: string
+  mes: number     // 1-12 — mes en que se otorgó el beneficio (el que se declara)
+  anio: number
+  concepto: string
+  valorMensual: number
+  empleadoId?: string  // opcional/informativo — el impuesto lo paga la empresa sin importar el beneficiario
+  notas?: string
+  // Declaración ante DGII (Formulario IR-17) — se marca a nivel de TODAS las
+  // líneas de un mismo mes/año a la vez (una sola declaración mensual cubre
+  // todos los conceptos), no por línea individual.
+  declarada?: boolean
+  fechaDeclaracion?: string  // ISO date string
+}

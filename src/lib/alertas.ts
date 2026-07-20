@@ -2,14 +2,15 @@
 
 import { useMemo } from 'react'
 import type { LucideIcon } from 'lucide-react'
-import { ShieldAlert, Wallet, Percent, Gift, BarChart3, History } from 'lucide-react'
+import { ShieldAlert, Wallet, Percent, Gift, BarChart3, History, Landmark } from 'lucide-react'
 import { useEmpleados } from './empleados-context'
 import { useEmpresa } from './empresa-context'
 import { usePeriodos } from './periodos-context'
 import { usePrestamos } from './prestamos-context'
 import { useLiquidaciones } from './liquidaciones-context'
 import { useBandasSalariales, normalizarPosicion } from './bandas-salariales-context'
-import { getSalarioMinimoAplicable, getBonificacionesPendientes } from './dominican-labor'
+import { useRetribuciones } from './retribuciones-context'
+import { getSalarioMinimoAplicable, getBonificacionesPendientes, getRetribucionesPendientes } from './dominican-labor'
 import { fullName, formatRD } from './utils'
 
 const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -52,6 +53,7 @@ export function useAlertas(): AlertaItem[] {
   const { prestamos } = usePrestamos()
   const { liquidaciones } = useLiquidaciones()
   const { bandas } = useBandasSalariales()
+  const { retribuciones } = useRetribuciones()
 
   return useMemo(() => {
     const items: AlertaItem[] = []
@@ -112,6 +114,28 @@ export function useAlertas(): AlertaItem[] {
         descripcion: 'Pago obligatorio en la primera quincena de diciembre (Art. 219)',
         href: '/regalia-pascual',
         linkLabel: 'Ir a Regalía Pascual',
+      })
+    }
+
+    // ── Retribuciones Complementarias — vencimiento IR-17 ────────────────
+    // Cadencia mensual (no anual como Bonificación/Regalía), así que el
+    // umbral de aviso es más corto (10 días) para no mostrarse "siempre
+    // encendida" desde el primer día del mes — solo avisa cuando el
+    // vencimiento (día 10 del mes siguiente) ya está cerca o pasado.
+    const pendientesRetrib = getRetribucionesPendientes(retribuciones)
+    const alertaRetrib = pendientesRetrib[0]
+    if (alertaRetrib && alertaRetrib.diasRestantes <= 10) {
+      const vencido = alertaRetrib.diasRestantes < 0
+      items.push({
+        id: 'retribuciones',
+        severidad: vencido ? 'danger' : 'warning',
+        icon: Landmark,
+        titulo: vencido
+          ? `Retribuciones Complementarias ${MESES_CORTO[alertaRetrib.mes - 1]} ${alertaRetrib.anio} — IR-17 vencido hace ${Math.abs(alertaRetrib.diasRestantes)} día(s)`
+          : `Retribuciones Complementarias ${MESES_CORTO[alertaRetrib.mes - 1]} ${alertaRetrib.anio} — IR-17 vence en ${alertaRetrib.diasRestantes} día(s)`,
+        descripcion: `Impuesto Sustitutivo 27% por declarar — límite ${alertaRetrib.limite.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+        href: '/retribuciones-complementarias',
+        linkLabel: 'Ir a Retribuciones Complementarias',
       })
     }
 
@@ -199,5 +223,5 @@ export function useAlertas(): AlertaItem[] {
     }
 
     return items.sort((a, b) => SEVERIDAD_ORDEN[a.severidad] - SEVERIDAD_ORDEN[b.severidad])
-  }, [empleadosActivos, empleados, empresa, periodos, prestamos, liquidaciones, bandas])
+  }, [empleadosActivos, empleados, empresa, periodos, prestamos, liquidaciones, bandas, retribuciones])
 }

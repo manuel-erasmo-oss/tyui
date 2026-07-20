@@ -14,6 +14,7 @@ import { LiquidacionesProvider } from '@/lib/liquidaciones-context'
 import { SaldoISRProvider } from '@/lib/saldo-isr-context'
 import { FeriadosProvider } from '@/lib/feriados-context'
 import { VacacionesProvider } from '@/lib/vacaciones-context'
+import { RetribucionesProvider } from '@/lib/retribuciones-context'
 import { AuthProvider } from '@/lib/auth-context'
 import { RouteGuard } from '@/components/auth/RouteGuard'
 
@@ -56,7 +57,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                               <PeriodosProvider>
                                 <FeriadosProvider>
                                   <VacacionesProvider>
-                                    <RouteGuard>{children}</RouteGuard>
+                                    <RetribucionesProvider>
+                                      <RouteGuard>{children}</RouteGuard>
+                                    </RetribucionesProvider>
                                   </VacacionesProvider>
                                 </FeriadosProvider>
                               </PeriodosProvider>
