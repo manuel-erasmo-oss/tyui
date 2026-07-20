@@ -3412,6 +3412,62 @@ sembrada directo en localStorage dispara el badge de la campana con "IR-17
 vencido hace N día(s)" y el link correcto. Sin errores de consola. `tsc
 --noEmit` y `npm run build` limpios (19 rutas, sin cambio de conteo).
 
+## Retribuciones Complementarias — prioridad media (D+E+F)
+
+Cierre de las 3 mejoras de prioridad media que habían quedado pendientes
+tras A+B (persistencia + recordatorio IR-17): **D** (acumulado por
+empleado), **E** (exportación a PDF) y **F** (bloque en Cumplimiento
+Fiscal de Reportería), a pedido explícito del usuario ("Vamos con
+prioridad media").
+
+**D — Acumulado por Empleado**: nueva sección en `/retribuciones-
+complementarias` que agrupa TODAS las líneas registradas (sin importar el
+mes) por `empleadoId`, mostrando total histórico, impuesto sustitutivo
+total, y cantidad de meses/conceptos — RRHH puede ver de un vistazo quién
+ha recibido más beneficios en especie a lo largo del tiempo sin revisar
+mes por mes. Las líneas sin empleado asignado se agrupan aparte como
+"General / sin asignar". Incluida también como tercera hoja en la
+exportación a Excel.
+
+**E — Exportación a PDF**: el módulo solo tenía Excel — se agregó
+`handleExportarPDF()` con el mismo lenguaje visual navy/`autoTable` ya
+usado en los reportes de Reportería (investigado primero vía agente: hay
+dos estilos de PDF en la app — "recibo individual" dibujado a mano en
+`nomina-shared.ts`/`liquidacion/page.tsx`, y "reporte tabular" con
+`jspdf-autotable` en `reportes/page.tsx` — se eligió el segundo por ser
+tabular). El header/tabla/tabla de historial/footer se escriben
+directamente en este archivo (no se extrajo a un lib compartido porque
+Next.js prohíbe exports adicionales desde un `page.tsx` y ningún otro
+módulo necesita esta función todavía — mismo problema ya documentado y
+resuelto de otra forma para `nomina-shared.ts`). El PDF se centra en el
+mes en vista + estado de declaración + historial (no incluye "Acumulado
+por Empleado", que ya vive en el Excel) — es un documento de soporte para
+la declaración de ESE mes, no un reporte gerencial completo.
+
+**F — Bloque en Cumplimiento Fiscal**: `ReporteTSS` en `reportes/page.tsx`
+ahora también lee `useRetribuciones()` y filtra por `mes`/`anio` del
+`PeriodoNomina` seleccionado (cruce simple, ya que `RetribucionComplementaria`
+no referencia un período de nómina — mismo criterio usado en
+`getRetribucionesPendientes`). Nueva franja "Impuesto Sustitutivo —
+Retribuciones Complementarias (IR-17)" debajo de la franja existente
+"Retención ISR — DGII" (mismo componente visual, condicional a que existan
+líneas ese mes — nunca aparece vacía). Se agregó también al PDF (tercer
+`autoTable` encadenado con `lastAutoTable.finalY`, mismo patrón que la
+franja de ISR) y al Excel (tercera hoja condicional "IR-17") de ese
+reporte. Es información de solo lectura — el checkbox de declarado/
+pendiente sigue viviendo exclusivamente en `/retribuciones-
+complementarias`, evitando duplicar el estado en dos lugares.
+
+Verificado en navegador con Playwright: acumulado de Carlos Ejecutivo
+(RD$20,000 Vehículo en julio + RD$15,000 Vivienda en junio) → total
+histórico exacto RD$35,000.00, impuesto RD$9,450.00, "2" meses/"2"
+conceptos; "Exportar PDF" descarga un archivo `.pdf` real sin errores;
+período mensual cerrado de julio con esa misma línea de RD$20,000 →
+Cumplimiento Fiscal muestra el bloque IR-17 con el monto exacto
+RD$5,400.00 (27% de 20,000), debajo del bloque de ISR existente. Sin
+errores de consola. `tsc --noEmit` y `npm run build` limpios (19 rutas,
+sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3420,6 +3476,8 @@ vencido hace N día(s)" y el link correcto. Sin errores de consola. `tsc
 
 | Hash | Descripción |
 |---|---|
+| `b9944b2` | feat: Retribuciones Complementarias — acumulado por empleado, PDF y bloque en Cumplimiento Fiscal |
+| `12b4a5c` | feat: Retribuciones Complementarias — acumulado histórico por empleado |
 | `4952e02` | feat: Retribuciones Complementarias — persistencia real + recordatorio de vencimiento IR-17 |
 | `ab8bcd0` | feat: filtros, documento de soporte y trazabilidad de reclamo en Licencias |
 | `7d5e156` | feat: prorrateo por reajuste salarial a mitad de período + alerta de pago retroactivo |
