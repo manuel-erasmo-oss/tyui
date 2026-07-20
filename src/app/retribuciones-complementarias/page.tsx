@@ -12,8 +12,17 @@ import { TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES, fechaLimiteIR17 } from '@/lib/
 import { formatRD, formatDate, fullName } from '@/lib/utils'
 import {
   Landmark, Percent, CalendarClock, Plus, Trash2, Info, Download,
-  ChevronLeft, ChevronRight, CheckCircle2, Undo2, History, Users,
+  ChevronLeft, ChevronRight, CheckCircle2, Undo2, History, Users, FileDown,
 } from 'lucide-react'
+import jsPDF from 'jspdf'
+import autoTable from 'jspdf-autotable'
+
+// Mismo navy y estilo autoTable ya usado en src/app/reportes/page.tsx — se
+// duplica localmente (en vez de importar) porque Next.js no permite exports
+// adicionales desde un archivo page.tsx (ver nomina-shared.ts para el
+// mismo problema resuelto de otra forma, extrayendo a un lib compartido —
+// aquí no se justifica un lib nuevo porque solo este módulo lo usa).
+const NAVY: [number, number, number] = [27, 41, 128]
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -185,20 +194,142 @@ export default function RetribucionesComplementariasPage() {
     setToast('Retribuciones complementarias exportadas a Excel')
   }
 
+  // Documento de soporte de la declaración IR-17 del mes en vista — mismo
+  // estilo autoTable/NAVY ya usado en los reportes de Reportería. A
+  // diferencia del Excel (que exporta también el histórico completo por
+  // empleado), el PDF se centra en lo que hace falta para la declaración de
+  // ESTE mes: detalle + estado + historial, como constancia de soporte.
+  function handleExportarPDF() {
+    if (lineasDelMes.length === 0) return
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const pageW = 210
+
+    doc.setFillColor(...NAVY)
+    doc.rect(0, 0, pageW, 22, 'F')
+    let textX = 14
+    if (empresa.logo) {
+      try {
+        const fmt = empresa.logo.startsWith('data:image/png') ? 'PNG' : 'JPEG'
+        doc.addImage(empresa.logo, fmt, 14, 3, 16, 16)
+        textX = 34
+      } catch { /* logo corrupto o formato no soportado — se omite */ }
+    }
+    doc.setTextColor(255, 255, 255)
+    doc.setFontSize(13)
+    doc.setFont('helvetica', 'bold')
+    doc.text(empresa.nombre || 'Empresa', textX, 10)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`RNC: ${empresa.rnc || '—'}`, textX, 16)
+
+    doc.setTextColor(...NAVY)
+    doc.setFontSize(12)
+    doc.setFont('helvetica', 'bold')
+    doc.text('Retribuciones Complementarias', 14, 31)
+    doc.setFontSize(8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(100, 100, 100)
+    doc.text(`${MESES[mesSel - 1]} ${anioSel} — Impuesto Sustitutivo 27% (Formulario IR-17)`, 14, 37)
+    doc.text(`Generado: ${new Date().toLocaleDateString('es-DO')}`, pageW - 14, 31, { align: 'right' })
+
+    autoTable(doc, {
+      startY: 44,
+      head: [['Concepto', 'Empleado', 'Valor Mensual', 'Impuesto Sustitutivo 27%']],
+      body: lineasDelMes.map(l => [
+        l.concepto,
+        l.empleadoId && empMap[l.empleadoId] ? fullName(empMap[l.empleadoId]) : 'General / sin asignar',
+        formatRD(l.valorMensual),
+        formatRD(l.valorMensual * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES),
+      ]),
+      foot: [[`TOTAL — ${lineasDelMes.length} concepto(s)`, '', formatRD(totalMensual), formatRD(impuestoMensual)]],
+      theme: 'striped',
+      headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
+      footStyles: { fillColor: [240, 240, 240], textColor: NAVY, fontStyle: 'bold', fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
+    })
+
+    const docTyped = doc as jsPDF & { lastAutoTable: { finalY: number } }
+    let y = (docTyped.lastAutoTable?.finalY ?? 44) + 10
+
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...NAVY)
+    doc.text('Estado de Declaración IR-17', 14, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(80, 80, 80)
+    doc.text(
+      declarado
+        ? `Declarado${fechaDeclaracionMes ? ` — ${formatDate(fechaDeclaracionMes)}` : ''}`
+        : `Pendiente — límite ${formatDate(limiteIR17.toISOString())} (${diasRestantes < 0 ? `vencido hace ${Math.abs(diasRestantes)} día(s)` : `${diasRestantes} día(s) restantes`})`,
+      14, y + 6,
+    )
+    y += 16
+
+    if (historialMeses.length > 0) {
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(...NAVY)
+      doc.text('Historial de Declaraciones IR-17', 14, y)
+      autoTable(doc, {
+        startY: y + 3,
+        head: [['Mes', 'Valor Total', 'Impuesto (27%)', 'Estado']],
+        body: historialMeses.map(g => [
+          `${MESES[g.mes - 1]} ${g.anio}`,
+          formatRD(g.total),
+          formatRD(g.total * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES),
+          g.declarada ? `Declarado${g.fecha ? ` (${formatDate(g.fecha)})` : ''}` : 'Pendiente',
+        ]),
+        theme: 'plain',
+        headStyles: { fillColor: [255, 255, 255], textColor: NAVY, fontStyle: 'bold', fontSize: 8 },
+        bodyStyles: { fontSize: 7.5 },
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
+      })
+    }
+
+    const pageH = doc.internal.pageSize.getHeight()
+    doc.setDrawColor(...NAVY)
+    doc.setLineWidth(0.4)
+    doc.line(14, pageH - 12, pageW - 14, pageH - 12)
+    doc.setFontSize(6.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...NAVY)
+    doc.text('Cielo Cloud · Nómina', 14, pageH - 8)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(170, 170, 170)
+    doc.text(`Generado el ${new Date().toLocaleDateString('es-DO')}`, pageW - 14, pageH - 8, { align: 'right' })
+
+    doc.save(`retribuciones-complementarias-${anioSel}-${String(mesSel).padStart(2, '0')}.pdf`)
+    setToast('PDF generado')
+  }
+
   return (
     <div className="flex flex-col overflow-hidden h-full">
       <Header
         title="Retribuciones Complementarias"
         subtitle="Impuesto Sustitutivo 27% · Formulario IR-17 · Guía DGII"
         actions={
-          <button
-            onClick={handleExportarExcel}
-            disabled={retribuciones.length === 0}
-            className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Download className="h-4 w-4" />
-            Exportar Excel
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExportarPDF}
+              disabled={lineasDelMes.length === 0}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              title={lineasDelMes.length === 0 ? `Sin retribuciones en ${MESES[mesSel - 1]} ${anioSel}` : undefined}
+            >
+              <FileDown className="h-4 w-4" />
+              Exportar PDF
+            </button>
+            <button
+              onClick={handleExportarExcel}
+              disabled={retribuciones.length === 0}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] px-3 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Download className="h-4 w-4" />
+              Exportar Excel
+            </button>
+          </div>
         }
       />
       <div className="flex-1 overflow-y-auto p-6 space-y-5 bg-zinc-50 dark:bg-[#0d0f1a]">

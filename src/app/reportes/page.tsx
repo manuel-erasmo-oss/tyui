@@ -19,7 +19,8 @@ import { usePrestamos } from '@/lib/prestamos-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useLicencias, labelLicencia, esLicenciaConSubsidio } from '@/lib/licencias-context'
-import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo, getDiasPreavisoRequeridos, getAnosServicio, TASAS_TSS } from '@/lib/dominican-labor'
+import { useRetribuciones } from '@/lib/retribuciones-context'
+import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo, getDiasPreavisoRequeridos, getAnosServicio, TASAS_TSS, TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatCedula, fullName,
   formatAnosServicio, contratoLabel, contratoBadgeClass, BTN_PRIMARY,
@@ -1187,6 +1188,21 @@ function ReporteTSS({
 
   const periodo = sorted.find(p => p.id === periodoId)
 
+  // ─── Impuesto Sustitutivo sobre Retribuciones Complementarias (IR-17) ──────
+  // No es TSS ni ISR retenido al empleado — es un impuesto aparte que la
+  // empresa paga a la DGII sobre beneficios en especie (vehículo, vivienda,
+  // etc., registrados en /retribuciones-complementarias). Se cruza por
+  // mes/año simple contra el período seleccionado (RetribucionComplementaria
+  // no referencia un PeriodoNomina, son campos independientes — mismo
+  // criterio ya usado en getRetribucionesPendientes de dominican-labor.ts).
+  const { retribuciones } = useRetribuciones()
+  const lineasIR17 = useMemo(
+    () => (periodo ? retribuciones.filter(r => r.mes === periodo.mes && r.anio === periodo.anio) : []),
+    [retribuciones, periodo]
+  )
+  const totalRetribucionesIR17 = useMemo(() => lineasIR17.reduce((s, l) => s + l.valorMensual, 0), [lineasIR17])
+  const impuestoIR17 = totalRetribucionesIR17 * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES
+
   // Empleados REALMENTE incluidos en el período (snapshot resultadosPorEmpleado
   // si existe, o todos los activos como respaldo solo para períodos sin ese
   // campo) — no `empleados.filter(e => e.activo)` a secas, que excluiría por
@@ -1384,6 +1400,20 @@ function ReporteTSS({
       tableWidth: 140,
     })
 
+    if (lineasIR17.length > 0) {
+      const afterISR = docTyped.lastAutoTable?.finalY ?? afterConciliacion + 20
+      autoTable(doc, {
+        startY: afterISR + 6,
+        head: [['Impuesto Sustitutivo — Retribuciones Complementarias (IR-17)', '']],
+        body: [[`27% sobre ${formatRD(totalRetribucionesIR17, 2)} en beneficios en especie`, formatRD(impuestoIR17, 2)]],
+        theme: 'plain',
+        headStyles: { fillColor: [255, 255, 255], textColor: NAVY, fontStyle: 'bold', fontSize: 9 },
+        bodyStyles: { fontSize: 9, fontStyle: 'bold' },
+        columnStyles: { 1: { halign: 'right' } },
+        tableWidth: 140,
+      })
+    }
+
     // ─── Página 2: Detalle por Empleado (auditoría/soporte) ─────────────────
     doc.addPage()
     pdfHeader(doc, empresa, 'Reporte TSS / IR-2 — Detalle por Empleado', periodoLabel(periodo))
@@ -1455,6 +1485,23 @@ function ReporteTSS({
             totales.afpEmpl, totales.sfsEmpl, totales.srl, totales.infotep, totales.totalTSS, totales.isr],
           anchos: [30, 18, 16, 14, 14, 14, 14, 12, 12, 16, 14],
         },
+        ...(lineasIR17.length > 0 ? [{
+          nombre: 'IR-17',
+          titulo: 'Impuesto Sustitutivo sobre Retribuciones Complementarias',
+          subtitulo: periodoLabel(periodo),
+          encabezados: ['Concepto', 'Empleado', 'Valor Mensual (RD$)', 'Impuesto Sustitutivo 27%'],
+          filas: lineasIR17.map(l => {
+            const emp = l.empleadoId ? empleados.find(e => e.id === l.empleadoId) : undefined
+            return [
+              l.concepto,
+              emp ? fullName(emp) : 'General / sin asignar',
+              l.valorMensual,
+              l.valorMensual * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES,
+            ]
+          }),
+          totales: [`TOTAL — ${lineasIR17.length} concepto(s)`, '', totalRetribucionesIR17, impuestoIR17],
+          anchos: [30, 26, 20, 22],
+        }] : []),
       ],
     })
   }
@@ -1569,6 +1616,17 @@ function ReporteTSS({
               </div>
               <p className="text-xl font-bold text-[#1B2980] dark:text-indigo-400 tabular-nums whitespace-nowrap">{formatRD(totales.isr, 2)}</p>
             </div>
+            {lineasIR17.length > 0 && (
+              <div className="border-t border-zinc-100 dark:border-[#1d2035] bg-[#eef0fb]/40 dark:bg-indigo-950/10 px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-[#1B2980] dark:text-indigo-400">Impuesto Sustitutivo — Retribuciones Complementarias (IR-17)</p>
+                  <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    27% sobre RD${totalRetribucionesIR17.toLocaleString('es-DO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} en beneficios en especie registrados este mes — obligación de la empresa, no se descuenta al empleado (ver /retribuciones-complementarias).
+                  </p>
+                </div>
+                <p className="text-xl font-bold text-[#1B2980] dark:text-indigo-400 tabular-nums whitespace-nowrap">{formatRD(impuestoIR17, 2)}</p>
+              </div>
+            )}
           </div>
 
           {/* Detalle por empleado — soporte y auditoría de la planilla de conciliación de arriba */}
