@@ -3323,6 +3323,95 @@ correcta con el contador y el footer "TOTAL (filtrado)" exactos. Sin errores
 de consola. `tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio
 de conteo).
 
+## Retribuciones Complementarias — persistencia real + recordatorio de vencimiento IR-17
+
+El usuario pidió analizar si el módulo (hasta entonces una calculadora
+efímera de una sola sesión, sin persistencia) se podía hacer "mejor y más
+productivo" — se propusieron 3 mejoras por prioridad; el usuario aprobó
+explícitamente **A (persistencia real + historial mensual)** y **B
+(recordatorio de vencimiento)**, descartando **C (integración con
+Préstamos vía diferencial de tasa de interés)** por ahora, y adjuntó la
+"Guía del Contribuyente No.14" oficial de la DGII sobre este impuesto para
+confirmar los datos legales exactos antes de codificarlos (evita el riesgo,
+ya identificado en el análisis previo, de afirmar una fecha límite sin
+verificar).
+
+**Datos legales confirmados por la guía adjunta** (antes solo se sospechaban,
+ahora vienen de la fuente oficial): el impuesto se declara mensualmente vía
+**Formulario IR-17** ("Otras Retenciones y Retribuciones Complementarias")
+en la Oficina Virtual DGII, **vence el día 10 de cada mes** junto con las
+demás retenciones (si cae fin de semana, se traslada al siguiente día
+hábil — la guía no detalla feriados, así que la función solo ajusta
+sábado/domingo, no feriados nacionales); declarar tarde genera 10% de
+recargo el primer mes/fracción + 4% progresivo por mes adicional + 1.10%
+de interés indemnizatorio acumulativo. Base legal: Código Tributario Ley
+11-92, modificada por las Leyes 557-05/139-11/253-12.
+
+**A — Persistencia real + historial mensual:**
+- Nuevo tipo `RetribucionComplementaria` (mes/año/concepto/valorMensual/
+  empleadoId opcional/`declarada`/`fechaDeclaracion`) + `src/lib/
+  retribuciones-context.tsx` (mismo patrón que `licencias-context.tsx`,
+  `useUserScopedKey('cielo-retribuciones-complementarias')`), registrado en
+  `layout.tsx`. Antes, refrescar la página perdía todo lo registrado — ahora
+  cada línea persiste con su mes/año, permitiendo comparar meses.
+- **`/retribuciones-complementarias`** rediseñado: selector de mes/año con
+  flechas ‹ › en vez de un formulario de una sola sesión; el "Empleado
+  beneficiario" pasó de ser un dato global del batch a un campo por línea
+  (con columna "Empleado" en la tabla), ya que ahora distintos meses/líneas
+  pueden tener beneficiarios distintos. Nueva sección "Historial de
+  Declaraciones IR-17" — tabla de todos los meses con líneas registradas
+  (total, impuesto, estado Declarado/Pendiente), con acción "Ver" que salta
+  directo a ese mes.
+- **Declaración IR-17** — `marcarDeclarado(mes, año, fecha)`/
+  `desmarcarDeclarado(mes, año)` en el contexto: una sola declaración
+  mensual cubre TODOS los conceptos de ese mes, así que el estado se marca
+  a nivel de mes (todas sus líneas), no por línea individual — botón
+  "Marcar como Declarado (IR-17)" + "deshacer", mismo patrón ya usado en
+  Licencias (trazabilidad de reclamo) y Nómina (marcar pagada).
+
+**B — Recordatorio de vencimiento:**
+- `fechaLimiteIR17(mes, anio)` + `getRetribucionesPendientes()` (nuevos,
+  `dominican-labor.ts`, mismo patrón que `getBonificacionesPendientes`) —
+  agrupa por mes/año, un mes cuenta como pendiente solo si NINGUNA de sus
+  líneas está declarada. Wireado en `useAlertas()` (`src/lib/alertas.ts`) y
+  visible en la campanita de notificaciones — a diferencia de Bonificación/
+  Regalía (cadencia anual, ventana de aviso de 30-45 días), aquí la ventana
+  es de solo **10 días** porque el vencimiento es mensual — con una ventana
+  larga la alerta estaría "siempre encendida" desde el día 1 de cada mes,
+  sin aportar urgencia real.
+- `TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES` (27%) se movió de una constante
+  local en la página a `dominican-labor.ts`, para que el helper de alertas
+  y la página compartan la misma fuente de verdad.
+
+**C — explícitamente diferido** (no implementado esta sesión, por decisión
+del usuario): detectar préstamos/avances con tasa de interés preferencial
+como retribución complementaria automática (Art. 318 CT — el diferencial de
+interés no cobrado es en sí mismo una retribución complementaria gravable).
+Sigue siendo una integración real pendiente para una sesión futura.
+
+**Hallazgo adicional de la guía, no implementado por estar fuera del
+alcance A+B acordado**: la guía especifica bases de cálculo mucho más
+detalladas que el "valor mensual" plano que usa hoy el módulo — vivienda se
+calcula por la SUMA de gastos reales imputados (depreciación/alquiler +
+mantenimiento + servicios), y vehículos llevan un % de uso personal
+presunto (40%/20% según si el empleado es de oficina y si el vehículo es
+propiedad de la empresa o del empleado, con una regla especial: si se
+asignan varios vehículos de la empresa a un mismo funcionario, solo el
+menos costoso recibe la proporcionalidad). Quedó registrado aquí para una
+futura sesión si el usuario decide refinar la base de cálculo por
+categoría — no se tocó la categorización ni las fórmulas existentes en esta
+pasada, solo persistencia (A) y vencimiento (B).
+
+Verificado en navegador con Playwright: línea de RD$20,000 (Vehículo de la
+empresa) → Impuesto Sustitutivo exacto RD$5,400.00; navegar al mes anterior
+y volver confirma el aislamiento real entre meses (antes todo vivía en un
+solo `useState` compartido); reload completo de página confirma persistencia
+real (ya no es efímera); "Marcar como Declarado" cambia el badge y aparece
+en el Historial; "deshacer" revierte; una línea de enero 2026 sin declarar
+sembrada directo en localStorage dispara el badge de la campana con "IR-17
+vencido hace N día(s)" y el link correcto. Sin errores de consola. `tsc
+--noEmit` y `npm run build` limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3331,6 +3420,7 @@ de conteo).
 
 | Hash | Descripción |
 |---|---|
+| `4952e02` | feat: Retribuciones Complementarias — persistencia real + recordatorio de vencimiento IR-17 |
 | `ab8bcd0` | feat: filtros, documento de soporte y trazabilidad de reclamo en Licencias |
 | `7d5e156` | feat: prorrateo por reajuste salarial a mitad de período + alerta de pago retroactivo |
 | `ee0d37a` | redesign: Centro de Alertas como campanita de notificaciones en el Header |
