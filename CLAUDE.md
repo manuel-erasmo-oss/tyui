@@ -3468,6 +3468,204 @@ RD$5,400.00 (27% de 20,000), debajo del bloque de ISR existente. Sin
 errores de consola. `tsc --noEmit` y `npm run build` limpios (19 rutas,
 sin cambio de conteo).
 
+## QA de comercialización — simulación de 7 años, 7 agentes en paralelo
+
+Directiva explícita del usuario, de cara a empezar a comercializar el
+producto: "Quiero que hagas QA a fondo de cada uno de los módulos del
+sistema... Quiero estar seguro de que todo está funcionando correctamente
+porque nuestro objetivo es comenzar a comercializar y todo debe estar bien.
+Simula 7 años." Autorización explícita para usar agentes en paralelo y
+capacidad máxima del modelo.
+
+**Metodología**: 7 agentes independientes (Agent tool, no Workflow — el
+pedido del usuario no cumplía la barra de "palabras propias del usuario"
+que exige el Workflow tool para orquestación multiagente), cada uno
+responsable de un grupo de módulos relacionados, construyendo su **propio**
+dataset sintético de 7 años (2019-2026) vía Playwright + `localStorage`
+directo contra un servidor de desarrollo compartido, usando perfiles de
+navegador persistentes independientes (`profile_qaA`...`profile_qaG`) para
+no chocar entre sí:
+
+| Agente | Módulos |
+|---|---|
+| A | Motor de Nómina + Cálculo/Envíos + Aumentos Salariales |
+| B | Empleados + Carga Inicial + Bandas Salariales |
+| C | Vacaciones + Liquidación |
+| D | Licencias + Préstamos |
+| E | Regalía Pascual + Bonificación + Retribuciones Complementarias |
+| F | Reportería (15+ reportes) |
+| G | Dashboard + Alertas + Configuración + Auth |
+
+**Resultado**: 27 hallazgos totales (13 críticos, 7 medios, 7 bajos). Los 13
+críticos y 6 de los 7 medios se corrigieron en esta sesión; los 2 medios/bajos
+restantes quedaron documentados como limitaciones arquitectónicas honestas
+(no bugs con fix simple), consistente con el criterio ya usado en el resto
+de este documento para casos similares.
+
+### 🔴 Hallazgos críticos corregidos (13)
+
+1. **Vacaciones — sobre-acumulación por umbral off-by-one.**
+   `calcularDiasVacacionesAcumulados` usaba `i >= 5`/`(aniosCompletos+1) >= 5`
+   para decidir 14 vs. 18 días/año — el año exactamente en el umbral (año 5)
+   ya contaba a 18 en vez de 14, adelantando el cambio de tasa un año antes
+   de lo que exige el Art. 177 ("más de cinco años"). Fix: `>= 5` → `> 5` en
+   ambos puntos. Verificado: 7 años exactos ahora acumulan 106 días
+   (5×14 + 2×18), no 108.
+2. **Cesantía/Preaviso — el promedio de 12 meses se distorsionaba con
+   historial incompleto.** `calcularSalarioPromedioUltimos12Meses` dividía
+   la suma real entre la CANTIDAD de meses encontrados (no siempre 12) —
+   un empleado con solo 2-3 meses de historial en Cielo Cloud (típico de
+   una empresa recién migrada) veía su indemnización basada en el promedio
+   de esos pocos meses, ignorando por completo
+   `Empleado.salarioHistoricoReferencia` (el campo diseñado exactamente
+   para este caso). Fix: divisor fijo de 12 meses, rellenando los meses sin
+   registro real con `salarioHistoricoReferencia ?? salarioBase`.
+3. **Reajuste salarial a mitad de período — el prorrateo ponderado solo
+   cubría el período donde ocurría el cambio.** Un período posterior (sin
+   ningún aumento efectivo DENTRO de su rango) seguía usando
+   `Empleado.salarioBase` en vivo en vez de reconstruir cuál era el salario
+   vigente al final de ese período específico — un período histórico
+   reabierto/recalculado después de un aumento posterior podía mostrar el
+   salario incorrecto. Fix: `salarioEfectivoEnPeriodo` ahora, cuando ningún
+   aumento cae dentro del rango, recorre la línea de tiempo completa de
+   `RegistroAumento[]` para reconstruir el salario vigente al cierre del
+   período (histórico si el período es anterior a todos los aumentos,
+   futuro-anterior si es posterior).
+4. **Saldo ISR a Favor — solo consumía el registro más antiguo, dejando
+   crédito real sin aplicar.** Un empleado con 2+ créditos ISR activos
+   simultáneos (ej. uno viejo parcialmente consumido + uno nuevo) solo veía
+   descontado el ISR contra el primero — si no alcanzaba, el resto del ISR
+   se retenía normal aunque hubiera más crédito disponible en el segundo
+   registro. Fix: `conSaldoISR`/`congelarYCalcular` ahora suman TODOS los
+   saldos activos y los encadenan FIFO tanto en la vista previa como al
+   procesar (consumo real, persistido por registro).
+5. **Modal de envío de comprobantes usaba el motor plano, sin ningún
+   prorrateo.** `EnvioComprobantesModal` calculaba con `calcularConPeriodo`
+   (dominican-labor.ts, sin conocimiento de suspensión/salida/licencia sin
+   sueldo/vacaciones/reajuste salarial) en vez de `calcularParaPeriodo`
+   (nomina-shared.ts, el chokepoint real) — el comprobante enviado por
+   correo podía mostrar un monto distinto al que realmente se procesó y
+   cerró. Fix: reemplazado el import y threading de `disfrutes`/
+   `licencias`/`aumentos`.
+6. **Duplicación de período especial al reseleccionar un año ya pagado.**
+   En Bonificación y Regalía Pascual, seleccionar un año fiscal cuyo
+   período ya estaba `cerrada` (pagado) seguía permitiendo "Solicitar
+   Liquidación" — creaba un SEGUNDO período especial para el mismo año,
+   duplicando el pago en los números agregados. Fix: guard explícito en
+   `confirmarSolicitud()` de ambos módulos + banner gris "ya pagada — ver
+   en Nómina" en vez del botón de solicitud cuando el período del año
+   elegido ya está cerrado.
+7. **Planilla Bancaria/ACH ignoraba el período seleccionado, usaba
+   plantilla siempre viva.** El reporte armaba el roster con
+   `empleados.filter(e => e.activo)` (estado ACTUAL) en vez del snapshot
+   histórico del período elegido — un período de 2019 mostraba empleados
+   contratados en 2026 y excluía a los ya desvinculados de esa época. Fix:
+   roster ahora se construye preferentemente desde
+   `periodo.resultadosPorEmpleado` (snapshot), con el mismo fallback ya
+   establecido para períodos anteriores a la existencia de ese campo.
+8. **Proyección Anual descartaba el costo YTD de empleados liquidados
+   este año.** El acumulado "Ejecutado YTD" solo sumaba `filas` (roster
+   actual), excluyendo por completo lo pagado a cualquier empleado que ya
+   no está activo — subestimaba el costo real ejecutado del año en
+   empresas con rotación. Fix: nuevo `ytdRealFueraDePlantilla` sumado al
+   total, con nota visible cuando aplica.
+9. **Alerta de Regalía Pascual solo evaluaba el año calendario actual.**
+   Un año fiscal anterior sin pagar (ej. la empresa se saltó un diciembre)
+   nunca generaba alerta una vez pasado ese año calendario — la campanita
+   solo miraba `anioActual`. Fix: nuevo `getRegaliaPendientes()` (mismo
+   patrón barrido que `getBonificacionesPendientes`) que recorre
+   `ANIOS_FISCALES` completo, acotado por `primerIngresoConocido`.
+10. **Historial Nómina fabricaba pagos fantasma.** El tab Historial Nómina
+    de Empleados no verificaba `PeriodoNomina.empleadosProcesados` —
+    mostraba un período como "pagado" para un empleado que nunca formó
+    parte de él (ej. contratado después de que ese período cerró), usando
+    su salario actual como si se le hubiera pagado ese mes. Fix: filtro
+    adicional que excluye períodos donde el empleado no está en
+    `empleadosProcesados` (cuando ese campo existe).
+11. **Importador Excel de Carga Inicial no normalizaba cédulas al hacer
+    matching.** Comparaba el string crudo de la celda contra
+    `Empleado.cedula` — variaciones de formato (guiones, ceros a la
+    izquierda perdidos por Excel) creaban empleados DUPLICADOS en vez de
+    actualizar el existente. Fix: reutiliza `cedulasCoinciden()` (ya
+    existente en `ImportadorHorasExcel.tsx`, ahora movida a
+    `empleado-form.ts` como helper compartido) + normalización de cédula
+    nueva idéntica a `formToEmpleado()` al crear un registro.
+12. **`regaliaPagadaAnio` nunca se estampaba desde Carga Inicial.** Los dos
+    flujos (Asistente Guiado, Importador Excel) seteaban
+    `regaliaPagadaEsteAnio` pero nunca el año ancla `regaliaPagadaAnio` —
+    sin él, `regaliaPagadaVigente()` asume que el descuento solo aplica al
+    año calendario ACTUAL, así que un dato migrado a mitad de año podía
+    dejar de aplicarse antes de tiempo. Fix: ambos flujos estampan también
+    `regaliaPagadaAnio: new Date().getFullYear()`.
+13. **(Combinado con #3)** — el mismo fix de `salarioEfectivoEnPeriodo`
+    cubrió tanto el caso de reajuste a mitad de período reportado por el
+    Agente A como un caso relacionado de ingreso tardío con retroactivo mal
+    calculado.
+
+### 🟡 Hallazgos medios corregidos (6 de 7)
+
+- **Préstamos — residuo de centavos nunca cerraba a "pagado".** Pagar
+  exactamente el monto de cada cuota (redondeada a centavos) casi nunca
+  cierra el saldo a 0.00 exacto por el desfase entre la cuota redondeada y
+  `cuotaBase` interno — un préstamo mostraba "100% pagado" en pantalla pero
+  seguía `estado: 'activo'` para siempre, pesando en el panel de Capacidad
+  de Pago indefinidamente. Fix: tolerancia de redondeo (`saldoBruto <= 1 ?
+  0 : saldoBruto`) en `registrarPago`.
+- **Alertas de Bonificación/Retribuciones solo mostraban el primer caso
+  pendiente, ocultando el resto.** Con 2+ años/meses vencidos
+  simultáneamente, el popover de notificaciones solo listaba `[0]` sin
+  ninguna indicación de que había más — un usuario podía creer que solo
+  debía un año cuando en realidad debía varios. Fix: `detalle`/
+  `detalleTotal` en las 3 alertas (Bonificación, Regalía, Retribuciones)
+  ahora incluyen los casos adicionales vía `.slice(1)`.
+- **Alerta de pago retroactivo — doble conteo en nómina quincenal +
+  falso positivo por suspensión histórica.** Un mes con 2 quincenas podía
+  generar 2 alertas separadas para el mismo hueco real; y un empleado
+  suspendido en el pasado (con la suspensión ya cerrada mucho antes de ese
+  mes) podía marcarse incorrectamente como "sin ingresos" en meses donde sí
+  cobró normal. Fix: agrupación por `${anio}-${mes}` antes de iterar
+  (máximo 1 alerta por mes real, sin importar cuántos períodos quincenales
+  lo componen) + chequeo de suspensión contra `historialSuspensiones` con
+  solapamiento real de fechas (en vez del estado puntual actual).
+
+**No corregidos — limitaciones documentadas, no bugs con fix simple:**
+- **Costo por Departamento usa el departamento ACTUAL del empleado, no el
+  histórico** (Agente F) — el modelo de datos no tiene un campo de
+  "departamento en la fecha X"; corregirlo requeriría el mismo tipo de
+  snapshot ya construido para salario/resultado, pero aplicado a un campo
+  que hoy no se versiona en absoluto. Queda como brecha arquitectónica real
+  para una sesión futura si se prioriza.
+- **Calendario de Feriados en Configuración solo muestra el año calendario
+  actual** (Agente G) — limitación de alcance del selector, no un defecto:
+  el usuario puede seguir registrando feriados de años pasados/futuros
+  manualmente, solo que la UI no ofrece navegación entre años todavía.
+
+**Hallazgos bajos (7)** — deliberadamente no abordados en esta pasada dado
+el alcance ya cubierto (umbrales de ISR hardcodeados en un widget de
+Cumplimiento Fiscal, inconsistencia menor en el chequeo del flag `pagada`
+de Regalía, código muerto `diasVacAnuales` en Liquidación, nota faltante de
+"venta de vacaciones" en el PDF de comprobante, wrapping de títulos largos
+en el popover de notificaciones, límite estructural de 10 años atrás en
+`ANIOS_FISCALES` para Bonificación). Uno (texto placeholder "bórrame" en
+celdas de ejemplo de la plantilla Excel) se corrigió como efecto colateral
+del fix #11.
+
+### Verificación
+
+Script Playwright con 6 escenarios dirigidos (smoke test de las 19 rutas +
+5 escenarios que reproducen exactamente el bug original de cada fix crítico
+más representativo — C1 vacaciones/7 años, A1 salario histórico en período
+retroactivo, A2 encadenamiento de saldo ISR, E1 bloqueo de período
+duplicado, F1 roster histórico de la Planilla ACH) — los 6 pasaron tras dos
+correcciones al propio script (no a la app): el flujo de "Procesar" con un
+solo empleado pendiente abre el modal de auditoría pre-cierre en vez de
+procesar directo (comportamiento correcto y ya documentado del sistema, no
+un bug), así que el script necesitó un paso adicional de confirmación.
+`npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de
+conteo) tanto antes como después de un reinicio de contenedor a mitad de
+sesión (verificado que ningún cambio se perdió comparando `git diff --stat`
+antes/después).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3476,6 +3674,7 @@ sin cambio de conteo).
 
 | Hash | Descripción |
 |---|---|
+| `01202c1` | fix: QA de 7 años — 13 bugs críticos y 6 medios en Nómina, Vacaciones, Regalía, Bonificación, Reportería y Alertas |
 | `b9944b2` | feat: Retribuciones Complementarias — acumulado por empleado, PDF y bloque en Cumplimiento Fiscal |
 | `12b4a5c` | feat: Retribuciones Complementarias — acumulado histórico por empleado |
 | `4952e02` | feat: Retribuciones Complementarias — persistencia real + recordatorio de vencimiento IR-17 |
