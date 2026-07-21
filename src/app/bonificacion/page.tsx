@@ -173,11 +173,18 @@ export default function BonificacionPage() {
   // calculan con resultadoBonificacion() (motor real de nómina), no con un
   // resultado sintético en cero.
   //
-  // Solo bloquea una nueva solicitud mientras el período del año fiscal
-  // elegido sigue en_proceso/procesada en Nómina — una vez cerrado (pagado),
-  // se puede solicitar la liquidación de otro año sin problema.
+  // Bloquea una nueva solicitud mientras exista CUALQUIER período (en
+  // cualquier estado) del año fiscal elegido — antes solo se revisaba
+  // `estado !== 'cerrada'`, así que reseleccionar un año ya PAGADO
+  // reactivaba el botón "Solicitar Liquidación" sin ningún aviso, pudiendo
+  // crear un segundo período de pago real duplicado para el mismo
+  // ejercicio (bug confirmado en QA: a diferencia de Regalía Pascual, cuyo
+  // acumulado por empleado se autorresetea, Bonificación se recalcula
+  // siempre desde cero desde la Utilidad Neta, así que el duplicado es un
+  // monto completo, no atenuado).
   const periodoBonifAnio = periodos.find(p => p.tipo === 'bonificacion' && p.anio === anioFiscal)
-  const periodoBonifExistente = periodoBonifAnio?.estado !== 'cerrada' ? periodoBonifAnio : undefined
+  const periodoBonifExistente = periodoBonifAnio && periodoBonifAnio.estado !== 'cerrada' ? periodoBonifAnio : undefined
+  const periodoBonifPagado = periodoBonifAnio && periodoBonifAnio.estado === 'cerrada' ? periodoBonifAnio : undefined
 
   const historialBonificacion = periodos
     .filter(p => p.tipo === 'bonificacion' && p.estado === 'cerrada')
@@ -244,6 +251,10 @@ export default function BonificacionPage() {
   }
 
   function confirmarSolicitud() {
+    // Defensa adicional además del gate de la UI: nunca crear un segundo
+    // período de Bonificación para un año fiscal que ya tiene uno, sin
+    // importar su estado.
+    if (periodoBonifAnio) return
     const montosBonificacion: Record<string, number> = {}
     const motivosAjusteBonificacion: Record<string, string> = {}
     let totalBruto = 0, totalDescuentos = 0, totalNeto = 0, totalAportes = 0, totalIsr = 0, totalCosto = 0
@@ -484,6 +495,15 @@ export default function BonificacionPage() {
                 <CheckCircle2 className="h-4 w-4" />
                 Liquidación {anioFiscal} en Nómina
               </Link>
+            ) : periodoBonifPagado ? (
+              <Link
+                href="/nomina"
+                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] transition-colors"
+                title="Ya se pagó este ejercicio — para corregirlo, reabre el período desde Nómina"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {anioFiscal} ya pagada — ver en Nómina
+              </Link>
             ) : (
               <button
                 onClick={abrirSolicitud}
@@ -510,6 +530,19 @@ export default function BonificacionPage() {
               Ya se solicitó la liquidación de Bonificación por Utilidades {anioFiscal} — continúa el pago desde Nómina.
             </div>
             <Link href="/nomina" className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">
+              Ir a Nómina <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {periodoBonifPagado && (
+          <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3.5 text-sm">
+            <div className="flex items-center gap-2.5 text-zinc-600 dark:text-zinc-300">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              La Bonificación por Utilidades {anioFiscal} ya se pagó — no se puede solicitar de nuevo. Si necesitas
+              corregirla, reabre el período desde Nómina.
+            </div>
+            <Link href="/nomina" className="flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-300 hover:underline">
               Ir a Nómina <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>

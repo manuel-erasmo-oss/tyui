@@ -87,12 +87,39 @@ export function EmpleadosProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  // Agrega un registro al historial completo de suspensiones (no solo la
+  // vigente) — reactivar() lo cierra con fechaFin. Sin este historial, un
+  // empleado suspendido y luego reactivado hace años queda indistinguible
+  // de uno que nunca estuvo suspendido, generando falsos positivos en la
+  // alerta de "posible pago retroactivo pendiente" para meses donde sí
+  // estuvo legítimamente ausente por una suspensión ya resuelta.
   function suspender(id: string, fecha: string, motivo: string) {
-    update(id, { suspendido: true, fechaSuspension: fecha, motivoSuspension: motivo })
+    setEmpleados(prev => {
+      const next = prev.map(e => e.id === id
+        ? {
+            ...e,
+            suspendido: true, fechaSuspension: fecha, motivoSuspension: motivo,
+            historialSuspensiones: [...(e.historialSuspensiones ?? []), { fechaInicio: fecha, motivo }],
+          }
+        : e)
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
   }
 
   function reactivar(id: string) {
-    update(id, { suspendido: false, fechaSuspension: undefined, motivoSuspension: undefined })
+    const hoy = new Date().toISOString().split('T')[0]
+    setEmpleados(prev => {
+      const next = prev.map(e => {
+        if (e.id !== id) return e
+        const historial = (e.historialSuspensiones ?? []).map((r, i, arr) =>
+          i === arr.length - 1 && !r.fechaFin ? { ...r, fechaFin: hoy } : r
+        )
+        return { ...e, suspendido: false, fechaSuspension: undefined, motivoSuspension: undefined, historialSuspensiones: historial }
+      })
+      try { localStorage.setItem(key, JSON.stringify(next)) } catch { /* ignore */ }
+      return next
+    })
   }
 
   function marcarSalidaPendiente(

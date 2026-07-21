@@ -52,14 +52,19 @@ export default function RegaliaPage() {
     (new Date(hoy.getFullYear(), 11, 20).getTime() - hoy.getTime()) / (1000 * 3600 * 24)
   ))
 
-  // Período de nómina de Regalía Pascual para el año en curso. Solo bloquea
-  // "Solicitar Liquidación" mientras sigue en_proceso/procesada en Nómina —
-  // una vez cerrada (pagada), el ciclo del año quedó completado de verdad:
-  // el acumulado ya volvió a 0 y el módulo debe volver a mostrar el estado
-  // normal de acumulación (hacia el próximo diciembre), no seguir apuntando
-  // a Nómina indefinidamente como si aún hubiera algo pendiente.
+  // Período de nómina de Regalía Pascual para el año en curso. Mientras
+  // sigue en_proceso/procesada en Nómina, bloquea "Solicitar Liquidación"
+  // con el banner "ya se solicitó". Una vez cerrada (pagada), YA NO debe
+  // reaparecer el botón de solicitud — aunque el acumulado individual de
+  // cada empleado ya vuelto a 0 amortigua el riesgo (regaliaPagadaVigente),
+  // un empleado que nunca formó parte de ese período cerrado (ej. se agregó
+  // después) sí mostraría un pendiente genuino, y confirmar crearía un
+  // SEGUNDO período "Regalía Pascual {año}" duplicado (bug confirmado en
+  // QA) — así que el gate real es "¿ya existe un período de este año, en
+  // cualquier estado?", no solo "¿sigue sin cerrar?".
   const periodoRegaliaAnioActual = periodos.find(p => p.tipo === 'regalia' && p.anio === anioActual)
-  const periodoRegaliaExistente = periodoRegaliaAnioActual?.estado !== 'cerrada' ? periodoRegaliaAnioActual : undefined
+  const periodoRegaliaExistente = periodoRegaliaAnioActual && periodoRegaliaAnioActual.estado !== 'cerrada' ? periodoRegaliaAnioActual : undefined
+  const periodoRegaliaPagado = periodoRegaliaAnioActual && periodoRegaliaAnioActual.estado === 'cerrada' ? periodoRegaliaAnioActual : undefined
 
   // Historial de ciclos ya liquidados y pagados — así queda visible que años
   // anteriores se pagaron y sobre cuál año se está acumulando ahora mismo.
@@ -135,6 +140,10 @@ export default function RegaliaPage() {
   }
 
   function confirmarSolicitud() {
+    // Defensa adicional además del gate de la UI: nunca crear un segundo
+    // período de Regalía Pascual para un año que ya tiene uno, sin importar
+    // su estado.
+    if (periodoRegaliaAnioActual) return
     const montosRegalia: Record<string, number> = {}
     const motivosAjusteRegalia: Record<string, string> = {}
     for (const f of filas) {
@@ -348,6 +357,15 @@ export default function RegaliaPage() {
                 <CheckCircle2 className="h-4 w-4" />
                 Liquidación {anioActual} en Nómina
               </Link>
+            ) : periodoRegaliaPagado ? (
+              <Link
+                href="/nomina"
+                className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] transition-colors"
+                title="Ya se pagó este ciclo — para corregirlo, reabre el período desde Nómina"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                {anioActual} ya pagada — ver en Nómina
+              </Link>
             ) : (
               <button
                 onClick={abrirSolicitud}
@@ -370,6 +388,19 @@ export default function RegaliaPage() {
               Ya se solicitó la liquidación de Regalía Pascual {anioActual} — continúa el pago desde Nómina.
             </div>
             <Link href="/nomina" className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400 hover:underline">
+              Ir a Nómina <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {periodoRegaliaPagado && (
+          <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3.5 text-sm">
+            <div className="flex items-center gap-2.5 text-zinc-600 dark:text-zinc-300">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              La Regalía Pascual {anioActual} ya se pagó — no se puede solicitar de nuevo. Si necesitas corregirla,
+              reabre el período desde Nómina.
+            </div>
+            <Link href="/nomina" className="flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-300 hover:underline">
               Ir a Nómina <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>

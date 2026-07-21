@@ -878,6 +878,16 @@ function EmpleadoDrawer({
               // nómina, que fabricaría un salario mensual completo
               // inexistente bajo la etiqueta de ese período.
               if ((p.tipo === 'regalia' || p.tipo === 'bonificacion') && !p.resultadosPorEmpleado?.[empleado.id]) return false
+              // Igual criterio para mensual/quincenal: si el período SÍ
+              // trackea quién fue procesado (empleadosProcesados) y este
+              // empleado no está en la lista, nunca formó parte de ese pago
+              // real — sin este chequeo, el paso de abajo caía al motor
+              // "en vivo" (calcNominaConAjustes con el salario actual) y
+              // fabricaba un pago completo inexistente bajo la etiqueta de
+              // ese período. Sin `empleadosProcesados` (períodos anteriores
+              // a ese campo) se asume que sí participó, como en el resto de
+              // la app.
+              if (p.empleadosProcesados !== undefined && !p.empleadosProcesados.includes(empleado.id)) return false
               return true
             })
             .map(p => {

@@ -162,6 +162,21 @@ export function labelTipoDoc(tipo?: TipoDocumento): string {
   return DOC_TIPOS.find(t => t.value === (tipo ?? 'cedula'))?.label ?? 'Cédula'
 }
 
+// Compara dos cédulas tolerando diferencias de formato (guiones/espacios) y
+// pérdida de ceros a la izquierda — común al reingresar cédulas dominicanas
+// en Excel: si la celda se guarda/lee como número en vez de texto, los
+// ceros iniciales (formato 0XX-XXXXXXX-X) se pierden. Compara primero
+// exacto (solo dígitos) y, si falla, ignorando ceros a la izquierda en
+// ambos lados antes de descartar la coincidencia.
+export function cedulasCoinciden(cedulaA: string, cedulaB: string): boolean {
+  const a = cedulaA.replace(/\D/g, '')
+  const b = cedulaB.replace(/\D/g, '')
+  if (a === b) return true
+  const aSinCeros = a.replace(/^0+/, '')
+  const bSinCeros = b.replace(/^0+/, '')
+  return aSinCeros !== '' && aSinCeros === bSinCeros
+}
+
 export function calcularEdad(fechaNacimiento: string): number {
   const hoy = new Date()
   const nac = new Date(fechaNacimiento)

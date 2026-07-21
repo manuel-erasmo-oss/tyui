@@ -8,10 +8,15 @@ import {
   enviarComprobante, plantillaComprobanteDeEmpresa, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
 } from '@/lib/comprobante-email'
 import type { PlantillaComprobante } from '@/lib/comprobante-email'
-import { getAnosServicio, calcularConPeriodo } from '@/lib/dominican-labor'
+import { getAnosServicio } from '@/lib/dominican-labor'
 import { formatRD, fullName, formatDate, BTN_PRIMARY } from '@/lib/utils'
-import { labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF } from '@/lib/nomina-shared'
-import type { Empleado, PeriodoNomina, ResultadoNomina } from '@/types'
+import {
+  labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF, calcularParaPeriodo,
+} from '@/lib/nomina-shared'
+import { useVacaciones } from '@/lib/vacaciones-context'
+import { useLicencias } from '@/lib/licencias-context'
+import { useAumentos } from '@/lib/aumentos-context'
+import type { Empleado, PeriodoNomina, ResultadoNomina, DisfruteVacaciones, Licencia, RegistroAumento } from '@/types'
 
 // Empleados + resultado a mostrar en el modal — para cualquier período ya
 // CERRADO (el único estado desde el que se abre este modal, vía "Marcar como
@@ -20,12 +25,14 @@ import type { Empleado, PeriodoNomina, ResultadoNomina } from '@/types'
 // realmente pagado, congelada al momento de procesar. Los períodos
 // anteriores a ese campo (o sembrados directo como datos demo, sin pasar
 // por el flujo real de "Procesar") no lo tienen — para esos se recalcula en
-// vivo con calcularConPeriodo, igual criterio ya usado en
+// vivo con calcularParaPeriodo (mismo motor exacto que usa Cálculo de
+// Nómina, ver nomina-shared.ts), igual criterio ya usado en
 // calcularSalarioPromedioUltimos12Meses: si el período trackea quién fue
 // procesado se respeta esa membresía, si no se asume que incluyó a todos
 // los empleados en nómina.
 function filasComprobante(
   periodo: PeriodoNomina, empleados: Empleado[], empleadosEnNomina: Empleado[],
+  disfrutes: DisfruteVacaciones[], licencias: Licencia[], aumentos: RegistroAumento[],
 ): { empleado: Empleado; resultado: ResultadoNomina }[] {
   const snapshots = periodo.resultadosPorEmpleado
   if (snapshots && Object.keys(snapshots).length > 0) {
@@ -55,7 +62,15 @@ function filasComprobante(
         return e ? [e] : []
       })
     : empleadosEnNomina
-  return roster.map(e => ({ empleado: e, resultado: calcularConPeriodo(e, ajustesPeriodo[e.id] ?? [], periodo) }))
+  // Mismo motor que Cálculo de Nómina (calcularParaPeriodo, de nomina-shared.ts)
+  // — antes usaba calcularConPeriodo (motor "plano", sin prorrateo por
+  // suspensión/salida/licencia sin sueldo/vacaciones/reajuste salarial), así
+  // que el comprobante descargado/enviado podía no coincidir con lo que
+  // Cálculo de Nómina reportaba como pagado para el mismo período.
+  return roster.map(e => ({
+    empleado: e,
+    resultado: calcularParaPeriodo(e, ajustesPeriodo[e.id] ?? [], periodo, disfrutes, licencias, aumentos),
+  }))
 }
 
 export function EnvioComprobantesModal({
@@ -67,6 +82,9 @@ export function EnvioComprobantesModal({
 }) {
   const { empleados, empleadosEnNomina } = useEmpleados()
   const { empresa } = useEmpresa()
+  const { disfrutes } = useVacaciones()
+  const { licencias } = useLicencias()
+  const { aumentos } = useAumentos()
   const [plantillaComprobante, setPlantillaComprobante] = useState<PlantillaComprobante>(plantillaComprobanteDeEmpresa(empresa))
   const [enviadosComprobante, setEnviadosComprobante] = useState<Set<string>>(new Set())
 
@@ -78,7 +96,7 @@ export function EnvioComprobantesModal({
       : periodo.tipo === 'quincenal'
         ? `Nómina Quincenal (${periodo.quincena}ª quincena)`
         : 'Nómina Mensual'
-  const filas = filasComprobante(periodo, empleados, empleadosEnNomina)
+  const filas = filasComprobante(periodo, empleados, empleadosEnNomina, disfrutes, licencias, aumentos)
   const fechaPagoTexto = periodo.fechaPago ? formatDate(periodo.fechaPago) : ''
 
   // Intenta abrir la ventana de correo para un empleado; devuelve si se logró.

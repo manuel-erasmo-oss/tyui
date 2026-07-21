@@ -132,6 +132,11 @@ export function AsistenteGuiado({ onFinish }: Props) {
     }
     if (form.regaliaPagadaEsteAnio.trim() !== '') {
       changes.regaliaPagadaEsteAnio = Number(form.regaliaPagadaEsteAnio)
+      // Sin esto, regaliaPagadaVigente() (dominican-labor.ts) usa como
+      // fallback el año actual EN CADA llamada — comparación tautológica
+      // que nunca resulta falsa, así que el descuento migrado nunca
+      // expiraba por sí solo al año siguiente como promete el campo.
+      changes.regaliaPagadaAnio = new Date().getFullYear()
     }
     if (form.salarioHistoricoReferencia.trim() !== '') {
       changes.salarioHistoricoReferencia = Number(form.salarioHistoricoReferencia)

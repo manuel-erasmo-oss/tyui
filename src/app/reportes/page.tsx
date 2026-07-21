@@ -1933,8 +1933,21 @@ function ReportePlanillaACH({
 
   const filas = useMemo(() => {
     if (!periodo || !generado) return []
-    return empleados
-      .filter(e => e.activo && e.numeroCuenta && e.banco)
+    // Roster REAL de ese período (snapshot de quién fue procesado), no la
+    // planilla activa de HOY — a diferencia del resto de reportes de este
+    // archivo (Nómina, TSS, Costo por Departamento), este usaba
+    // `empleados.filter(activo)` sin importar el período seleccionado, así
+    // que "generar" para un mes de hace años mostraba (y sumaba) la nómina
+    // de hoy, con nombres y montos completamente ajenos a ese mes real.
+    const tieneSnapshots = periodo.resultadosPorEmpleado && Object.keys(periodo.resultadosPorEmpleado).length > 0
+    const roster = tieneSnapshots
+      ? Object.keys(periodo.resultadosPorEmpleado!).flatMap(id => {
+          const e = empleados.find(x => x.id === id)
+          return e ? [e] : []
+        })
+      : empleados.filter(e => e.activo)
+    return roster
+      .filter(e => e.numeroCuenta && e.banco)
       .filter(e => filtroBanco === 'todos' || e.banco === filtroBanco)
       .map(emp => {
         const res = resultadoHistorico(emp, periodo)
@@ -2633,13 +2646,26 @@ function ReporteProyeccionAnual({
     )
   }, [filas, searchQ])
 
-  const totales = useMemo(() => filas.reduce((acc, r) => ({
-    brutoAnual: acc.brutoAnual + r.brutoAnual,
-    regalia: acc.regalia + r.regalia,
-    vacaciones: acc.vacaciones + r.vacaciones,
-    totalProyectado: acc.totalProyectado + r.totalProyectado,
-    ytdReal: acc.ytdReal + r.ytdReal,
-  }), { brutoAnual: 0, regalia: 0, vacaciones: 0, totalProyectado: 0, ytdReal: 0 }), [filas])
+  const totales = useMemo(() => {
+    const base = filas.reduce((acc, r) => ({
+      brutoAnual: acc.brutoAnual + r.brutoAnual,
+      regalia: acc.regalia + r.regalia,
+      vacaciones: acc.vacaciones + r.vacaciones,
+      totalProyectado: acc.totalProyectado + r.totalProyectado,
+      ytdReal: acc.ytdReal + r.ytdReal,
+    }), { brutoAnual: 0, regalia: 0, vacaciones: 0, totalProyectado: 0, ytdReal: 0 })
+    // El costo YTD real de empleados que ya NO están activos (liquidados
+    // durante el año en curso) también es gasto genuinamente ejecutado —
+    // se suma aparte porque esos empleados no tienen fila propia en `filas`
+    // (no hay "hacia adelante" que proyectar para alguien que ya se fue),
+    // pero antes se omitía por completo de "Ejecutado YTD", subestimando el
+    // gasto real cada vez que hubo rotación durante el año.
+    const idsEnFilas = new Set(filas.map(f => f.emp.id))
+    const ytdFueraDePlantilla = Object.entries(ytdCostoPorEmp)
+      .filter(([id]) => !idsEnFilas.has(id))
+      .reduce((s, [, monto]) => s + monto, 0)
+    return { ...base, ytdReal: base.ytdReal + ytdFueraDePlantilla, ytdRealFueraDePlantilla: ytdFueraDePlantilla }
+  }, [filas, ytdCostoPorEmp])
 
   function exportarPDF() {
     if (filas.length === 0) return
@@ -2703,6 +2729,11 @@ function ReporteProyeccionAnual({
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">Ejecutado YTD</p>
               <p className="mt-1 text-xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatRD(totales.ytdReal)}</p>
+              {totales.ytdRealFueraDePlantilla > 0 && (
+                <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-500">
+                  Incluye {formatRD(totales.ytdRealFueraDePlantilla)} de empleados ya liquidados este año
+                </p>
+              )}
             </div>
             <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] p-4 shadow-sm dark:shadow-none">
               <p className="text-xs text-zinc-500 dark:text-zinc-400">% Ejecutado</p>

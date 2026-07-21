@@ -125,9 +125,12 @@ export function calcularDiasVacacionesAcumulados(anosServicio: number, saldoVaca
   const fraccionActual  = anosServicio - aniosCompletos
   let dias = 0
   for (let i = 1; i <= aniosCompletos; i++) {
-    dias += i >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
+    // Los primeros 5 años (i = 1..5) acreditan a 14 días — el salto a 18 solo
+    // aplica al 6º año en adelante (i > 5), nunca al año 5 en sí (bug corregido:
+    // antes usaba `i >= 5`, acreditando de más el año 5 completo).
+    dias += i > 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
   }
-  const tasaActual = (aniosCompletos + 1) >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
+  const tasaActual = (aniosCompletos + 1) > 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
   dias += tasaActual * fraccionActual
   return Math.max(0, dias + saldoVacacionesInicial)
 }
@@ -745,14 +748,28 @@ export function calcularSalarioPromedioUltimos12Meses(
     totalPorMes.set(key, (totalPorMes.get(key) ?? 0) + totalBruto)
   }
 
-  // Sin historial real en el sistema (recién migrado): usa el salario
-  // histórico de referencia capturado en la carga inicial, si existe.
-  if (totalPorMes.size === 0) {
-    return Math.max(empleado.salarioHistoricoReferencia ?? empleado.salarioBase, empleado.salarioBase)
-  }
-
+  // Blende los meses reales encontrados con el salario histórico de
+  // referencia (o el salarioBase actual si no hay referencia capturada)
+  // para los meses de la ventana de 12 que todavía no tienen nómina real
+  // procesada en el sistema — el divisor SIEMPRE es 12, nunca la cantidad
+  // de meses reales encontrados. Antes, con solo 1-2 meses reales
+  // acumulados (el caso normal de toda empresa recién migrada, antes de
+  // completar su primer año en Cielo Cloud), el promedio se calculaba
+  // ÚNICAMENTE sobre esos pocos meses — un solo mes atípico (ej. un bono
+  // grande puntual) podía duplicar la Cesantía/Preaviso de un empleado,
+  // ignorando por completo salarioHistoricoReferencia pese a que la propia
+  // documentación del campo promete protegerlo "mientras no acumule 12
+  // meses reales". Con `totalPorMes.size === 0` (recién migrado, nada real
+  // todavía) esta fórmula colapsa exactamente al salario histórico puro;
+  // con `size === 12` (historial completo) colapsa al promedio real puro —
+  // ambos casos límite ya verificados, este cambio solo corrige los casos
+  // intermedios (1-11 meses reales).
+  const MESES_VENTANA = 12
+  const salarioReferenciaMesFaltante = empleado.salarioHistoricoReferencia ?? empleado.salarioBase
+  const mesesFaltantes = Math.max(0, MESES_VENTANA - totalPorMes.size)
   const sumaTotal = [...totalPorMes.values()].reduce((s, v) => s + v, 0)
-  const promedio   = sumaTotal / totalPorMes.size
+    + mesesFaltantes * salarioReferenciaMesFaltante
+  const promedio = sumaTotal / MESES_VENTANA
   return Math.max(promedio, empleado.salarioBase)
 }
 
@@ -858,6 +875,43 @@ export function getBonificacionesPendientes(
       return { anio: a, fin, limite, diasRestantes }
     })
     .filter((x): x is BonificacionPendiente => x !== null)
+    .sort((a, b) => a.diasRestantes - b.diasRestantes)
+}
+
+export interface RegaliaPendiente {
+  anio: number
+  limite: Date
+  diasRestantes: number  // negativo = ya vencida
+}
+
+// Años calendario con Regalía Pascual (Art. 219, vence el 20 de diciembre)
+// todavía sin pagar — a diferencia de getBonificacionesPendientes, aquí
+// "fin del período que se evalúa" y "fecha límite de pago" son el mismo día
+// (20 de diciembre de ESE año), no hay ventana de 90-120 días aparte. Barre
+// hacia atrás igual que Bonificación (ANIOS_FISCALES) para no perder de
+// vista un año que quedó sin pagar y ya no es el año en curso — antes la
+// alerta solo evaluaba `anioActual`, así que un atraso desaparecía
+// silenciosamente en cuanto el calendario avanzaba al año siguiente.
+export function getRegaliaPendientes(
+  empleados: Pick<Empleado, 'fechaIngreso'>[],
+  periodos: Pick<PeriodoNomina, 'tipo' | 'anio' | 'estado'>[],
+  aniosCandidatos: number[],
+): RegaliaPendiente[] {
+  if (empleados.length === 0) return []
+
+  const hoy = new Date()
+  const primerIngresoConocido = new Date(Math.min(...empleados.map(e => new Date(e.fechaIngreso).getTime())))
+
+  return aniosCandidatos
+    .map(anio => {
+      const limite = new Date(anio, 11, 20)
+      if (limite < primerIngresoConocido) return null
+      const pagada = periodos.some(p => p.tipo === 'regalia' && p.anio === anio && p.estado === 'cerrada')
+      if (pagada) return null
+      const diasRestantes = Math.ceil((limite.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
+      return { anio, limite, diasRestantes }
+    })
+    .filter((x): x is RegaliaPendiente => x !== null)
     .sort((a, b) => a.diasRestantes - b.diasRestantes)
 }
 

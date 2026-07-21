@@ -147,6 +147,13 @@ export interface Empleado {
   suspendido?: boolean
   fechaSuspension?: string    // ISO date — inicio de la suspensión vigente
   motivoSuspension?: string   // texto libre (ej. "Licencia médica no cubierta")
+  // Historial completo de suspensiones (no solo la vigente) — reactivar() ya
+  // no puede darse el lujo de olvidar la anterior: sin esto, un empleado
+  // suspendido y luego reactivado hace años queda indistinguible de uno que
+  // nunca estuvo suspendido, lo que generaba falsos positivos en la alerta
+  // de "posible pago retroactivo pendiente" (alertas.ts) para meses donde
+  // sí estuvo legítimamente ausente por una suspensión ya resuelta.
+  historialSuspensiones?: { fechaInicio: string; fechaFin?: string; motivo?: string }[]
 
   // ─── Salida pendiente de liquidar ───────────────────────────────────────────
   // Se marca al dar de baja a un empleado desde Empleados — ANTES de calcular

@@ -10,7 +10,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { getCategoriaSRLPorSector } from '@/lib/dominican-labor'
-import { DOC_TIPOS, PAISES, BANCOS, TIPO_CONTRATO_OPTIONS } from '@/lib/empleado-form'
+import { DOC_TIPOS, PAISES, BANCOS, TIPO_CONTRATO_OPTIONS, cedulasCoinciden } from '@/lib/empleado-form'
 import { formatRD } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import type { Empleado, TipoDocumento, TipoContrato, Banco } from '@/types'
@@ -226,14 +226,21 @@ export function ImportadorExcel({ onFinish }: Props) {
     const wsData: (string | number | null)[][] = [
       [...ENCABEZADOS],
       [
-        '000-0000000-0 (ejemplo — bórrame)', 'Juana', 'Pérez', 'Analista de Contabilidad', 'Contabilidad',
+        // Cédulas de ejemplo con formato válido pero claramente ficticio (fuera
+        // del rango real de la Junta Central Electoral) — el texto "bórrame" NO
+        // vive en esta celda a propósito: si el usuario dejara la cédula sin
+        // completar por error, un texto pegado al dato produciría un error de
+        // importación confuso en vez de una fila simplemente vacía. La
+        // instrucción de borrar las filas de ejemplo ya vive aparte, en la nota
+        // de abajo.
+        '000-0000000-0', 'Juana', 'Pérez', 'Analista de Contabilidad', 'Contabilidad',
         '2019-03-15', 35000,
         'Cédula', 'República Dominicana', '1990-05-20', 'Fijo (Tiempo Indefinido)',
         'juana.perez@empresa.com', '809-555-0101', 'Banco Popular', '100-2345678-9', 'No',
         14, 0, 32000, 0,
       ],
       [
-        '000-0000001-1 (ejemplo — bórrame)', 'Carlos', 'Ramírez', 'Supervisor de Bodega', 'Almacén',
+        '000-0000001-1', 'Carlos', 'Ramírez', 'Supervisor de Bodega', 'Almacén',
         '2022-08-01', 28000,
         'Cédula', 'República Dominicana', '1985-11-03', 'Fijo (Tiempo Indefinido)',
         'carlos.ramirez@empresa.com', '829-555-0202', 'BanReservas', '200-3456789-0', 'No',
@@ -320,8 +327,14 @@ export function ImportadorExcel({ onFinish }: Props) {
           if (filaCompletamenteVacia) return
 
           const numFila = idx + 2 // +1 por header, +1 por 1-index
+          // Compara tolerando pérdida de ceros a la izquierda (frecuente
+          // cuando Excel interpreta la columna de cédula como número en vez
+          // de texto) — antes era una comparación de string exacta, así que
+          // prácticamente cualquier cédula dominicana con cero inicial subida
+          // vía CSV/Excel fallaba el matching, generando un empleado
+          // duplicado en vez de actualizar el registro existente.
           const existente = cedulaRaw
-            ? empleados.find(emp => emp.cedula.trim().toLowerCase() === cedulaRaw.toLowerCase())
+            ? empleados.find(emp => cedulasCoinciden(cedulaRaw, emp.cedula))
             : undefined
           const accion: Accion = existente ? 'actualizar' : 'crear'
 
@@ -420,7 +433,13 @@ export function ImportadorExcel({ onFinish }: Props) {
         // un dato bueno ya cargado con vacío, igual que el Asistente Guiado.
         const cambios: Partial<Empleado> = { saldosInicialesRevisado: true }
         if (f.saldoVacacionesInicial !== null) cambios.saldoVacacionesInicial = f.saldoVacacionesInicial
-        if (f.regaliaPagadaEsteAnio !== null) cambios.regaliaPagadaEsteAnio = f.regaliaPagadaEsteAnio
+        if (f.regaliaPagadaEsteAnio !== null) {
+          cambios.regaliaPagadaEsteAnio = f.regaliaPagadaEsteAnio
+          // Sin esto, regaliaPagadaVigente() (dominican-labor.ts) compara
+          // "año actual === año actual" en cada llamada — el descuento
+          // migrado nunca expiraría por sí solo al año siguiente.
+          cambios.regaliaPagadaAnio = new Date().getFullYear()
+        }
         if (f.salarioHistoricoReferencia !== null) cambios.salarioHistoricoReferencia = f.salarioHistoricoReferencia
         if (f.tipoDocumento !== null) cambios.tipoDocumento = f.tipoDocumento
         if (f.nacionalidad !== null) cambios.nacionalidad = f.nacionalidad
@@ -437,7 +456,10 @@ export function ImportadorExcel({ onFinish }: Props) {
         const nuevo: Omit<Empleado, 'id'> = {
           nombre: f.nombre.trim(),
           apellido: f.apellido.trim(),
-          cedula: f.cedula.trim(),
+          // Misma normalización que formToEmpleado() (empleado-form.ts) —
+          // el resto de la app siempre guarda la cédula como solo dígitos
+          // (sin guiones/espacios), nunca como texto libre.
+          cedula: (f.tipoDocumento ?? 'cedula') === 'cedula' ? f.cedula.replace(/\D/g, '') : f.cedula.trim().toUpperCase(),
           tipoDocumento: f.tipoDocumento ?? 'cedula',
           nacionalidad: f.nacionalidad ?? undefined,
           fechaNacimiento: f.fechaNacimiento ?? undefined,
@@ -455,6 +477,7 @@ export function ImportadorExcel({ onFinish }: Props) {
           regimenIntermitente: f.regimenIntermitente ?? undefined,
           saldoVacacionesInicial: f.saldoVacacionesInicial ?? undefined,
           regaliaPagadaEsteAnio: f.regaliaPagadaEsteAnio ?? undefined,
+          regaliaPagadaAnio: f.regaliaPagadaEsteAnio !== null ? new Date().getFullYear() : undefined,
           salarioHistoricoReferencia: f.salarioHistoricoReferencia ?? undefined,
           saldosInicialesRevisado: true,
         }

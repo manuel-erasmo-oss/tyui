@@ -165,7 +165,16 @@ export function PrestamosProvider({ children }: { children: ReactNode }) {
     setPrestamos(prev => {
       const next = prev.map(p => {
         if (p.id !== prestamoId) return p
-        const nuevoSaldo = Math.max(0, p.saldoPendiente - cuota.montoPagado)
+        const saldoBruto = p.saldoPendiente - cuota.montoPagado
+        // Tolerancia de redondeo (≤ RD$1): la cuota que se muestra/paga está
+        // redondeada a centavos, pero `cuotaBase` internamente puede tener
+        // más decimales — pagar el monto redondeado exactamente N veces casi
+        // nunca cierra el saldo a 0 exacto, dejando un residuo real de unos
+        // centavos que antes dejaba el préstamo 'activo' para siempre pese a
+        // mostrar "100% pagado" en pantalla (y seguía pesando su cuota
+        // completa en el panel de Capacidad de Pago). Un residuo así se
+        // absorbe como saldado, no se le sigue cobrando al empleado.
+        const nuevoSaldo = saldoBruto <= 1 ? 0 : saldoBruto
         return {
           ...p,
           saldoPendiente: nuevoSaldo,

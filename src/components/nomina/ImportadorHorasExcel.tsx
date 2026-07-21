@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { fullName, formatCedula } from '@/lib/utils'
+import { cedulasCoinciden } from '@/lib/empleado-form'
 import type { AjusteLinea, ConceptoAjuste, Empleado } from '@/types'
 
 interface Props {
@@ -56,20 +57,6 @@ function normalizarConcepto(v: unknown): ConceptoAjuste | null {
 function celdaTexto(v: unknown): string {
   if (v === null || v === undefined) return ''
   return String(v).trim()
-}
-
-// Muchas cédulas dominicanas empiezan en "00…" — si Excel interpretó la
-// columna como número (típico al escribir dígitos puros sin formatear la
-// celda como Texto), esos ceros a la izquierda se pierden al guardar el
-// archivo. Comparamos primero exacto y, si falla, comparamos ignorando
-// ceros a la izquierda en ambos lados antes de descartar la fila.
-function cedulasCoinciden(cedulaArchivo: string, cedulaEmpleado: string): boolean {
-  const a = cedulaArchivo.replace(/\D/g, '')
-  const b = cedulaEmpleado.replace(/\D/g, '')
-  if (a === b) return true
-  const aSinCeros = a.replace(/^0+/, '')
-  const bSinCeros = b.replace(/^0+/, '')
-  return aSinCeros !== '' && aSinCeros === bSinCeros
 }
 
 function parsearHoras(v: unknown): number | null {

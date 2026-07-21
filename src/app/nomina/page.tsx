@@ -47,7 +47,11 @@ import { useAuth } from '@/lib/auth-context'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams, getAnosServicio, getDivisorSalarioDiario, contarDiasLaborables } from '@/lib/dominican-labor'
 import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
 import { formatRD, fullName, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
-import { labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF } from '@/lib/nomina-shared'
+import {
+  labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF,
+  diasSuspensionEnPeriodo, diasSalidaEnPeriodo,
+  diasVacacionEnPeriodo, diasLicenciaSinSueldoEnPeriodo, salarioEfectivoEnPeriodo, calcularParaPeriodo,
+} from '@/lib/nomina-shared'
 import type {
   Empleado,
   ResultadoNomina,
@@ -117,185 +121,6 @@ function isHorasConcepto(concepto: ConceptoAjuste): boolean {
   return concepto === 'horas_extras_35' || concepto === 'horas_extras_100' || concepto === 'recargo_nocturno'
 }
 
-// ── calcularConAjustes ────────────────────────────────────────────────────────
-// `diasOverride` prorratea el salario base cuando el empleado no trabajó el
-// período completo (ver diasSuspensionEnPeriodo) — ambos valores son días
-// calendario en la MISMA unidad, así que la razón diasTrabajados/diasLaborablesMes
-// es válida tanto para un período mensual como para media quincena. Reusa
-// ajustesToParams (dominican-labor.ts) en vez de repetir el bucketing de
-// conceptos inline — así el catálogo de conceptos personalizados (y
-// cualquier concepto nuevo a futuro) solo necesita mantenerse en un lugar.
-function calcularConAjustes(
-  empleado: Empleado,
-  ajustes: AjusteLinea[],
-  tipo: TipoPeriodo,
-  quincena: 1 | 2,
-  diasOverride?: { diasTrabajados: number; diasLaborablesMes: number } | null,
-  vacacionesGoce?: number,
-  vacacionesVendidas?: number,
-): ResultadoNomina {
-  const params: ParametrosNomina = {
-    ...ajustesToParams(ajustes),
-    ...(diasOverride ? { diasTrabajados: diasOverride.diasTrabajados, diasLaborablesMes: diasOverride.diasLaborablesMes } : {}),
-    ...(vacacionesGoce ? { vacacionesGoce } : {}),
-    ...(vacacionesVendidas ? { vacacionesVendidas } : {}),
-  }
-  return tipo === 'quincenal'
-    ? calcularNominaQuincenal(empleado, quincena, params)
-    : calcularNomina(empleado, params)
-}
-
-// ── Prorrateo por suspensión a mitad de período ────────────────────────────────
-// Rango de fechas calendario que cubre un período — el mes completo para
-// mensual, o la mitad correspondiente (1-15 / 16-fin) para quincenal.
-function rangoPeriodo(
-  mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): { inicio: Date; fin: Date } {
-  const diasEnMes = new Date(anio, mes, 0).getDate()
-  if (tipo === 'mensual') return { inicio: new Date(anio, mes - 1, 1), fin: new Date(anio, mes - 1, diasEnMes) }
-  return quincena === 1
-    ? { inicio: new Date(anio, mes - 1, 1), fin: new Date(anio, mes - 1, 15) }
-    : { inicio: new Date(anio, mes - 1, 16), fin: new Date(anio, mes - 1, diasEnMes) }
-}
-
-// Si una fecha de corte (suspensión o salida pendiente) cae DENTRO (o
-// después) del rango de este período, devuelve cuántos días calendario
-// trabajó antes de esa fecha, sobre el total de días del período — para
-// prorratear el salario en vez de pagar el período completo o excluirlo por
-// completo. `null` si la fecha de corte cae ANTES de que el período
-// empezara — ese caso se excluye del todo en empleadosDelPeriodo, no se
-// prorratea.
-function diasCorteEnPeriodo(
-  fechaCorte: Date, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): { diasTrabajados: number; diasLaborablesMes: number } | null {
-  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
-  if (fechaCorte < inicio) return null
-  const finEfectivo = fechaCorte < fin ? fechaCorte : fin
-  const msPorDia = 24 * 3600 * 1000
-  const diasTrabajados     = Math.floor((finEfectivo.getTime() - inicio.getTime()) / msPorDia) + 1
-  const diasLaborablesMes  = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
-  return { diasTrabajados, diasLaborablesMes }
-}
-
-function diasSuspensionEnPeriodo(
-  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): { diasTrabajados: number; diasLaborablesMes: number } | null {
-  if (!empleado.suspendido || !empleado.fechaSuspension) return null
-  return diasCorteEnPeriodo(new Date(empleado.fechaSuspension), mes, anio, tipo, quincena)
-}
-
-// Igual que diasSuspensionEnPeriodo, pero para un empleado marcado con
-// salida pendiente que eligió pagar sus días trabajados "por nómina" en vez
-// de junto con la liquidación (Empleado.pagoDiasTrabajadosPendiente).
-function diasSalidaEnPeriodo(
-  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): { diasTrabajados: number; diasLaborablesMes: number } | null {
-  if (!empleado.salidaPendiente || empleado.pagoDiasTrabajadosPendiente !== 'nomina' || !empleado.fechaSalidaPendiente) return null
-  return diasCorteEnPeriodo(new Date(empleado.fechaSalidaPendiente), mes, anio, tipo, quincena)
-}
-
-// ── Goce de vacaciones dentro de un período ────────────────────────────────
-// A diferencia de suspensión/salida (un solo punto de corte, desde ahí en
-// adelante), un Disfrute de Vacaciones es un RANGO que puede caer en medio
-// del período. Se calculan por separado: (1) los días CALENDARIO de
-// vacación dentro del rango del período, para reducir los días trabajados
-// normales (mismo mecanismo de diasCorteEnPeriodo — consistente con cómo ya
-// se prorratea por suspensión); y (2) los días LABORABLES (excl. domingo)
-// tomados dentro de ese mismo rango, para valorar el goce a pagar (tarifa
-// diaria × días — la misma convención ya usada en /vacaciones y en
-// Liquidación para "Vacaciones No Gozadas", no la fracción calendario).
-//
-// Un registro de tipo 'venta' (venta de vacaciones) NO reduce días
-// trabajados — el empleado sigue trabajando normal, solo cambia días de
-// descanso futuro por dinero ahora — así que su solape con el período se
-// evalúa igual (fechaInicio === fechaFin, una sola fecha efectiva) pero solo
-// aporta a `vacacionesVendidas`, nunca a `diasVacCalendario`.
-//
-// Si el período es quincenal, ambos montos se PRE-DOBLAN antes de
-// devolverlos: calcularNominaQuincenal divide TODO el bruto entre 2 —
-// incluidas bonificaciones/comisiones, ver CLAUDE.md "Quincenal" — así que
-// duplicarlo aquí hace que, tras esa división automática, el resultado sea
-// el monto real correspondiente a esta quincena específica (mismo truco
-// implícito que ya "sobrevive" el prorrateo de días vía diasCorteEnPeriodo).
-function diasVacacionEnPeriodo(
-  empleado: Empleado, disfrutes: DisfruteVacaciones[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): { diasTrabajados: number; diasLaborablesMes: number; vacacionesGoce: number; vacacionesVendidas: number } | null {
-  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
-  const msPorDia = 24 * 3600 * 1000
-  const propios = disfrutes.filter(d => d.empleadoId === empleado.id)
-  const tarifaDiaria = empleado.salarioBase / getDivisorSalarioDiario(empleado)
-
-  let diasVacCalendario = 0
-  let goceRealDisfrute  = 0
-  let goceRealVenta     = 0
-  for (const d of propios) {
-    const dInicio = new Date(d.fechaInicio)
-    const dFin    = new Date(d.fechaFin)
-    const solapInicio = dInicio < inicio ? inicio : dInicio
-    const solapFin    = dFin > fin ? fin : dFin
-    if (solapInicio > solapFin) continue
-    if (d.tipo === 'venta') {
-      goceRealVenta += d.diasLaborables * tarifaDiaria
-    } else {
-      diasVacCalendario += Math.floor((solapFin.getTime() - solapInicio.getTime()) / msPorDia) + 1
-      goceRealDisfrute   += contarDiasLaborables(solapInicio, solapFin) * tarifaDiaria
-    }
-  }
-  if (diasVacCalendario === 0 && goceRealVenta === 0) return null
-
-  const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
-  const diasTrabajados    = Math.max(0, diasLaborablesMes - diasVacCalendario)
-  const factor = tipo === 'quincenal' ? 2 : 1
-  return {
-    diasTrabajados, diasLaborablesMes,
-    vacacionesGoce:     goceRealDisfrute * factor,
-    vacacionesVendidas: goceRealVenta * factor,
-  }
-}
-
-// ── Licencia sin sueldo dentro de un período ────────────────────────────────
-// Solo enfermedad_comun/accidente_laboral SIN disfrute de sueldo reducen los
-// días trabajados. El resto de las licencias (matrimonial/fallecimiento/
-// alumbramiento, maternidad, y enfermedad/accidente CON disfrute de sueldo)
-// NO se tocan aquí — en esos casos el salario del empleado sigue corriendo
-// sin interrupción por ley o por decisión de la empresa, así que el sueldo
-// mensual normal (sin prorratear) ya cubre esos días correctamente, igual
-// que ya sucede hoy sin ningún cambio.
-//
-// Cuando NO hay disfrute de sueldo, la empresa no paga nada por esos días
-// (el subsidio de SISALRIL/ARL se paga directo al empleado, fuera de
-// nómina) — sin este prorrateo, el empleado recibiría su sueldo completo
-// por nómina Y el subsidio de TSS por los mismos días de ausencia, un doble
-// pago silencioso. Mismo mecanismo de solape/clamp que diasVacacionEnPeriodo,
-// pero sin monto que calcular — solo reduce diasTrabajados, igual que
-// diasCorteEnPeriodo hace para suspensión.
-function diasLicenciaSinSueldoEnPeriodo(
-  empleado: Empleado, licencias: Licencia[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): { diasTrabajados: number; diasLaborablesMes: number } | null {
-  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
-  const msPorDia = 24 * 3600 * 1000
-  const propias = licencias.filter(l =>
-    l.empleadoId === empleado.id &&
-    (l.tipo === 'enfermedad_comun' || l.tipo === 'accidente_laboral') &&
-    !l.disfruteSueldo
-  )
-
-  let diasLicenciaCalendario = 0
-  for (const l of propias) {
-    const lInicio = new Date(l.fechaInicio)
-    const lFin    = new Date(l.fechaFin)
-    const solapInicio = lInicio < inicio ? inicio : lInicio
-    const solapFin    = lFin > fin ? fin : lFin
-    if (solapInicio > solapFin) continue
-    diasLicenciaCalendario += Math.floor((solapFin.getTime() - solapInicio.getTime()) / msPorDia) + 1
-  }
-  if (diasLicenciaCalendario === 0) return null
-
-  const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
-  const diasTrabajados    = Math.max(0, diasLaborablesMes - diasLicenciaCalendario)
-  return { diasTrabajados, diasLaborablesMes }
-}
-
 // Lista de empleados que participan de un período específico: los normales
 // (empleadosEnNomina) más cualquier empleado suspendido o con salida
 // pendiente (pago "por nómina") cuya fecha de corte cae dentro de este
@@ -332,94 +157,6 @@ function sugerirProximoPeriodo(
   const mes  = ultimo.mes === 12 ? 1 : ultimo.mes + 1
   const anio = ultimo.mes === 12 ? ultimo.anio + 1 : ultimo.anio
   return { mes, anio, quincena: 1 }
-}
-
-// ── Reajuste salarial a mitad de período ────────────────────────────────────
-// Cuando un aumento ya APLICADO tiene fechaEfectiva dentro del rango del
-// período, el empleado no debería cobrar el salario nuevo completo desde el
-// día 1 del período — parte corresponde al salario anterior, parte al
-// nuevo. En vez de sumar dos llamadas independientes a calcularNomina (lo
-// que rompería los topes cotizables de TSS y los tramos de ISR, calculados
-// sobre el total real del mes, no sobre dos sub-cálculos por separado), se
-// computa un salario PONDERADO por días — el mismo total que el empleado
-// gana en el mes — y se usa como si fuera su salarioBase completo para ese
-// período. Mismo mecanismo ya usado para Vacaciones/Bonificación (tratar un
-// monto calculado como si fuera el salario base vía calcularNomina({
-// ...empleado, salarioBase: monto })).
-//
-// Solo aplica a períodos aún en_proceso — un período ya cerrado es un
-// registro histórico inmutable (mismo principio que el resto del sistema),
-// así que un aumento aplicado después de cerrar un período no lo corrige
-// retroactivamente solo; para eso existe "Reabrir" (desposteo).
-//
-// Soporta más de un reajuste dentro del mismo período (caso raro pero
-// posible) — construye segmentos consecutivos, cada uno al salario vigente
-// en ese tramo, ordenados por fechaEfectiva.
-function salarioEfectivoEnPeriodo(
-  empleadoId: string, aumentos: RegistroAumento[],
-  mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): number | null {
-  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
-  const msPorDia = 24 * 3600 * 1000
-  const relevantes = aumentos
-    .filter(a => a.empleadoId === empleadoId && a.estado === 'aplicado' && a.fechaEfectiva)
-    .map(a => ({ ...a, fechaEfectivaDate: new Date(a.fechaEfectiva!) }))
-    .filter(a => a.fechaEfectivaDate >= inicio && a.fechaEfectivaDate <= fin)
-    .sort((a, b) => a.fechaEfectivaDate.getTime() - b.fechaEfectivaDate.getTime())
-  if (relevantes.length === 0) return null
-
-  const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
-  let cursor = inicio
-  let totalPonderado = 0
-  for (const r of relevantes) {
-    const finTramo = new Date(r.fechaEfectivaDate.getTime() - msPorDia)
-    if (finTramo >= cursor) {
-      const dias = Math.floor((finTramo.getTime() - cursor.getTime()) / msPorDia) + 1
-      totalPonderado += dias * r.salarioAnterior
-    }
-    cursor = r.fechaEfectivaDate
-  }
-  const diasFinal = Math.floor((fin.getTime() - cursor.getTime()) / msPorDia) + 1
-  totalPonderado += diasFinal * relevantes[relevantes.length - 1].salarioNuevo
-
-  return Math.round((totalPonderado / diasLaborablesMes) * 100) / 100
-}
-
-// Envoltorio de conveniencia: calcula la nómina de un empleado para un
-// período específico, aplicando automáticamente el prorrateo por suspensión,
-// salida pendiente, licencia sin sueldo, o el salario ponderado por un
-// reajuste a mitad de período, si corresponde — evita tener que acordarse
-// de calcular cada mecanismo en cada call-site.
-function calcularParaPeriodo(
-  empleado: Empleado, ajustes: AjusteLinea[],
-  periodo: { mes: number; anio: number; tipo: TipoPeriodo; quincena?: 1 | 2 },
-  disfrutes: DisfruteVacaciones[] = [],
-  licencias: Licencia[] = [],
-  aumentos: RegistroAumento[] = [],
-): ResultadoNomina {
-  const quincena = periodo.quincena ?? 1
-  const salarioEfectivo = salarioEfectivoEnPeriodo(empleado.id, aumentos, periodo.mes, periodo.anio, periodo.tipo, quincena)
-  const empleadoCalculo = salarioEfectivo !== null ? { ...empleado, salarioBase: salarioEfectivo } : empleado
-
-  const dias = diasSuspensionEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
-    ?? diasSalidaEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
-    ?? diasLicenciaSinSueldoEnPeriodo(empleadoCalculo, licencias, periodo.mes, periodo.anio, periodo.tipo, quincena)
-  // Suspensión/salida/licencia sin sueldo tienen prioridad sobre vacaciones
-  // — un empleado no debería tener a la vez un disfrute de vacaciones
-  // vigente en la práctica; si ambos existieran por error de captura, se
-  // respeta el prorrateo por suspensión/salida/licencia (ya excluye al
-  // empleado de nómina normal) y se ignora el disfrute para ese período. El
-  // salario ponderado por reajuste, en cambio, SÍ compone con cualquiera de
-  // los otros mecanismos (se aplica primero, como base, antes de cualquier
-  // prorrateo de días encima).
-  if (dias) return calcularConAjustes(empleadoCalculo, ajustes, periodo.tipo, quincena, dias)
-  const vac = diasVacacionEnPeriodo(empleadoCalculo, disfrutes, periodo.mes, periodo.anio, periodo.tipo, quincena)
-  return calcularConAjustes(
-    empleadoCalculo, ajustes, periodo.tipo, quincena,
-    vac ? { diasTrabajados: vac.diasTrabajados, diasLaborablesMes: vac.diasLaborablesMes } : null,
-    vac?.vacacionesGoce,
-    vac?.vacacionesVendidas,
-  )
 }
 
 // ── Detalle modal ─────────────────────────────────────────────────────────────
@@ -626,9 +363,14 @@ export default function NominaPage() {
   // disponible ahora mismo (se "congela" recién al procesar).
   function conSaldoISR(empleado: Empleado, base: ResultadoNomina, periodo: PeriodoNomina): ResultadoNomina {
     const yaProcesado = periodo.empleadosProcesados?.includes(empleado.id) ?? false
+    // Suma TODOS los saldos activos, no solo el más antiguo — un empleado
+    // puede tener más de un registro de crédito ISR vigente a la vez (ej. uno
+    // de hace varios años parcialmente consumido más uno nuevo), y el ISR de
+    // este período debe poder cubrirse encadenando ambos (FIFO), no solo el
+    // primero.
     const monto = yaProcesado
       ? getMontoAplicadoEnPeriodo(empleado.id, periodo.id)
-      : (getSaldosActivos(empleado.id)[0]?.saldoPendiente ?? 0)
+      : getSaldosActivos(empleado.id).reduce((s, x) => s + x.saldoPendiente, 0)
     return aplicarSaldoISRFavor(base, monto, empleado.grossingUpPct).resultado
   }
 
@@ -864,9 +606,14 @@ export default function NominaPage() {
     const conLicenciaSinSueldo = empleadosNuevoPeriodo.filter(e =>
       diasLicenciaSinSueldoEnPeriodo(e, licencias, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
     ).length
-    const conReajusteSalarial = empleadosNuevoPeriodo.filter(e =>
-      salarioEfectivoEnPeriodo(e.id, aumentos, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
-    ).length
+    // Solo cuenta como "reajuste" si el salario reconstruido para este
+    // período realmente DIFIERE del salario en vivo — salarioEfectivoEnPeriodo
+    // también devuelve un valor (no null) para el caso "sin ningún reajuste
+    // relevante, coincide con el salario actual", que no amerita aviso.
+    const conReajusteSalarial = empleadosNuevoPeriodo.filter(e => {
+      const efectivo = salarioEfectivoEnPeriodo(e.id, aumentos, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
+      return efectivo !== null && Math.abs(efectivo - e.salarioBase) > 0.005
+    }).length
     const avisos = [
       conVacaciones > 0 ? `${conVacaciones} empleado(s) con vacaciones` : null,
       conLicenciaSinSueldo > 0 ? `${conLicenciaSinSueldo} empleado(s) con licencia sin sueldo` : null,
@@ -1136,10 +883,21 @@ export default function NominaPage() {
     const emp = empleadosPeriodo.find(e => e.id === empId)
     if (!emp) return null
     const base = calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes, licencias, aumentos)
-    const saldo = getSaldosActivos(emp.id)[0]
-    const { resultado, montoAplicado } = aplicarSaldoISRFavor(base, saldo?.saldoPendiente ?? 0, emp.grossingUpPct)
-    if (saldo && montoAplicado > 0) {
-      aplicarSaldoISR(saldo.id, periodoActual.id, periodoActualLabel, montoAplicado)
+    // Encadena TODOS los saldos activos del empleado (FIFO — el más antiguo
+    // primero), no solo el primero: si el crédito más antiguo no alcanza a
+    // cubrir el ISR de este período, el excedente se consume del siguiente
+    // registro activo, y así sucesivamente, hasta cubrir el ISR o agotarlos.
+    const saldosActivos = getSaldosActivos(emp.id)
+    const totalDisponible = saldosActivos.reduce((s, x) => s + x.saldoPendiente, 0)
+    const { resultado, montoAplicado } = aplicarSaldoISRFavor(base, totalDisponible, emp.grossingUpPct)
+    let restante = montoAplicado
+    for (const saldo of saldosActivos) {
+      if (restante <= 0) break
+      const montoDeEste = Math.min(restante, saldo.saldoPendiente)
+      if (montoDeEste > 0) {
+        aplicarSaldoISR(saldo.id, periodoActual.id, periodoActualLabel, montoDeEste)
+        restante -= montoDeEste
+      }
     }
     return resultado
   }

@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import type { LucideIcon } from 'lucide-react'
+import type { PeriodoNomina } from '@/types'
 import { ShieldAlert, Wallet, Percent, Gift, BarChart3, History, Landmark } from 'lucide-react'
 import { useEmpleados } from './empleados-context'
 import { useEmpresa } from './empresa-context'
@@ -10,7 +11,7 @@ import { usePrestamos } from './prestamos-context'
 import { useLiquidaciones } from './liquidaciones-context'
 import { useBandasSalariales, normalizarPosicion } from './bandas-salariales-context'
 import { useRetribuciones } from './retribuciones-context'
-import { getSalarioMinimoAplicable, getBonificacionesPendientes, getRetribucionesPendientes } from './dominican-labor'
+import { getSalarioMinimoAplicable, getBonificacionesPendientes, getRetribucionesPendientes, getRegaliaPendientes } from './dominican-labor'
 import { fullName, formatRD } from './utils'
 
 const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
@@ -81,10 +82,17 @@ export function useAlertas(): AlertaItem[] {
     }
 
     // ── Bonificación por Utilidades — vencimiento (Art. 224) ─────────────
+    // El título/descripción solo comunican el ejercicio MÁS urgente
+    // (pendientesBonif[0]) — con varios años sin pagar acumulados, los demás
+    // quedaban completamente invisibles (un usuario que resuelve el más
+    // viejo creía estar al día). Los demás pendientes se listan como chips
+    // de detalle, igual patrón ya usado en salario-mínimo/préstamos/pago
+    // retroactivo.
     const pendientesBonif = getBonificacionesPendientes(empleados, periodos, empresa.cierreFiscal ?? 'diciembre', ANIOS_FISCALES)
     const alertaBonif = pendientesBonif[0]
     if (alertaBonif && alertaBonif.diasRestantes <= 45) {
       const vencido = alertaBonif.diasRestantes < 0
+      const otrosBonif = pendientesBonif.slice(1)
       items.push({
         id: 'bonificacion',
         severidad: vencido ? 'danger' : 'warning',
@@ -92,26 +100,34 @@ export function useAlertas(): AlertaItem[] {
         titulo: vencido
           ? `Bonificación ${alertaBonif.anio} vencida hace ${Math.abs(alertaBonif.diasRestantes)} día(s)`
           : `Bonificación ${alertaBonif.anio} vence en ${alertaBonif.diasRestantes} día(s)`,
-        descripcion: `Plazo legal de pago (Art. 224) — límite ${alertaBonif.limite.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+        descripcion: `Plazo legal de pago (Art. 224) — límite ${alertaBonif.limite.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' })}`
+          + (otrosBonif.length > 0 ? ` — ${otrosBonif.length} ejercicio(s) más sin pagar` : ''),
+        detalle: otrosBonif.slice(0, 3).map(p => `${p.anio}${p.diasRestantes < 0 ? ` — vencida hace ${Math.abs(p.diasRestantes)}d` : ` — vence en ${p.diasRestantes}d`}`),
+        detalleTotal: otrosBonif.length,
         href: '/bonificacion',
         linkLabel: 'Ir a Bonificación',
       })
     }
 
     // ── Regalía Pascual — vencimiento (Art. 219, 20 de diciembre) ────────
-    const periodoRegaliaAnio = periodos.find(p => p.tipo === 'regalia' && p.anio === anioActual)
-    const regaliaPagada = periodoRegaliaAnio?.estado === 'cerrada'
-    const diasParaDic20 = Math.ceil((new Date(anioActual, 11, 20).getTime() - hoy.getTime()) / (1000 * 3600 * 24))
-    if (!regaliaPagada && diasParaDic20 <= 30) {
-      const vencida = diasParaDic20 < 0
+    // Barre años anteriores (no solo el actual) — un año sin pagar ya no
+    // debe desaparecer de las alertas solo porque el calendario avanzó.
+    const pendientesRegalia = getRegaliaPendientes(empleados, periodos, ANIOS_FISCALES)
+    const alertaRegalia = pendientesRegalia[0]
+    if (alertaRegalia && alertaRegalia.diasRestantes <= 30) {
+      const vencida = alertaRegalia.diasRestantes < 0
+      const otrasRegalia = pendientesRegalia.slice(1)
       items.push({
         id: 'regalia',
         severidad: vencida ? 'danger' : 'warning',
         icon: Gift,
         titulo: vencida
-          ? `Regalía Pascual ${anioActual} vencida hace ${Math.abs(diasParaDic20)} día(s)`
-          : `Regalía Pascual ${anioActual} vence en ${diasParaDic20} día(s)`,
-        descripcion: 'Pago obligatorio en la primera quincena de diciembre (Art. 219)',
+          ? `Regalía Pascual ${alertaRegalia.anio} vencida hace ${Math.abs(alertaRegalia.diasRestantes)} día(s)`
+          : `Regalía Pascual ${alertaRegalia.anio} vence en ${alertaRegalia.diasRestantes} día(s)`,
+        descripcion: 'Pago obligatorio en la primera quincena de diciembre (Art. 219)'
+          + (otrasRegalia.length > 0 ? ` — ${otrasRegalia.length} año(s) más sin pagar` : ''),
+        detalle: otrasRegalia.slice(0, 3).map(p => `${p.anio}${p.diasRestantes < 0 ? ` — vencida hace ${Math.abs(p.diasRestantes)}d` : ` — vence en ${p.diasRestantes}d`}`),
+        detalleTotal: otrasRegalia.length,
         href: '/regalia-pascual',
         linkLabel: 'Ir a Regalía Pascual',
       })
@@ -126,6 +142,7 @@ export function useAlertas(): AlertaItem[] {
     const alertaRetrib = pendientesRetrib[0]
     if (alertaRetrib && alertaRetrib.diasRestantes <= 10) {
       const vencido = alertaRetrib.diasRestantes < 0
+      const otrosRetrib = pendientesRetrib.slice(1)
       items.push({
         id: 'retribuciones',
         severidad: vencido ? 'danger' : 'warning',
@@ -133,7 +150,10 @@ export function useAlertas(): AlertaItem[] {
         titulo: vencido
           ? `Retribuciones Complementarias ${MESES_CORTO[alertaRetrib.mes - 1]} ${alertaRetrib.anio} — IR-17 vencido hace ${Math.abs(alertaRetrib.diasRestantes)} día(s)`
           : `Retribuciones Complementarias ${MESES_CORTO[alertaRetrib.mes - 1]} ${alertaRetrib.anio} — IR-17 vence en ${alertaRetrib.diasRestantes} día(s)`,
-        descripcion: `Impuesto Sustitutivo 27% por declarar — límite ${alertaRetrib.limite.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' })}`,
+        descripcion: `Impuesto Sustitutivo 27% por declarar — límite ${alertaRetrib.limite.toLocaleDateString('es-DO', { day: '2-digit', month: 'short', year: 'numeric' })}`
+          + (otrosRetrib.length > 0 ? ` — ${otrosRetrib.length} mes(es) más sin declarar` : ''),
+        detalle: otrosRetrib.slice(0, 3).map(p => `${MESES_CORTO[p.mes - 1]} ${p.anio}${p.diasRestantes < 0 ? ` — vencido hace ${Math.abs(p.diasRestantes)}d` : ` — vence en ${p.diasRestantes}d`}`),
+        detalleTotal: otrosRetrib.length,
         href: '/retribuciones-complementarias',
         linkLabel: 'Ir a Retribuciones Complementarias',
       })
@@ -189,12 +209,38 @@ export function useAlertas(): AlertaItem[] {
     // principal y más barata: el empleado ni siquiera figura entre los
     // procesados de ese período.
     const periodosCerrados = periodos.filter(p => p.estado === 'cerrada' && p.tipo !== 'regalia' && p.tipo !== 'bonificacion')
-    const gapsRetroactivos: { nombre: string; periodoLabel: string }[] = []
+    // Agrupa por mes/año calendario (no por período individual) — en
+    // modalidad quincenal, un mismo mes son 2 períodos cerrados; evaluarlos
+    // por separado duplicaba la misma alerta dos veces para el mismo
+    // empleado/mes. Un "gap" real es que falte en TODOS los períodos de ese
+    // mes, no en uno de los dos.
+    const mesesConPeriodo = new Map<string, PeriodoNomina[]>()
     for (const p of periodosCerrados) {
-      if (p.empleadosProcesados === undefined) continue // sin tracking — no se puede evaluar con confianza
-      const finMes = new Date(p.anio, p.mes, 0, 23, 59, 59, 999)
+      const key = `${p.anio}-${p.mes}`
+      const grupo = mesesConPeriodo.get(key)
+      if (grupo) grupo.push(p); else mesesConPeriodo.set(key, [p])
+    }
+
+    const gapsRetroactivos: { nombre: string; periodoLabel: string }[] = []
+    for (const gruposDelMes of mesesConPeriodo.values()) {
+      if (gruposDelMes.some(p => p.empleadosProcesados === undefined)) continue // algún período de ese mes sin tracking — no se puede evaluar con confianza
+      const { mes, anio } = gruposDelMes[0]
+      const inicioMes = new Date(anio, mes - 1, 1)
+      const finMes = new Date(anio, mes, 0, 23, 59, 59, 999)
       for (const e of empleados) {
-        if (e.suspendido) continue
+        // Excluye si estuvo suspendido en ALGÚN momento dentro de este mes
+        // específico — usa el historial completo (historialSuspensiones),
+        // no solo el estado actual: un empleado reactivado hace tiempo no
+        // debe seguir marcado para siempre por una suspensión ya resuelta
+        // en un mes que nada tiene que ver con ella. Fallback a la
+        // suspensión vigente (sin historial) para registros previos a este
+        // campo.
+        const suspendidoEseMes = (e.historialSuspensiones ?? []).some(r => {
+          const inicio = new Date(r.fechaInicio)
+          const fin = r.fechaFin ? new Date(r.fechaFin) : hoy
+          return inicio <= finMes && fin >= inicioMes
+        }) || (!!e.suspendido && !!e.fechaSuspension && new Date(e.fechaSuspension) <= finMes && (!e.historialSuspensiones || e.historialSuspensiones.length === 0))
+        if (suspendidoEseMes) continue
         const ingreso = new Date(e.fechaIngreso)
         if (ingreso > finMes) continue
         let elegible = e.activo
@@ -203,8 +249,9 @@ export function useAlertas(): AlertaItem[] {
           elegible = !!liq && new Date(liq.fechaTerminacion) > finMes
         }
         if (!elegible) continue
-        if (!p.empleadosProcesados.includes(e.id)) {
-          gapsRetroactivos.push({ nombre: fullName(e), periodoLabel: `${MESES_CORTO[p.mes - 1]} ${p.anio}` })
+        const faltaEnTodos = gruposDelMes.every(p => !p.empleadosProcesados!.includes(e.id))
+        if (faltaEnTodos) {
+          gapsRetroactivos.push({ nombre: fullName(e), periodoLabel: `${MESES_CORTO[mes - 1]} ${anio}` })
         }
       }
     }
