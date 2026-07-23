@@ -4099,6 +4099,67 @@ Utilidades. `npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin
 cambio de conteo); re-ejecutada toda la suite de verificación de sesiones
 anteriores sin regresiones.
 
+## Fix — ajuste manual de RD$1,000 en período quincenal solo aplicaba RD$500
+
+Reporte directo del usuario: "Abrí un periodo de nómina y agregué a un
+empleado un ajuste por un ingreso adicional por bono de 1000 pesos y cuando
+abrí la tarjeta para ver el detalle sólo se agregaron 500 pesos al
+cálculo... lo mismo hice con un descuento... solo se descontaron 500 es
+decir la mitad." Confirmado como bug real, con causa raíz sistémica más
+amplia que los dos síntomas reportados.
+
+**Causa raíz**: `ajustesToParams()` (`dominican-labor.ts`) bucketea
+`AjusteLinea[]` en un `ParametrosNomina`, que luego pasa por
+`calcularNominaQuincenal` — función que divide TODO el bruto/descuentos
+entre 2 asumiendo que cada campo de `params` es un total MENSUAL (ver
+sección "Quincenal" arriba). Eso es correcto para valores que en efecto
+representan una cuota o monto mensual (préstamo, dependiente SFS), pero
+`ajustesToParams` no distinguía esos dos casos — cualquier ajuste manual
+(bono, otro ingreso, comisión, horas extra 35%/100%, recargo nocturno, otro
+descuento, o un concepto personalizado) que el usuario captura como EXACTAMENTE
+lo que corresponde a ESA quincena específica se dividía a la mitad sin que
+nada lo compensara, porque nunca fue pensado como un total mensual.
+
+**Fix**: `ajustesToParams(ajustes: AjusteLinea[], tipo: TipoPeriodo)` ahora
+recibe el tipo de período y pre-dobla (`factor = tipo === 'quincenal' ? 2 :
+1`) los 8 conceptos manuales afectados —`horasExtras35`, `horasExtras100`,
+`horasNocturnas`, `bonificaciones` (bono + otro ingreso), `comisiones`, y
+los 3 campos de ingresos/deducciones personalizados (catálogo configurable
+de Configuración) — mismo mecanismo ya usado y validado para
+`vacacionesGoce`/`vacacionesVendidas`/`diasIngresoPendientes`
+(`nomina-shared.ts`): el monto se dobla ANTES de entrar a
+`calcularNominaQuincenal`, así que sobrevive intacto la división automática
+que le sigue. Dos excepciones deliberadamente NO se tocan, porque ya están
+en la escala correcta por diseño:
+- `prestamo` (`cuotaBase`): es un monto MENSUAL pre-cargado íntegro en AMBAS
+  quincenas al crear cada período — la división automática es justo lo que
+  reparte la cuota mensual 50/50 entre ambas.
+- `dependiente_sfs`: ya se pre-divide en `prorratearMontoFijo` al crear el
+  período (RD$1,919.78 → RD$959.89/quincena) — doblarlo aquí lo habría
+  vuelto a partir por error.
+Los 3 call sites de `ajustesToParams` (`nomina-shared.ts`'s
+`calcularConAjustes`, `empleados/page.tsx`'s `calcNominaConAjustes` para
+Historial Nómina, y `dominican-labor.ts`'s propio `calcularConPeriodo` para
+Reportería/Liquidación) se actualizaron para pasar el `tipo` ya disponible
+en cada uno — un único fix en la fuente compartida corrige Nómina,
+Historial Nómina y Reportería a la vez, sin duplicar lógica.
+
+Verificado en navegador con Playwright, reproduciendo exacto el reporte del
+usuario (empresa quincenal, salarioBase RD$40,000, 1ª quincena): ajuste
+"Bono" de RD$1,000 → S. Bruto exacto RD$21,000.00 (RD$20,000 + RD$1,000
+completo, no RD$20,500); ajuste "Otro Desc." de RD$1,000 → S. Neto exacto
+RD$17,818.00 (RD$18,818.00 − RD$1,000 completo, no RD$500), con el modal de
+comprobante mostrando "Bonificaciones RD$1,000.00" y "Otros Descuentos
+(RD$1,000.00)" respectivamente. Confirmado sin regresión en los dos casos
+deliberadamente excluidos: préstamo con `cuotaBase` RD$1,000/mes sigue
+mostrando exacto RD$500.00/quincena (mitad, vía el halving automático que sí
+aplica ahí) y Dep. SFS sigue en RD$959.89/quincena fijo (sin doble
+división). Re-ejecutada la suite completa de regresión de sesiones
+anteriores (seguridad de períodos cerrados, días pendientes por ingreso a
+mitad de período, corte de cierre 15/30/31, cierre anticipado, y los 5
+escenarios de la QA de 7 años) sin ningún hallazgo nuevo. `npx tsc --noEmit`
+y `npm run build` limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -4107,6 +4168,7 @@ anteriores sin regresiones.
 
 | Hash | Descripción |
 |---|---|
+| `a5206bc` | fix: ajustesToParams no pre-doblaba ajustes manuales en período quincenal |
 | `f43b13a` | fix: Regalía/Bonificación requieren deshacer pago antes de reabrir, igual que nómina normal |
 | `7518dcc` | fix: revertir acumulado de Regalía Pascual al reabrir un período (título de commit incorrecto por error de copiado) |
 | `2b63b69` | fix: congelar el roster de un período no en_proceso — evita que un ingreso posterior al cierre real aparezca en la tabla |
