@@ -3717,6 +3717,99 @@ siguiente) NO aparece en absoluto en el período de julio. `npx tsc
 re-ejecutado también el script de verificación de la QA de 7 años completa
 (sección anterior) sin regresiones.
 
+## Corrección — el prorrateo por días calendario NO usaba la tarifa diaria legal (÷23.83)
+
+El usuario probó el fix anterior y señaló, con la matemática en mano, que
+RD$1,500 por 1 día de trabajo no podía ser correcto: RD$45,000 ÷ 23.83 =
+RD$1,888.37. El fix anterior prorrateaba con días CALENDARIO del período
+(mismo método ya usado por suspensión/salida/licencia/"días trabajados
+pendientes" en Liquidación) en vez de con la tarifa diaria legal del Art.
+177 (`DIVISOR_DIA_ORDINARIO = 23.83`, o 26 en régimen intermitente).
+
+**Se intentó aplicar ÷23.83 directamente dentro del período parcial y se
+demostró matemáticamente que se rompe** — valorar los días PERDIDOS de una
+quincena a esa tarifa y restarlos del salario de esa quincena puede dar
+**neto negativo** en casos completamente normales, no solo extremos:
+- Quincena 1-15 de julio, ingreso el 15 → 12 días laborables perdidos ×
+  RD$1,888.38 × 2 (pre-doblado, ya que `calcularNominaQuincenal` divide
+  TODO entre 2) = RD$45,321.05, más que el salario mensual completo
+  (RD$45,000) → salario de esa quincena sale en **-RD$160.51**.
+- Mensual, ingreso el día 31 de un mes con solo 4 domingos → 26 días
+  laborables perdidos × RD$1,888.38 = RD$49,097.78, también más que el
+  salario completo → **-RD$4,097.78**.
+
+La razón: 23.83 es un PROMEDIO de días laborables por mes completo,
+diseñado para valorar vacaciones/cesantía/preaviso (pagos siempre contra
+el salario íntegro) — un mes o quincena real con pocos domingos tiene MÁS
+días laborables reales que ese promedio, así que "días reales × tarifa
+promedio" puede superar el propio salario del período. La tarifa diaria
+legal nunca fue pensada para prorratear un período parcial por sí sola.
+
+**Decisión del usuario, con dos restricciones explícitas ("el divisor debe
+mantenerse y nunca una nómina dará negativa")**: en vez de prorratear
+DENTRO del período parcial, ese período simplemente no le paga nada al
+empleado nuevo — se excluye por completo, igual que ya se excluye a quien
+ingresa después de que el período termina — y los días que sí trabajó se
+valoran a la tarifa legal y se SUMAN, como pago extra, al período
+SIGUIENTE (mismo patrón ya usado por "días trabajados pendientes" al DAR
+DE BAJA a un empleado, aplicado aquí simétricamente al INGRESO). Ejemplos
+del propio usuario: ingreso el día 15 de una quincena 1-15 → ese día se
+paga en la 2ª quincena; ingreso el día 31 → se paga en la 1ª quincena del
+mes siguiente (o el mes siguiente completo, si la nómina es mensual). Al
+ser un monto SUMADO sobre el sueldo normal completo (nunca restado de él),
+es matemáticamente imposible que dé negativo.
+
+**Rediseño — `nomina-shared.ts`:**
+- `empleadosDelPeriodo` (`nomina/page.tsx`) vuelve a excluir por completo a
+  cualquier empleado cuya `fechaIngreso` caiga DESPUÉS del INICIO del
+  período (no solo después del fin, como en el intento anterior) — un
+  ingreso a mitad de período NUNCA se prorratea dentro de ese período.
+- Nueva `diasIngresoPendientes(empleado, periodos, mes, anio, tipo,
+  quincena)` reemplaza a `diasIngresoEnPeriodo` — calcula el hueco entre el
+  último período en que el empleado SÍ fue procesado (o su `fechaIngreso`
+  si nunca se le procesó ninguno) y el inicio del período que se está
+  calculando, en días laborables (`contarDiasLaborables`, excluye
+  domingos), valorados a `salarioBase ÷ getDivisorSalarioDiario(empleado)`.
+  **Acotado al período INMEDIATAMENTE anterior** (mismo tipo/cadencia,
+  vía `periodoAnteriorDeSerie`) — sin este límite, cualquier empleado con
+  historial (Carga Inicial, saldos migrados) generaría un "hueco pendiente"
+  de años cada vez que la empresa crea su primer período; con el límite,
+  un `fechaIngreso` anterior al inicio del período inmediato anterior se
+  trata como empleado con historial normal, sin ningún hueco fabricado.
+- Nuevo campo `diasIngresoPendientes` en `ParametrosNomina`/`ResultadoNomina`
+  — se suma a `totalBrutoLegado` en `calcularNomina` (cotizable TSS,
+  gravable ISR — salario ordinario, mismo tratamiento que
+  `vacacionesVendidas`: pago EXTRA sobre el sueldo normal completo, nunca
+  lo sustituye), con el mismo "pre-doblado" quincenal ya usado para
+  `vacacionesGoce`/`vacacionesVendidas` (`calcularNominaQuincenal` divide
+  TODO entre 2, así que el monto se dobla antes para sobrevivir esa
+  división). Nueva línea "Días Pendientes (Ingreso)" en Devengos del modal
+  `DetalleNomina` y en el PDF de comprobante.
+- Toast al crear un período distingue dos avisos: "N empleado(s) con días
+  pendientes de un ingreso reciente" (quien SÍ cobra en este período, con
+  el extra) y "N empleado(s) recién ingresados no cobran este período (sus
+  días se suman al próximo)" (quien queda excluido de este período
+  específico) — para que no parezca que un empleado recién creado
+  "desapareció" sin explicación.
+
+Verificado en navegador con Playwright, matemática exacta: empresa
+quincenal, `salarioBase` RD$45,000, ingreso 2026-07-15 (dentro de la 1ª
+quincena 1-15) → **1ª quincena NO muestra al empleado en absoluto**; **2ª
+quincena** muestra Salario Básico RD$22,500.00 (quincena completa, normal)
++ "Días Pendientes (Ingreso)" RD$1,888.38 (exacto — 1 día laborable × RD$45,000÷23.83)
+= Total Bruto RD$24,388.38, con AFP/SFS/ISR calculados sobre el total
+combinado y Salario Neto RD$21,265.67 (nunca negativo). Empleado control
+con antigüedad desde 2020 sigue mostrando la quincena completa sin
+cambios. Escenario mensual: ingreso 2026-07-31 (último día de julio,
+excluido de julio) → **agosto** muestra RD$46,000.00 + RD$1,930.34 (=
+RD$46,000÷23.83, 1 día) = RD$47,930.34. Escenario de acotamiento: empleado
+con `fechaIngreso` 2020-01-01 y la empresa creando su PRIMER período en
+julio 2026 → **sin ninguna línea de "Días Pendientes" fabricada** (el
+hueco de años queda correctamente fuera del período inmediato anterior).
+`npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de
+conteo); re-ejecutado también el script de verificación de la QA de 7 años
+completa sin regresiones.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3725,6 +3818,7 @@ re-ejecutado también el script de verificación de la QA de 7 años completa
 
 | Hash | Descripción |
 |---|---|
+| `851ec56` | fix: ingreso a mitad de período se excluye y se paga en el siguiente a tarifa diaria legal |
 | `040d12d` | fix: prorratear salario de empleado nuevo cuando su ingreso cae a mitad de período |
 | `01202c1` | fix: QA de 7 años — 13 bugs críticos y 6 medios en Nómina, Vacaciones, Regalía, Bonificación, Reportería y Alertas |
 | `b9944b2` | feat: Retribuciones Complementarias — acumulado por empleado, PDF y bloque en Cumplimiento Fiscal |
