@@ -3949,6 +3949,64 @@ rutas, sin cambio de conteo); re-ejecutadas también las suites de
 verificación de la sesión anterior (días pendientes mensual, seguridad de
 períodos cerrados, QA de 7 años) sin regresiones.
 
+## Empleado nuevo contratado DESPUÉS de un cierre anticipado — el sistema debe saberlo
+
+El usuario planteó un caso real adicional, distinto al corte de 15/30/31:
+"si hoy es día 12 de agosto y yo como departamento de nómina decido cortar
+la nómina hoy... si un empleado entra el día 13, 14 o 15 esos días
+trabajados pasarán a la próxima quincena, entonces el sistema tiene que
+estar claro que hubo un empleado que entró después que el periodo de
+nómina se cerró". Es decir: el corte real no siempre coincide con el
+último día calendario del período (15/30/31) — puede ser ANTES, porque el
+departamento decide cerrar la nómina unos días antes de la fecha de pago
+para tener tiempo de correr la transferencia.
+
+**Bug real encontrado al investigar**: `empleadosPeriodo` en
+`nomina/page.tsx` se recalculaba EN VIVO desde `empleadosEnNomina`
+sin importar el `estado` del período. Aunque el guard de datos de la
+sesión anterior ya bloqueaba que un empleado nuevo pudiera ser realmente
+PROCESADO en un período `procesada`/`cerrada` (no-op silencioso en
+`marcarProcesados`), la tabla visual seguía mostrando a ese empleado como
+si pudiera procesarse ahí — confuso e inconsistente con el principio de
+"un período cerrado es un registro histórico inmutable".
+
+**Fix — `nomina/page.tsx`**: `empleadosPeriodo` ahora solo se recalcula en
+vivo mientras `estado === 'en_proceso'`. En cuanto el período pasa a
+`procesada` o `cerrada`, el roster se congela exactamente a
+`empleadosProcesados` (con fallback a la lista en vivo solo para períodos
+sin ese campo — mismo criterio ya usado en `EnvioComprobantesModal.tsx`).
+Esto resuelve el caso de raíz: si el departamento "cierra" el período el
+día 12 (lo marca `procesada`/`cerrada` ese día) y luego contrata a alguien
+el día 13, ese empleado nunca vuelve a aparecer en ese período sin
+importar cuántas veces se reabra la vista — sus días quedan capturados
+automáticamente por `diasIngresoPendientes` (ya construido en la sesión
+anterior) en el período SIGUIENTE que se cree, sin necesidad de que el
+corte coincida con el día calendario 15/30/31 exacto — el corte real es
+"cuándo el departamento efectivamente cerró", no una fecha fija.
+
+**Señal complementaria ya existente**: la alerta `pago-retroactivo` en
+`alertas.ts` (sesión previa, "posible pago retroactivo pendiente") ya
+detecta a este mismo empleado como un caso pendiente EN CUANTO el período
+donde debería figurar queda cerrado sin él — antes incluso de que se cree
+el período siguiente que finalmente le pague sus días. Se confirmó que
+esta alerta se resuelve sola una vez el período siguiente lo procesa
+(deja de estar "ausente de TODOS los períodos cerrados de ese mes").
+
+Verificado en navegador con Playwright: período "1ª Quincena · Agosto
+2026" sembrado ya `cerrada` con un solo empleado procesado (simulando
+cierre el día 12) → se agrega un empleado nuevo con `fechaIngreso`
+2026-08-13 → al abrir el período cerrado, sigue mostrando exactamente "1
+de 1 empleado(s)" (el nuevo NUNCA aparece, sin importar que su fecha de
+ingreso caiga calendario-mente dentro del rango 1-15) → al crear la 2ª
+quincena, el empleado nuevo aparece con salario completo (RD$22,500.00) +
+"Días Pendientes (Ingreso)" RD$5,665.13 exacto (3 días — 13, 14 y 15 de
+agosto, ninguno domingo — a la tarifa legal RD$45,000÷23.83), con el toast
+"1 empleado(s) con días pendientes de un ingreso reciente en este
+período". `npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin
+cambio de conteo); re-ejecutadas las suites de verificación de sesiones
+anteriores (corte de cierre, seguridad de períodos cerrados, QA de 7 años)
+sin regresiones.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3957,6 +4015,7 @@ períodos cerrados, QA de 7 años) sin regresiones.
 
 | Hash | Descripción |
 |---|---|
+| `2b63b69` | fix: congelar el roster de un período no en_proceso — evita que un ingreso posterior al cierre real aparezca en la tabla |
 | `1853b22` | fix: el corte de cierre solo excluye el último día del período, no todo ingreso posterior al día 1 |
 | `d7d339d` | feat: ningún período cerrado se altera jamás — guard de datos + bloqueo de reabrir pagados |
 | `851ec56` | fix: ingreso a mitad de período se excluye y se paga en el siguiente a tarifa diaria legal |
