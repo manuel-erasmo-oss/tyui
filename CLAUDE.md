@@ -3666,6 +3666,57 @@ conteo) tanto antes como después de un reinicio de contenedor a mitad de
 sesión (verificado que ningún cambio se perdió comparando `git diff --stat`
 antes/después).
 
+## Fix — empleado nuevo cobraba el período completo sin prorratear por fecha de ingreso
+
+Reporte directo del usuario: creó un empleado con `fechaIngreso` 15 de julio
+y, al abrir el período de nómina de la 1ª quincena de julio (1-15), el
+sistema lo incluyó de inmediato con el cálculo de la quincena COMPLETA, en
+vez de solo el día que realmente trabajó (el 15). Confirmado como bug real,
+no limitación conocida: pese a que el motor ya tenía mecanismos de
+prorrateo simétricos para suspensión, salida pendiente, licencia sin sueldo
+y goce de vacaciones (todos vía `diasCorteEnPeriodo`/variantes en
+`nomina-shared.ts`), **ninguno cubría el caso inverso — un ingreso que cae
+a mitad de un período ya abierto**. `empleadosEnNomina`
+(`empleados-context.tsx`) nunca filtró por `fechaIngreso`, así que un
+empleado recién creado con fecha futura respecto al inicio del período
+aparecía de inmediato con el 100% del período, sin importar cuántos días
+realmente llevaba trabajando.
+
+**Fix — mismo patrón exacto que los mecanismos ya existentes:**
+- Nueva función `diasIngresoEnPeriodo(empleado, mes, anio, tipo, quincena)`
+  en `nomina-shared.ts` — si `fechaIngreso` cae DENTRO del rango del
+  período (después de que ya empezó), prorratea `diasTrabajados` desde esa
+  fecha hasta el fin del período, sobre el total de días del período
+  (`diasLaborablesMes`). Si `fechaIngreso` es anterior o igual al inicio,
+  devuelve `null` (sin prorrateo, período completo — comportamiento
+  correcto ya existente). Wireada en `calcularParaPeriodo` (el chokepoint
+  único usado por los 6+ call sites de Cálculo de Nómina y Gestión de
+  Envíos/`EnvioComprobantesModal`), en la misma cadena de prioridad que
+  suspensión/salida/licencia sin sueldo — todas comparten el criterio ya
+  documentado de "el primer corte que aplique gana", ya que en la práctica
+  no deberían coexistir dos cortes distintos en el mismo período.
+- `empleadosDelPeriodo` (`nomina/page.tsx`) ahora también EXCLUYE por
+  completo (no solo prorratea) a cualquier empleado cuya `fechaIngreso` sea
+  POSTERIOR al fin del período — un empleado contratado en agosto no debe
+  aparecer siquiera en un período de julio, ni con RD$0. Mismo criterio
+  simétrico ya usado para suspensión/salida (una fecha de corte anterior al
+  inicio del período excluye del todo, no prorratea a cero).
+- Toast al crear un período ahora también menciona "N empleado(s) con
+  ingreso a mitad de período (prorrateado)", mismo patrón ya usado para
+  vacaciones/licencia sin sueldo/reajuste salarial.
+
+Verificado en navegador con Playwright, matemática exacta (empresa
+quincenal, salarioBase RD$45,000, 1ª quincena de julio = 15 días): empleado
+con `fechaIngreso` 2026-07-15 → S. Bruto exacto RD$1,500.00
+(=(45,000/2 quincena) × 1/15 días — el 15 de julio es el único día
+trabajado de esa quincena), contra un empleado control con antigüedad
+desde 2020 que sigue mostrando la quincena completa RD$22,500.00 sin
+cambios. Segundo escenario: empleado con `fechaIngreso` 2026-08-01 (mes
+siguiente) NO aparece en absoluto en el período de julio. `npx tsc
+--noEmit` y `npm run build` limpios (19 rutas, sin cambio de conteo);
+re-ejecutado también el script de verificación de la QA de 7 años completa
+(sección anterior) sin regresiones.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3674,6 +3725,7 @@ antes/después).
 
 | Hash | Descripción |
 |---|---|
+| `040d12d` | fix: prorratear salario de empleado nuevo cuando su ingreso cae a mitad de período |
 | `01202c1` | fix: QA de 7 años — 13 bugs críticos y 6 medios en Nómina, Vacaciones, Regalía, Bonificación, Reportería y Alertas |
 | `b9944b2` | feat: Retribuciones Complementarias — acumulado por empleado, PDF y bloque en Cumplimiento Fiscal |
 | `12b4a5c` | feat: Retribuciones Complementarias — acumulado histórico por empleado |
