@@ -487,8 +487,28 @@ export default function NominaPage() {
   // normales, a cualquier suspendido a mitad de ESTE período (ver
   // empleadosDelPeriodo). Sustituye a empleadosEnNomina en todo lo que sea
   // específico del período actualmente abierto.
+  //
+  // Solo se recalcula EN VIVO mientras el período está en_proceso — un
+  // período procesada/cerrada es un registro histórico congelado (mismo
+  // principio que ya rige actualizarAjustes/marcarProcesados, ver
+  // periodos-context.tsx), así que su roster se fija a los empleados que
+  // REALMENTE fueron procesados. Sin este freeze, un empleado contratado
+  // DESPUÉS de que el departamento ya cerró ese período (ej. cierre el día
+  // 12 para pagar el 15, empleado entra el 13) aparecía igual en la tabla
+  // al reabrir/ver el período — aunque ya no se le podía procesar ahí
+  // (bloqueado por el guard de datos), seguía viéndose como si pudiera. Sus
+  // días quedan correctamente diferidos al período siguiente vía
+  // diasIngresoPendientes (nomina-shared.ts), sin importar en qué día
+  // calendario específico haya entrado. Fallback a la lista en vivo solo
+  // para períodos sin empleadosProcesados (anteriores a ese campo, o datos
+  // demo sembrados directo) — mismo criterio ya usado en
+  // EnvioComprobantesModal.tsx.
   const empleadosPeriodo = periodoActual
-    ? empleadosDelPeriodo(empleados, empleadosEnNomina, periodoActual.mes, periodoActual.anio, periodoActual.tipo, periodoActual.quincena ?? 1)
+    ? periodoActual.estado === 'en_proceso'
+      ? empleadosDelPeriodo(empleados, empleadosEnNomina, periodoActual.mes, periodoActual.anio, periodoActual.tipo, periodoActual.quincena ?? 1)
+      : periodoActual.empleadosProcesados
+        ? periodoActual.empleadosProcesados.flatMap(id => { const e = empleados.find(x => x.id === id); return e ? [e] : [] })
+        : empleadosEnNomina
     : empleadosEnNomina
 
   // If the open period was deleted, reset to list view without calling setState during render
