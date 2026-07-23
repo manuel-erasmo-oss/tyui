@@ -4046,24 +4046,58 @@ Reabrir → el acumulado de Ana vuelve a un valor real y distinto de cero
 (RD$23,333.33, proporcional a sus meses de servicio) en vez de quedar
 atascado en RD$0.00.
 
-### 🟡 Hallazgo reportado, pendiente de decisión — Regalía/Bonificación se pueden reabrir aunque su propio dominio ya las trate como "pagadas"
+### 🟡 Hallazgo resuelto — Regalía/Bonificación ahora usan el mismo candado de dos pasos que nómina normal
 
-`regalia-pascual/page.tsx` y `bonificacion/page.tsx` tratan
+`regalia-pascual/page.tsx` y `bonificacion/page.tsx` trataban
 `estado === 'cerrada'` como "ya se distribuyó" (bloquean una segunda
-solicitud con el banner correspondiente) — es su propia noción de "pagado",
-independiente del campo `pagada` (pensado para la confirmación ACH de
-nómina mensual/quincenal vía Gestión de Envíos). El guard de `reabrir()`
-agregado en la sesión anterior ("no se puede reabrir un período pagado")
-solo verifica ese campo `pagada` — que Regalía/Bonificación nunca estampan
-por su cuenta. Confirmado en navegador: un período de Regalía Pascual
-`cerrada` (sin `pagada` marcado) SÍ se puede reabrir sin ninguna
-restricción hoy, aunque `regalia-pascual/page.tsx` ya lo trate como
-completamente distribuido.
+solicitud con el banner correspondiente), pero el guard de `reabrir()`
+("no se puede reabrir un período pagado") solo verifica el campo `pagada`
+— que Regalía/Bonificación nunca estampaban por su cuenta, ya que Gestión
+de Envíos (aunque siempre los listó, al ser un filtro genérico por
+`estado`) nunca era parte del flujo esperado para estos dos tipos. Un
+período de Regalía/Bonificación `cerrada` se podía reabrir sin ninguna
+restricción, aunque su propia página ya lo tratara como completamente
+distribuido.
 
-Presentada la disyuntiva al usuario (bloquear reabrir por completo en
-cuanto Regalía/Bonificación cierra, vs. extender el mecanismo de
-"Marcar/Deshacer Pagada" de Gestión de Envíos a estos dos tipos) — sin
-resolver todavía, pendiente de confirmación antes de implementar.
+Presentada la disyuntiva al usuario — bloquear reabrir por completo en
+cuanto cierra, vs. extender el mecanismo de "Marcar/Deshacer Pagada" de
+Gestión de Envíos a estos dos tipos — **eligió la segunda opción**, ya
+implementada:
+
+- `regalia-pascual/page.tsx` y `bonificacion/page.tsx`: el banner/botón de
+  "ya pagada" ahora distingue el estado real vía `periodo.pagada` (no solo
+  `estado === 'cerrada'`). Sin `pagada` (cerrada pero sin confirmar en
+  Gestión de Envíos todavía) → mensaje y enlace sin cambios, apuntan a
+  "reabre el período desde Nómina" (Cálculo de Nómina, reabrir directo
+  sigue disponible — igual que un mensual/quincenal `cerrada` sin pagar
+  aún). Con `pagada` → nuevo mensaje "ya se pagó y se confirmó el envío —
+  para corregirlo, deshaz el pago primero en Gestión de Envíos", con el
+  enlace apuntando a `/nomina/envios` en vez de `/nomina` (ya que Reabrir
+  ahí estaría deshabilitado sin ese paso previo).
+- Mismo ajuste en la tabla "Historial de Liquidaciones" de ambos módulos:
+  el badge "Estado" ya no dice "Pagada" de forma incondicional para todo
+  el historial — ahora es condicional a `p.pagada` (`Badge variant="warning">Cerrada
+  — pago sin confirmar"` para los que nunca pasaron por Gestión de Envíos).
+  Este era un hallazgo real independiente: como `fechaPago` tampoco se
+  estampaba nunca para estos tipos, la columna "Fecha de Pago" del
+  historial ya mostraba correctamente "—", pero el badge de al lado
+  afirmaba "Pagada" de todas formas — inconsistencia interna en la misma
+  fila.
+- Ningún cambio necesario en `periodos-context.tsx`: `marcarPagada`/
+  `desmarcarPagada`/el guard de `reabrir()` ya eran type-agnostic desde la
+  sesión anterior — el mecanismo ya soportaba esto, solo faltaba que la UI
+  de Regalía/Bonificación reflejara correctamente el estado real en vez de
+  asumir que "cerrada" siempre implicaba "ya con el candado puesto".
+
+Verificado en navegador con Playwright, ciclo completo para ambos tipos:
+Regalía Pascual `cerrada` sin pagar → Reabrir habilitado en Cálculo de
+Nómina, banner apunta a "ver en Nómina" → "Marcar como Pagada" en Gestión
+de Envíos → banner cambia a "pagada — Gestión de Envíos", Reabrir pasa a
+deshabilitado → "Deshacer Pago" → banner vuelve a "ver en Nómina", Reabrir
+vuelve a estar habilitado. Mismo ciclo confirmado para Bonificación por
+Utilidades. `npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin
+cambio de conteo); re-ejecutada toda la suite de verificación de sesiones
+anteriores sin regresiones.
 
 ## Branch de trabajo
 

@@ -306,7 +306,11 @@ export default function RegaliaPage() {
                       <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400">{p.totalEmpleados}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{formatRD(p.totales.bruto)}</td>
                       <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{p.fechaPago ? formatDate(p.fechaPago) : '—'}</td>
-                      <td className="px-4 py-3.5"><Badge variant="success">Pagada</Badge></td>
+                      <td className="px-4 py-3.5">
+                        {p.pagada
+                          ? <Badge variant="success">Pagada</Badge>
+                          : <Badge variant="warning">Cerrada — pago sin confirmar</Badge>}
+                      </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link
                           href="/nomina"
@@ -359,12 +363,14 @@ export default function RegaliaPage() {
               </Link>
             ) : periodoRegaliaPagado ? (
               <Link
-                href="/nomina"
+                href={periodoRegaliaPagado.pagada ? '/nomina/envios' : '/nomina'}
                 className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] transition-colors"
-                title="Ya se pagó este ciclo — para corregirlo, reabre el período desde Nómina"
+                title={periodoRegaliaPagado.pagada
+                  ? 'Ya se pagó y se confirmó el envío — para corregirlo, deshaz el pago primero en Gestión de Envíos'
+                  : 'Ya se pagó este ciclo — para corregirlo, reabre el período desde Nómina'}
               >
                 <CheckCircle2 className="h-4 w-4" />
-                {anioActual} ya pagada — ver en Nómina
+                {periodoRegaliaPagado.pagada ? `${anioActual} pagada — Gestión de Envíos` : `${anioActual} ya pagada — ver en Nómina`}
               </Link>
             ) : (
               <button
@@ -397,11 +403,17 @@ export default function RegaliaPage() {
           <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3.5 text-sm">
             <div className="flex items-center gap-2.5 text-zinc-600 dark:text-zinc-300">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              La Regalía Pascual {anioActual} ya se pagó — no se puede solicitar de nuevo. Si necesitas corregirla,
-              reabre el período desde Nómina.
+              {periodoRegaliaPagado.pagada
+                ? <>La Regalía Pascual {anioActual} ya se pagó y se confirmó el envío — no se puede solicitar de nuevo.
+                    Si necesitas corregirla, primero deshaz el pago en Gestión de Envíos y luego reabre el período desde Nómina.</>
+                : <>La Regalía Pascual {anioActual} ya se pagó — no se puede solicitar de nuevo. Si necesitas corregirla,
+                    reabre el período desde Nómina.</>}
             </div>
-            <Link href="/nomina" className="flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-300 hover:underline">
-              Ir a Nómina <ArrowRight className="h-3.5 w-3.5" />
+            <Link
+              href={periodoRegaliaPagado.pagada ? '/nomina/envios' : '/nomina'}
+              className="flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-300 hover:underline"
+            >
+              {periodoRegaliaPagado.pagada ? 'Ir a Gestión de Envíos' : 'Ir a Nómina'} <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         )}

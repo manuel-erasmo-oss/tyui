@@ -443,7 +443,11 @@ export default function BonificacionPage() {
                       <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(p.totales.bruto)}</td>
                       <td className="px-4 py-3.5 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(p.totales.neto)}</td>
                       <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400">{p.pagada && p.fechaPago ? formatDate(p.fechaPago) : '—'}</td>
-                      <td className="px-4 py-3.5"><Badge variant="success">Pagada</Badge></td>
+                      <td className="px-4 py-3.5">
+                        {p.pagada
+                          ? <Badge variant="success">Pagada</Badge>
+                          : <Badge variant="warning">Cerrada — pago sin confirmar</Badge>}
+                      </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link
                           href="/nomina"
@@ -497,12 +501,14 @@ export default function BonificacionPage() {
               </Link>
             ) : periodoBonifPagado ? (
               <Link
-                href="/nomina"
+                href={periodoBonifPagado.pagada ? '/nomina/envios' : '/nomina'}
                 className="flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm font-medium text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] transition-colors"
-                title="Ya se pagó este ejercicio — para corregirlo, reabre el período desde Nómina"
+                title={periodoBonifPagado.pagada
+                  ? 'Ya se pagó y se confirmó el envío — para corregirlo, deshaz el pago primero en Gestión de Envíos'
+                  : 'Ya se pagó este ejercicio — para corregirlo, reabre el período desde Nómina'}
               >
                 <CheckCircle2 className="h-4 w-4" />
-                {anioFiscal} ya pagada — ver en Nómina
+                {periodoBonifPagado.pagada ? `${anioFiscal} pagada — Gestión de Envíos` : `${anioFiscal} ya pagada — ver en Nómina`}
               </Link>
             ) : (
               <button
@@ -539,11 +545,18 @@ export default function BonificacionPage() {
           <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-5 py-3.5 text-sm">
             <div className="flex items-center gap-2.5 text-zinc-600 dark:text-zinc-300">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
-              La Bonificación por Utilidades {anioFiscal} ya se pagó — no se puede solicitar de nuevo. Si necesitas
-              corregirla, reabre el período desde Nómina.
+              {periodoBonifPagado.pagada
+                ? <>La Bonificación por Utilidades {anioFiscal} ya se pagó y se confirmó el envío — no se puede
+                    solicitar de nuevo. Si necesitas corregirla, primero deshaz el pago en Gestión de Envíos y luego
+                    reabre el período desde Nómina.</>
+                : <>La Bonificación por Utilidades {anioFiscal} ya se pagó — no se puede solicitar de nuevo. Si
+                    necesitas corregirla, reabre el período desde Nómina.</>}
             </div>
-            <Link href="/nomina" className="flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-300 hover:underline">
-              Ir a Nómina <ArrowRight className="h-3.5 w-3.5" />
+            <Link
+              href={periodoBonifPagado.pagada ? '/nomina/envios' : '/nomina'}
+              className="flex items-center gap-1 font-semibold text-zinc-600 dark:text-zinc-300 hover:underline"
+            >
+              {periodoBonifPagado.pagada ? 'Ir a Gestión de Envíos' : 'Ir a Nómina'} <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
         )}
