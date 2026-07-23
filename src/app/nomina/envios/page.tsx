@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Wallet, Mail, CheckCircle2 } from 'lucide-react'
+import { Search, Wallet, Mail, CheckCircle2, Undo2 } from 'lucide-react'
 import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { Toast } from '@/components/ui/Toast'
@@ -17,7 +17,7 @@ import type { PeriodoNomina } from '@/types'
 // todavía está en_proceso/procesada no tiene nada que hacer en esta
 // pantalla — primero hay que cerrarlo desde Cálculo de Nómina.
 export default function GestionEnviosPage() {
-  const { periodos, marcarPagada } = usePeriodos()
+  const { periodos, marcarPagada, desmarcarPagada } = usePeriodos()
   const [busqueda, setBusqueda] = useState('')
   const [filtroAnio, setFiltroAnio] = useState<'todos' | number>('todos')
   const [envioPeriodoId, setEnvioPeriodoId] = useState<string | null>(null)
@@ -39,6 +39,19 @@ export default function GestionEnviosPage() {
     if (!confirm(`¿Confirmar que "${labelPeriodo(p)}" ya fue pagado (transferencia ACH enviada) el ${formatDate(hoy)}?`)) return
     marcarPagada(p.id, hoy)
     setEnvioPeriodoId(p.id)
+  }
+
+  // Deshacer un pago es el único requisito para poder reabrir después un
+  // período cerrado (ver periodos-context.tsx) — no revierte ninguna
+  // transferencia bancaria real, es un reconocimiento explícito de que ese
+  // pago ya no aplica (se pagó mal, hay que corregir el período). Por eso
+  // la confirmación es más severa que la de marcar como pagada.
+  function handleDesmarcarPagada(p: PeriodoNomina) {
+    if (!confirm(
+      `¿Deshacer el pago de "${labelPeriodo(p)}"? Esto NO revierte ninguna transferencia bancaria — solo quita la marca de "pagado" en el sistema para poder reabrir y corregir el período si fue necesario. Úsalo solo si el pago se registró por error o hay que corregirlo.`
+    )) return
+    desmarcarPagada(p.id)
+    setToast('Pago deshecho — el período vuelve a estar pendiente de pago')
   }
 
   const periodoEnvio = envioPeriodoId ? periodos.find(p => p.id === envioPeriodoId) ?? null : null
@@ -135,12 +148,21 @@ export default function GestionEnviosPage() {
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         {p.pagada ? (
-                          <button
-                            onClick={() => setEnvioPeriodoId(p.id)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
-                          >
-                            <Mail className="h-3.5 w-3.5" /> Comprobantes
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleDesmarcarPagada(p)}
+                              title="Deshacer pago — necesario para poder reabrir este período"
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 dark:border-amber-800/50 px-2.5 py-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                            >
+                              <Undo2 className="h-3.5 w-3.5" /> Deshacer Pago
+                            </button>
+                            <button
+                              onClick={() => setEnvioPeriodoId(p.id)}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] px-2.5 py-1.5 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+                            >
+                              <Mail className="h-3.5 w-3.5" /> Comprobantes
+                            </button>
+                          </div>
                         ) : (
                           <button
                             onClick={() => handleMarcarPagada(p)}

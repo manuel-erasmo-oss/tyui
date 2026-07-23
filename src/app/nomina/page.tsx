@@ -1299,32 +1299,52 @@ export default function NominaPage() {
                               </button>
                             )}
                             {p.estado !== 'en_proceso' && esPeriodoMasReciente(p, periodos) && (
+                              p.pagada ? (
+                                <button
+                                  disabled
+                                  title="Período ya pagado — no se puede reabrir. Deshaz el pago primero en Gestión de Envíos."
+                                  className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
+                                >
+                                  <Unlock className="h-4 w-4" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    if (!confirm(
+                                      `¿Reabrir "${labelPeriodo(p)}"? Los empleados procesados volverán a marcarse como pendientes y deberás reprocesarlos. Esta acción queda registrada con tu usuario y fecha.`
+                                    )) return
+                                    const ok = reabrir(p.id, user?.email ?? 'desconocido')
+                                    setToast(ok ? 'Período reabierto — vuelve a En Proceso' : 'No se pudo reabrir el período')
+                                  }}
+                                  title="Reabrir período (desposteo)"
+                                  className="rounded-lg border border-amber-200 dark:border-amber-800/50 p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                                >
+                                  <Unlock className="h-4 w-4" />
+                                </button>
+                              )
+                            )}
+                            {p.estado === 'cerrada' ? (
+                              <button
+                                disabled
+                                title="Un período cerrado es un registro histórico — no se puede eliminar. Reábrelo primero si necesitas corregirlo."
+                                className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-300 dark:text-zinc-600 cursor-not-allowed"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            ) : (
                               <button
                                 onClick={e => {
                                   e.stopPropagation()
-                                  if (!confirm(
-                                    `¿Reabrir "${labelPeriodo(p)}"? Los empleados procesados volverán a marcarse como pendientes y deberás reprocesarlos. Esta acción queda registrada con tu usuario y fecha.`
-                                  )) return
-                                  const ok = reabrir(p.id, user?.email ?? 'desconocido')
-                                  setToast(ok ? 'Período reabierto — vuelve a En Proceso' : 'No se pudo reabrir el período')
+                                  if (!confirm(`¿Eliminar el período "${labelPeriodo(p)}"?`)) return
+                                  eliminar(p.id)
                                 }}
-                                title="Reabrir período (desposteo)"
-                                className="rounded-lg border border-amber-200 dark:border-amber-800/50 p-1.5 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
+                                title="Eliminar período"
+                                className="rounded-lg border border-rose-200 dark:border-rose-800/50 p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
                               >
-                                <Unlock className="h-4 w-4" />
+                                <Trash2 className="h-4 w-4" />
                               </button>
                             )}
-                            <button
-                              onClick={e => {
-                                e.stopPropagation()
-                                if (!confirm(`¿Eliminar el período "${labelPeriodo(p)}"?`)) return
-                                eliminar(p.id)
-                              }}
-                              title="Eliminar período"
-                              className="rounded-lg border border-rose-200 dark:border-rose-800/50 p-1.5 text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
                           </div>
                         </td>
                       </tr>
