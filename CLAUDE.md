@@ -3887,6 +3887,68 @@ el período vuelve a "En Proceso" correctamente. Sin errores de consola.
 conteo); re-ejecutada también la suite de verificación de ingreso a mitad
 de período (sección anterior) y la de la QA de 7 años, sin regresiones.
 
+## Corrección — el corte de nómina excluía DEMASIADOS días, solo debe excluir el último día del período
+
+El usuario corrigió el diseño anterior: "cualquier ingreso después del día
+1 del período queda excluido... eso no debe ser así". El fix previo
+excluía por completo del período a CUALQUIER ingreso posterior al día 1
+(día 2, día 10, día 14…), cuando en la práctica real de nómina el corte
+administrativo ocurre solo unos días antes del pago (ej. paga el 15,
+corte el 12) — solo quien ingresa DESPUÉS de ese corte se difiere a la
+próxima quincena; alguien que entra el día 2 debe cobrar esa misma
+quincena, prorrateado.
+
+Simplificación explícita del propio usuario para no depender de un
+"corte configurable": **el corte automático son los días 15, 30 y 31** —
+es decir, exactamente el ÚLTIMO día calendario de cada período (15 en la
+1ra quincena; 30 o 31 —o 28/29 en febrero— en la 2da quincena o en
+mensual). Cualquier ingreso ANTES de ese último día sí participa del
+período, prorrateado por días calendario; solo el ingreso que cae
+EXACTAMENTE en el último día del período se excluye y se arrastra al
+siguiente a la tarifa diaria legal (mecanismo ya construido en la sesión
+anterior, sin cambios).
+
+**Fix — `nomina-shared.ts`:**
+- Restaurada `diasIngresoEnPeriodo(empleado, mes, anio, tipo, quincena)`
+  (el mecanismo de prorrateo por días calendario que existía ANTES de la
+  corrección del ÷23.83, ahora con el alcance correcto): `null` si
+  `fechaIngreso <= inicio` (período completo) o si `fechaIngreso >= fin`
+  (cae en el corte o después — se excluye del todo, no se prorratea aquí).
+  Para cualquier fecha estrictamente entre inicio y fin, prorratea
+  `diasTrabajados`/`diasLaborablesMes` en días calendario — mismo
+  mecanismo exacto que ya usan suspensión/salida/licencia
+  (`diasCorteEnPeriodo`), nunca puede dar negativo ni superar el 100% del
+  período por construcción.
+- Wireada en `calcularParaPeriodo`, en la misma cadena de prioridad que
+  suspensión/salida/licencia sin sueldo.
+- `diasIngresoPendientes` (el mecanismo de arrastre a la tarifa legal) NO
+  cambió su lógica interna — matemáticamente sigue resolviendo
+  exactamente 1 día de hueco en el caso común, porque ahora la ÚNICA
+  condición de exclusión de un período es `fechaIngreso === fin` (antes
+  cualquier `fechaIngreso > inicio` disparaba la exclusión).
+
+**Fix — `nomina/page.tsx`:** `empleadosDelPeriodo` cambia el filtro de
+"normales" de `fechaIngreso <= inicio` de vuelta a `fechaIngreso < fin`
+(estrictamente antes del corte, no solo del día 1) — un ingreso el día 2
+o el día 14 ya vuelve a incluirse en el período, prorrateado. Toast al
+crear un período distingue ahora tres avisos: "N con reajuste salarial",
+"N con ingreso a mitad de período (prorrateado)" (los que SÍ cobran este
+período, prorrateados por días calendario) y "N ingresados en el corte de
+cierre no cobran este período" (los que caen justo en 15/30/31, se
+difieren).
+
+Verificado en navegador con Playwright, matemática exacta (quincenal,
+salarioBase RD$45,000, 1ra quincena de julio = 15 días): ingreso el día 2
+→ S. Bruto exacto RD$21,000.00 (=22,500 × 14/15 días calendario, SÍ
+participa de esa quincena); ingreso el día 14 → RD$3,000.00 (=22,500 ×
+2/15); ingreso el día 15 (el corte exacto) → NO aparece en la 1ra
+quincena, aparece en la 2da con "Días Pendientes (Ingreso)" RD$1,888.38
+exacto (tarifa legal, 1 día — mismo cálculo ya verificado en la sesión
+anterior, intacto). `npx tsc --noEmit` y `npm run build` limpios (19
+rutas, sin cambio de conteo); re-ejecutadas también las suites de
+verificación de la sesión anterior (días pendientes mensual, seguridad de
+períodos cerrados, QA de 7 años) sin regresiones.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3895,6 +3957,7 @@ de período (sección anterior) y la de la QA de 7 años, sin regresiones.
 
 | Hash | Descripción |
 |---|---|
+| `1853b22` | fix: el corte de cierre solo excluye el último día del período, no todo ingreso posterior al día 1 |
 | `d7d339d` | feat: ningún período cerrado se altera jamás — guard de datos + bloqueo de reabrir pagados |
 | `851ec56` | fix: ingreso a mitad de período se excluye y se paga en el siguiente a tarifa diaria legal |
 | `040d12d` | fix: prorratear salario de empleado nuevo cuando su ingreso cae a mitad de período |
