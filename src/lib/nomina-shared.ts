@@ -446,6 +446,33 @@ export function diasVacacionEnPeriodo(
   }
 }
 
+// ── Ingreso a mitad de período ──────────────────────────────────────────────
+// Un empleado cuya fechaIngreso cae DENTRO del rango del período (no antes)
+// solo trabajó una parte de esos días — sin este prorrateo, el primer
+// período de un empleado nuevo se pagaba completo desde el día 1, aunque
+// hubiera entrado a mitad de quincena/mes. Mismo mecanismo exacto que
+// diasCorteEnPeriodo (suspensión/salida), pero mirando hacia el otro lado:
+// el "corte" es el INICIO de la relación laboral, no el fin.
+//
+// Si fechaIngreso cae DESPUÉS de que el período completo ya terminó, el
+// empleado ni siquiera debería aparecer en este período — ver el filtro
+// correspondiente en empleadosDelPeriodo (nomina/page.tsx), que excluye a
+// estos casos de la lista antes de llegar aquí. Esta función solo maneja el
+// caso intermedio (ingreso DENTRO del rango); si por algún camino se llama
+// con una fecha de ingreso posterior al fin del período, clampa a 0 días
+// trabajados en vez de un valor negativo.
+export function diasIngresoEnPeriodo(
+  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { diasTrabajados: number; diasLaborablesMes: number } | null {
+  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
+  const fechaIngreso = new Date(empleado.fechaIngreso)
+  if (fechaIngreso <= inicio) return null
+  const msPorDia = 24 * 3600 * 1000
+  const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
+  const diasTrabajados = Math.max(0, Math.floor((fin.getTime() - fechaIngreso.getTime()) / msPorDia) + 1)
+  return { diasTrabajados, diasLaborablesMes }
+}
+
 // ── Licencia sin sueldo dentro de un período ────────────────────────────────
 // Solo enfermedad_comun/accidente_laboral SIN disfrute de sueldo reducen los
 // días trabajados. El resto de las licencias (matrimonial/fallecimiento/
@@ -568,11 +595,12 @@ export function salarioEfectivoEnPeriodo(
 
 // Envoltorio de conveniencia: calcula la nómina de un empleado para un
 // período específico, aplicando automáticamente el prorrateo por suspensión,
-// salida pendiente, licencia sin sueldo, o el salario ponderado por un
-// reajuste a mitad de período, si corresponde — evita tener que acordarse
-// de calcular cada mecanismo en cada call-site. Usada tanto por Cálculo de
-// Nómina (nomina/page.tsx) como por Gestión de Envíos / el modal de
-// comprobantes (EnvioComprobantesModal.tsx) — una sola fuente de verdad.
+// salida pendiente, licencia sin sueldo, ingreso a mitad de período, o el
+// salario ponderado por un reajuste a mitad de período, si corresponde —
+// evita tener que acordarse de calcular cada mecanismo en cada call-site.
+// Usada tanto por Cálculo de Nómina (nomina/page.tsx) como por Gestión de
+// Envíos / el modal de comprobantes (EnvioComprobantesModal.tsx) — una sola
+// fuente de verdad.
 export function calcularParaPeriodo(
   empleado: Empleado, ajustes: AjusteLinea[],
   periodo: { mes: number; anio: number; tipo: TipoPeriodo; quincena?: 1 | 2 },
@@ -587,14 +615,15 @@ export function calcularParaPeriodo(
   const dias = diasSuspensionEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasSalidaEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasLicenciaSinSueldoEnPeriodo(empleadoCalculo, licencias, periodo.mes, periodo.anio, periodo.tipo, quincena)
-  // Suspensión/salida/licencia sin sueldo tienen prioridad sobre vacaciones
-  // — un empleado no debería tener a la vez un disfrute de vacaciones
-  // vigente en la práctica; si ambos existieran por error de captura, se
-  // respeta el prorrateo por suspensión/salida/licencia (ya excluye al
-  // empleado de nómina normal) y se ignora el disfrute para ese período. El
-  // salario ponderado por reajuste, en cambio, SÍ compone con cualquiera de
-  // los otros mecanismos (se aplica primero, como base, antes de cualquier
-  // prorrateo de días encima).
+    ?? diasIngresoEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
+  // Suspensión/salida/licencia sin sueldo/ingreso tardío tienen prioridad
+  // sobre vacaciones — un empleado no debería tener a la vez un disfrute de
+  // vacaciones vigente en la práctica; si ambos existieran por error de
+  // captura, se respeta el prorrateo por el primer mecanismo que aplique (ya
+  // excluye al empleado de nómina normal) y se ignora el disfrute para ese
+  // período. El salario ponderado por reajuste, en cambio, SÍ compone con
+  // cualquiera de los otros mecanismos (se aplica primero, como base, antes
+  // de cualquier prorrateo de días encima).
   if (dias) return calcularConAjustes(empleadoCalculo, ajustes, periodo.tipo, quincena, dias)
   const vac = diasVacacionEnPeriodo(empleadoCalculo, disfrutes, periodo.mes, periodo.anio, periodo.tipo, quincena)
   return calcularConAjustes(

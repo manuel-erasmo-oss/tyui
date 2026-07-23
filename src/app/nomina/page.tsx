@@ -50,7 +50,7 @@ import { formatRD, fullName, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
 import {
   labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF,
   diasSuspensionEnPeriodo, diasSalidaEnPeriodo,
-  diasVacacionEnPeriodo, diasLicenciaSinSueldoEnPeriodo, salarioEfectivoEnPeriodo, calcularParaPeriodo,
+  diasVacacionEnPeriodo, diasLicenciaSinSueldoEnPeriodo, diasIngresoEnPeriodo, salarioEfectivoEnPeriodo, calcularParaPeriodo, rangoPeriodo,
 } from '@/lib/nomina-shared'
 import type {
   Empleado,
@@ -128,16 +128,24 @@ function isHorasConcepto(concepto: ConceptoAjuste): boolean {
 // prorrateado, aunque ya esté suspendido o a punto de irse. Una fecha de
 // corte ANTERIOR a que el período comenzara no se agrega (0 días
 // trabajados, correctamente excluido).
+//
+// También excluye de "normales" a cualquier empleado cuya fechaIngreso caiga
+// DESPUÉS de que este período ya terminó — todavía no existía en la empresa
+// durante ese rango de fechas, así que no debe aparecer en absoluto (ni
+// siquiera con RD$0). Un ingreso DENTRO del período sí se conserva: se
+// prorratea vía diasIngresoEnPeriodo en calcularParaPeriodo, no se excluye.
 function empleadosDelPeriodo(
   todos: Empleado[], normales: Empleado[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): Empleado[] {
+  const { fin } = rangoPeriodo(mes, anio, tipo, quincena)
+  const normalesVigentes = normales.filter(e => new Date(e.fechaIngreso) <= fin)
   const extra = todos.filter(e =>
-    e.activo && !normales.some(n => n.id === e.id) && (
+    e.activo && !normalesVigentes.some(n => n.id === e.id) && (
       (e.suspendido && diasSuspensionEnPeriodo(e, mes, anio, tipo, quincena) !== null) ||
       (e.salidaPendiente && diasSalidaEnPeriodo(e, mes, anio, tipo, quincena) !== null)
     )
   )
-  return extra.length ? [...normales, ...extra] : normales
+  return extra.length ? [...normalesVigentes, ...extra] : normalesVigentes
 }
 
 // Sugiere el próximo período mensual/quincenal a crear, continuando la serie
@@ -614,10 +622,14 @@ export default function NominaPage() {
       const efectivo = salarioEfectivoEnPeriodo(e.id, aumentos, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
       return efectivo !== null && Math.abs(efectivo - e.salarioBase) > 0.005
     }).length
+    const conIngresoTardio = empleadosNuevoPeriodo.filter(e =>
+      diasIngresoEnPeriodo(e, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
+    ).length
     const avisos = [
       conVacaciones > 0 ? `${conVacaciones} empleado(s) con vacaciones` : null,
       conLicenciaSinSueldo > 0 ? `${conLicenciaSinSueldo} empleado(s) con licencia sin sueldo` : null,
       conReajusteSalarial > 0 ? `${conReajusteSalarial} empleado(s) con reajuste salarial` : null,
+      conIngresoTardio > 0 ? `${conIngresoTardio} empleado(s) con ingreso a mitad de período (prorrateado)` : null,
     ].filter(Boolean)
     setToast(avisos.length > 0
       ? `Período creado · Cuotas de préstamos pre-cargadas · ${avisos.join(' · ')} en este período`
