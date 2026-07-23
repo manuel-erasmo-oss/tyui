@@ -4291,6 +4291,111 @@ período, corte de cierre 15/30/31, cierre anticipado, y los 5 escenarios
 de la QA de 7 años) sin ningún hallazgo nuevo. `npx tsc --noEmit` y
 `npm run build` limpios (19 rutas, sin cambio de conteo).
 
+## Fix sistémico — fechas solo-fecha se parseaban como UTC en vez de local (bug de un día en TODO el sistema)
+
+Reporte del usuario: "yo creé un empleado con fecha de 17 de junio y se me
+marca como que entró el 16 de junio... cada vez que creo un empleado con
+una fecha se registra en el sistema el día posterior o el anterior."
+Confirmado como el bug clásico de JavaScript con fechas solo-fecha:
+`new Date("2026-06-17")` (sin componente de hora) se interpreta como
+**medianoche UTC**, no medianoche local — en cualquier navegador con zona
+horaria detrás de UTC (Rep. Dominicana, UTC-4, siempre, sin horario de
+verano), esa medianoche UTC cae en las 8pm del día CALENDARIO ANTERIOR en
+hora local. En cuanto el código le pide cualquier componente local
+(`getDate()`, `getMonth()`, `getFullYear()`, `getDay()`, o
+`toLocaleDateString()`), devuelve el día equivocado. El sandbox de esta
+sesión corre en UTC, por lo que el bug nunca se manifestó en las pruebas
+automatizadas anteriores — se reprodujo forzando `timezoneId:
+'America/Santo_Domingo'` en el navegador de Playwright, confirmando
+exactamente el síntoma reportado (fechaIngreso guardada "2026-06-17",
+tabla y drawer mostrando "16 jun de 2026").
+
+**Alcance real, mucho más amplio que el síntoma reportado**: `fechaIngreso`
+es solo uno de ~20 campos de fecha-solo (`fechaNacimiento`,
+`fechaSuspension`, `fechaSalidaPendiente`, `fechaTerminacion`,
+`fechaNotificacionRenuncia`, `DisfruteVacaciones.fechaInicio/fechaFin`,
+`Licencia.fechaInicio/fechaFin`, `RegistroAumento.fechaEfectiva`,
+`Prestamo.fechaOtorgamiento`, `Dependiente.fechaNacimiento`, etc.) que
+vienen de un `<input type="date">` y se guardan como string "YYYY-MM-DD" en
+todo el sistema — el mismo patrón de parseo roto aparecía en **más de 40
+call-sites** a través del motor de nómina (`dominican-labor.ts`),
+`nomina-shared.ts`, `nomina/page.tsx`, `liquidacion/page.tsx`,
+`bonificacion/page.tsx`, `empleados/page.tsx`, `alertas.ts`,
+`vacaciones-context.tsx`, `licencias-context.tsx`, `prestamos/page.tsx`,
+`reportes/page.tsx`, y varios más. El impacto real no era solo visual —
+afectaba directamente cálculos legales: antigüedad (`getAnosServicio`,
+usada por Cesantía/Preaviso/tramos de vacaciones), el "corte de cierre" de
+nómina (15/30/31, construido en una sesión anterior — un empleado con
+`fechaIngreso` exactamente en la frontera de un período podía clasificarse
+en el período equivocado), `contarDiasLaborables` (usada por goce/venta de
+vacaciones — dependía de `.getDay()` para excluir domingos, que devolvía el
+día de la semana equivocado), y el reajuste salarial a mitad de período.
+
+**Fix — dos helpers nuevos en `src/lib/utils.ts`, única fuente de verdad**:
+- `parseFechaLocal(iso: string): Date` — parsea "YYYY-MM-DD" construyendo
+  `new Date(year, month-1, day)` (el constructor de 3 argumentos SIEMPRE usa
+  hora local, nunca UTC) en vez de `new Date(isoString)`. Si el string trae
+  componente de hora (`incluye 'T'` — timestamps completos reales como
+  `fechaGeneracion`, `CuotaPago.fecha`, `RegistroAumento.fechaSolicitud`,
+  todos estampados vía `new Date().toISOString()`), se deja el parseo
+  nativo intacto — esos representan un instante real, no una fecha
+  ambigua, y ya eran correctos.
+- `hoyLocalISO(): string` — "hoy" como "YYYY-MM-DD" en hora LOCAL, para
+  prellenar `<input type="date">` o comparar contra otras fechas
+  solo-fecha. Corrige un bug SIMÉTRICO encontrado durante la misma
+  investigación: `new Date().toISOString().split('T')[0]` (el patrón usado
+  en varios formularios para prellenar "hoy") convierte el instante actual
+  a UTC ANTES de cortar la fecha — en Rep. Dominicana, cualquier hora local
+  desde las 8pm en adelante ya es "mañana" en UTC, así que abrir un
+  formulario de noche prellenaba la fecha de MAÑANA. Corregido en los
+  valores por defecto que SÍ se guardan como dato real (fecha de
+  suspensión, fecha de salida, fecha de otorgamiento de préstamo, fecha de
+  terminación en Liquidación, fecha de registro de Saldo ISR, fecha de
+  pago de nómina) — no en nombres de archivo de exportación (cosmético,
+  fuera de alcance).
+- `formatDate()` (ya existente) ahora usa `parseFechaLocal` internamente —
+  corrige de un solo golpe la visualización en TODA la app, ya que es la
+  función compartida para mostrar fechas.
+
+**`ajustesToParams`-tier de importancia**: se auditaron sistemáticamente
+TODOS los `new Date(<campo>)` del código (grep exhaustivo, no muestreo) y
+se clasificó cada uno como (a) campo solo-fecha → reemplazado por
+`parseFechaLocal`, (b) timestamp completo confirmado (revisando el punto
+de estampado real, no solo el nombre del campo — algunos `fechaRegistro`
+son timestamps completos y otros son solo-fecha según el flujo que los
+crea) → sin cambios, o (c) ya usa el constructor local seguro (`new
+Date(anio, mes, dia)`) → sin cambios. Archivos corregidos: `dominican-labor.ts`
+(`getAnosServicio`, `calcularNomina` provisión de vacaciones,
+`calcularDiasTrabajadosPendientes`, `getBonificacionesPendientes`/
+`getRegaliaPendientes`), `nomina-shared.ts` (suspensión/salida/vacaciones/
+licencia sin sueldo/ingreso a mitad de período/reajuste salarial — el
+"corte de cierre" completo), `nomina/page.tsx` (`empleadosDelPeriodo`,
+auditoría pre-cierre, salientes de Liquidación), `liquidacion/page.tsx`
+(antigüedad, regalía proporcional, cumplimiento de preaviso), `alertas.ts`
+(pago retroactivo pendiente), `bonificacion/page.tsx` (prorrateo de
+ejercicio fiscal), `empleados/page.tsx`, `reportes/page.tsx` (antigüedad,
+cumplimiento de preaviso, empleados sin ingresos, filtro de años de
+licencias), `vacaciones-context.tsx`/`licencias-context.tsx`
+(`contarDiasLaborables`, licencia activa/vencida), `empleado-form.ts`
+(`calcularEdad`), `prestamos/page.tsx` (`cuotasFromDates`, préstamos
+pagados este mes), `empleados-context.tsx` (reactivar de suspensión).
+
+Verificado en navegador con Playwright forzando `timezoneId:
+'America/Santo_Domingo'` (el sandbox de esta sesión corre en UTC, así que
+sin este override el bug es invisible en las pruebas): (1) reproducción
+exacta del reporte del usuario — empleado con `fechaIngreso: "2026-06-17"`
+mostraba "16 jun de 2026" antes del fix, "17 jun de 2026" después, tanto en
+la tabla como en el drawer; (2) prorrateo de nómina por corte de cierre
+sigue exacto tras el fix — empleado con ingreso el 16 de junio (mes de 30
+días) → S. Bruto RD$22,000.00 exacto (15 de 30 días), confirmando que el
+fix no rompió el mecanismo de prorrateo ya construido en sesiones
+anteriores. Re-ejecutada la suite completa de regresión (seguridad de
+períodos cerrados, días pendientes por ingreso a mitad de período, corte de
+cierre 15/30/31, cierre anticipado, ajustes manuales quincenales, préstamos
+mensual/quincenal, y los 5 escenarios de la QA de 7 años) sin ningún
+hallazgo nuevo. `npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin
+cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
