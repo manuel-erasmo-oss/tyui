@@ -4107,6 +4107,8 @@ anteriores sin regresiones.
 
 | Hash | Descripción |
 |---|---|
+| `f43b13a` | fix: Regalía/Bonificación requieren deshacer pago antes de reabrir, igual que nómina normal |
+| `7518dcc` | fix: revertir acumulado de Regalía Pascual al reabrir un período (título de commit incorrecto por error de copiado) |
 | `2b63b69` | fix: congelar el roster de un período no en_proceso — evita que un ingreso posterior al cierre real aparezca en la tabla |
 | `1853b22` | fix: el corte de cierre solo excluye el último día del período, no todo ingreso posterior al día 1 |
 | `d7d339d` | feat: ningún período cerrado se altera jamás — guard de datos + bloqueo de reabrir pagados |
