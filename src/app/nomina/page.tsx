@@ -50,7 +50,7 @@ import { formatRD, fullName, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
 import {
   labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF,
   diasSuspensionEnPeriodo, diasSalidaEnPeriodo,
-  diasVacacionEnPeriodo, diasLicenciaSinSueldoEnPeriodo, diasIngresoPendientes, salarioEfectivoEnPeriodo, calcularParaPeriodo, rangoPeriodo,
+  diasVacacionEnPeriodo, diasLicenciaSinSueldoEnPeriodo, diasIngresoEnPeriodo, diasIngresoPendientes, salarioEfectivoEnPeriodo, calcularParaPeriodo, rangoPeriodo,
 } from '@/lib/nomina-shared'
 import type {
   Empleado,
@@ -130,18 +130,19 @@ function isHorasConcepto(concepto: ConceptoAjuste): boolean {
 // trabajados, correctamente excluido).
 //
 // También excluye de "normales" a cualquier empleado cuya fechaIngreso caiga
-// DESPUÉS del inicio de este período (no solo después de que termine) —
-// decisión explícita del usuario: un ingreso a mitad de período NUNCA se
-// prorratea dentro de ese mismo período (ver diasIngresoPendientes en
-// nomina-shared.ts — hacerlo con la tarifa diaria legal puede dar montos
-// negativos en nómina quincenal). El período parcial simplemente no le
-// paga nada; esos días laborables se valoran a la tarifa legal y se suman
+// EXACTAMENTE en el último día calendario de este período (el "corte" de
+// cierre real de nómina — 15/30/31, ver diasIngresoEnPeriodo en
+// nomina-shared.ts) o después — un ingreso ANTES de ese corte (día 2, día
+// 10, día 14…) sí participa de este período, prorrateado normalmente vía
+// diasIngresoEnPeriodo (mismo mecanismo de días calendario que ya usan
+// suspensión/salida/licencia). Solo el que cae justo en el corte se excluye
+// del todo; esos días laborables se valoran a la tarifa legal y se suman
 // como línea aparte en el período SIGUIENTE, vía calcularParaPeriodo.
 function empleadosDelPeriodo(
   todos: Empleado[], normales: Empleado[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): Empleado[] {
-  const { inicio } = rangoPeriodo(mes, anio, tipo, quincena)
-  const normalesVigentes = normales.filter(e => new Date(e.fechaIngreso) <= inicio)
+  const { fin } = rangoPeriodo(mes, anio, tipo, quincena)
+  const normalesVigentes = normales.filter(e => new Date(e.fechaIngreso) < fin)
   const extra = todos.filter(e =>
     e.activo && !normalesVigentes.some(n => n.id === e.id) && (
       (e.suspendido && diasSuspensionEnPeriodo(e, mes, anio, tipo, quincena) !== null) ||
@@ -634,21 +635,25 @@ export default function NominaPage() {
     const conDiasPendientes = empleadosNuevoPeriodo.filter(e =>
       diasIngresoPendientes(e, periodos, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
     ).length
-    // Empleados excluidos por completo de ESTE período por ingresar a mitad
-    // de él (no en su primer día) — sus días se sumarán al próximo período
-    // vía diasIngresoPendientes. Se avisa aparte para que no parezca que el
+    // Empleados con ingreso a mitad de período (antes del corte de cierre)
+    // que SÍ participan de este período, prorrateados por días calendario.
+    const conIngresoProrrateado = empleadosNuevoPeriodo.filter(e =>
+      diasIngresoEnPeriodo(e, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
+    ).length
+    // Empleados excluidos por completo de ESTE período por ingresar
+    // justo en el corte de cierre (el último día calendario del período —
+    // 15/30/31) — sus días se sumarán al próximo período vía
+    // diasIngresoPendientes. Se avisa aparte para que no parezca que el
     // empleado "desapareció" del período recién creado.
-    const { inicio: inicioNuevo, fin: finNuevo } = rangoPeriodo(nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
-    const conIngresoExcluido = empleadosEnNomina.filter(e => {
-      const fi = new Date(e.fechaIngreso)
-      return fi > inicioNuevo && fi <= finNuevo
-    }).length
+    const { fin: finNuevo } = rangoPeriodo(nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
+    const conIngresoExcluido = empleadosEnNomina.filter(e => new Date(e.fechaIngreso).getTime() === finNuevo.getTime()).length
     const avisos = [
       conVacaciones > 0 ? `${conVacaciones} empleado(s) con vacaciones` : null,
       conLicenciaSinSueldo > 0 ? `${conLicenciaSinSueldo} empleado(s) con licencia sin sueldo` : null,
       conReajusteSalarial > 0 ? `${conReajusteSalarial} empleado(s) con reajuste salarial` : null,
+      conIngresoProrrateado > 0 ? `${conIngresoProrrateado} empleado(s) con ingreso a mitad de período (prorrateado)` : null,
       conDiasPendientes > 0 ? `${conDiasPendientes} empleado(s) con días pendientes de un ingreso reciente` : null,
-      conIngresoExcluido > 0 ? `${conIngresoExcluido} empleado(s) recién ingresados no cobran este período (sus días se suman al próximo)` : null,
+      conIngresoExcluido > 0 ? `${conIngresoExcluido} empleado(s) ingresados en el corte de cierre no cobran este período (sus días se suman al próximo)` : null,
     ].filter(Boolean)
     setToast(avisos.length > 0
       ? `Período creado · Cuotas de préstamos pre-cargadas · ${avisos.join(' · ')} en este período`

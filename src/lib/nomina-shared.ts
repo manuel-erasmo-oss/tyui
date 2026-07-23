@@ -449,18 +449,45 @@ export function diasVacacionEnPeriodo(
   }
 }
 
-// ── Ingreso a mitad de período — se excluye ese período y se arrastra al siguiente ──
-// Un empleado cuya fechaIngreso cae DENTRO de un período (no en su primer
-// día) NUNCA se prorratea DENTRO de ese período — empleadosDelPeriodo
-// (nomina/page.tsx) lo excluye por completo de ese período, sin importar
-// cuántos días haya trabajado ahí. En vez de eso, esos días laborables se
-// valoran a la tarifa diaria LEGAL (salarioBase ÷ 23.83/26, Art. 177) y se
-// suman como línea aparte en el período SIGUIENTE — decisión explícita del
-// usuario: prorratear DENTRO de un período con la tarifa diaria legal puede
-// dar montos negativos en nómina quincenal (una quincena real tiene más de
-// la mitad de 23.83 días laborables, así que "días perdidos × tarifa" puede
-// superar el propio salario de esa quincena) — ver CLAUDE.md. Mismo mecanismo
-// ya usado por la empresa al DAR DE BAJA a un empleado con días sueltos
+// ── Ingreso a mitad de período — prorrateo normal, salvo el "corte" del cierre ──
+// Réplica del corte administrativo real de nómina: los departamentos de
+// nómina cierran el período unos días antes de la fecha de pago (15, 30,
+// 31) — cualquier ingreso capturado ANTES de ese cierre sí se prorratea
+// dentro del propio período (días calendario trabajados / días del
+// período, mismo mecanismo que ya usan suspensión/salida/licencia vía
+// diasCorteEnPeriodo), y solo el que cae justo en el día de cierre (el
+// último día calendario del período — 15 en la 1ra quincena, el día 30/31/
+// fin de mes en la 2da quincena o mensual) se excluye de ESE período y se
+// arrastra al siguiente (ver diasIngresoPendientes) — matemáticamente
+// nunca hay solapamiento entre ambos mecanismos, porque el corte usa
+// fechaIngreso === fin (frontera exacta), mientras el prorrateo normal
+// exige fechaIngreso ESTRICTAMENTE antes de esa frontera.
+export function diasIngresoEnPeriodo(
+  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { diasTrabajados: number; diasLaborablesMes: number } | null {
+  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
+  const fechaIngreso = new Date(empleado.fechaIngreso)
+  if (fechaIngreso <= inicio) return null  // ingresó desde el día 1 — período completo, sin prorrateo
+  if (fechaIngreso >= fin) return null     // cae en el corte de cierre (o después) — se excluye del todo, ver empleadosDelPeriodo/diasIngresoPendientes
+  const msPorDia = 24 * 3600 * 1000
+  const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
+  const diasTrabajados = Math.floor((fin.getTime() - fechaIngreso.getTime()) / msPorDia) + 1
+  return { diasTrabajados, diasLaborablesMes }
+}
+
+// ── Ingreso justo en el corte de cierre — se excluye ese período y se arrastra al siguiente ──
+// Un empleado cuya fechaIngreso cae EXACTAMENTE en el último día calendario
+// del período (el "corte" — 15/30/31, ver diasIngresoEnPeriodo arriba)
+// nunca se prorratea dentro de ese período — empleadosDelPeriodo
+// (nomina/page.tsx) lo excluye por completo, sin importar que solo sea 1
+// día. Ese único día laborable se valora a la tarifa diaria LEGAL
+// (salarioBase ÷ 23.83/26, Art. 177) y se suma como línea aparte en el
+// período SIGUIENTE — decisión explícita del usuario: prorratear DENTRO de
+// un período con la tarifa diaria legal puede dar montos negativos en
+// nómina quincenal (una quincena real tiene más de la mitad de 23.83 días
+// laborables, así que "días perdidos × tarifa" puede superar el propio
+// salario de esa quincena) — ver CLAUDE.md. Mismo mecanismo ya usado por la
+// empresa al DAR DE BAJA a un empleado con días sueltos
 // (pagoDiasTrabajadosPendiente), aplicado aquí simétricamente al INGRESO.
 //
 // Acotado a la ventana del período INMEDIATAMENTE anterior (mismo tipo/
@@ -664,9 +691,11 @@ export function calcularParaPeriodo(
   const dias = diasSuspensionEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasSalidaEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasLicenciaSinSueldoEnPeriodo(empleadoCalculo, licencias, periodo.mes, periodo.anio, periodo.tipo, quincena)
-  // Suspensión/salida/licencia sin sueldo tienen prioridad sobre vacaciones
-  // — un empleado no debería tener a la vez un disfrute de vacaciones
-  // vigente en la práctica; si ambos existieran por error de captura, se
+    ?? diasIngresoEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
+  // Suspensión/salida/licencia sin sueldo/ingreso a mitad de período tienen
+  // prioridad sobre vacaciones — un empleado no debería tener a la vez un
+  // disfrute de vacaciones vigente en la práctica; si ambos existieran por
+  // error de captura, se
   // respeta el prorrateo por el primer mecanismo que aplique (ya excluye al
   // empleado de nómina normal) y se ignora el disfrute para ese período. El
   // salario ponderado por reajuste, en cambio, SÍ compone con cualquiera de
