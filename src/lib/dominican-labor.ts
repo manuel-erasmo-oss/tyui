@@ -633,9 +633,17 @@ export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio
 //
 // Dos excepciones que NO se pre-doblan porque ya están en la escala
 // correcta por diseño:
-// - `prestamo` (cuotaBase): es un monto MENSUAL que se pre-carga íntegro en
-//   AMBAS quincenas del mes al crear cada período — la división automática
-//   es justo lo que reparte la cuota mensual 50/50 entre ambas quincenas.
+// - `prestamo` con `prestamoId` (cuotaBase real de Préstamos): es un monto
+//   MENSUAL que se pre-carga íntegro en AMBAS quincenas del mes al crear
+//   cada período — la división automática es justo lo que reparte la cuota
+//   mensual 50/50 entre ambas quincenas. Un ajuste `prestamo` SIN
+//   `prestamoId` (el usuario lo agregó a mano vía "+ Ajuste" para un
+//   préstamo que no está registrado en el módulo de Préstamos) es
+//   exactamente igual de ad-hoc que "Otro Desc." — el monto capturado es
+//   el de ESA quincena específica, así que SÍ se pre-dobla (bug real
+//   reportado por el usuario: un descuento manual de RD$3,000 con concepto
+//   "Préstamo" para un empleado sin préstamo registrado se aplicaba como
+//   solo RD$1,500 en la quincena).
 // - `dependiente_sfs`: ya se pre-divide en `prorratearMontoFijo` al crear
 //   el período (RD$1,919.78 → RD$959.89/quincena), así que ajustesToParams
 //   ya recibe el monto correcto por quincena, sin nada que doblar.
@@ -652,7 +660,10 @@ export function ajustesToParams(ajustes: AjusteLinea[], tipo: TipoPeriodo): Para
     if (a.concepto === 'bono' || a.concepto === 'otro_ingreso') bonificaciones += a.valor
     if (a.concepto === 'comision')         comisiones      += a.valor
     if (a.concepto === 'dependiente_sfs')  sfsDependientes += a.valor
-    if (a.concepto === 'prestamo')         otrosDescuentosPrestamo += a.valor
+    if (a.concepto === 'prestamo') {
+      if (a.prestamoId) otrosDescuentosPrestamo += a.valor
+      else otrosDescuentosManual += a.valor
+    }
     if (a.concepto === 'otro_descuento')   otrosDescuentosManual += a.valor
     // Concepto del catálogo configurable (Configuración → Ingresos y
     // Deducciones). Los ingresos personalizados siempre suman a totalBruto;
