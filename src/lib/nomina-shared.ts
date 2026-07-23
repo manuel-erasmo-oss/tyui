@@ -39,7 +39,7 @@ export function resultadoRegalia(empleadoId: string, monto: number, anosServicio
     bonificaciones: 0, comisiones: 0, ingresosPersonalizados: 0, totalBruto: monto,
     salarioCotizable: 0,
     afpEmpleado: 0, sfsEmpleado: 0, isrMensual: 0, sfsDependientes: 0, otrosDescuentos: 0,
-    aporteVoluntarioAFPEmpleado: 0, vacacionesGoce: 0, vacacionesVendidas: 0, totalDescuentos: 0,
+    aporteVoluntarioAFPEmpleado: 0, vacacionesGoce: 0, vacacionesVendidas: 0, diasIngresoPendientes: 0, totalDescuentos: 0,
     grossingUpEmpresa: 0,
     saldoISRAplicado: 0,
     salarioNeto: monto,
@@ -151,6 +151,7 @@ export function descargarComprobantePDF(
     ...(nomina.comisiones     > 0 ? [{ label: 'Comisiones',        v: nomina.comisiones }]     : []),
     ...(nomina.vacacionesGoce > 0 ? [{ label: 'Vacaciones (Goce)', v: nomina.vacacionesGoce }] : []),
     ...(nomina.vacacionesVendidas > 0 ? [{ label: 'Vacaciones Vendidas', v: nomina.vacacionesVendidas }] : []),
+    ...(nomina.diasIngresoPendientes > 0 ? [{ label: 'Días Pendientes (Ingreso)', v: nomina.diasIngresoPendientes }] : []),
     ...(nomina.ingresosPersonalizados > 0 ? [{ label: 'Otros Ingresos', v: nomina.ingresosPersonalizados }] : []),
   ]
   const descuentos = [
@@ -326,12 +327,14 @@ export function calcularConAjustes(
   diasOverride?: { diasTrabajados: number; diasLaborablesMes: number } | null,
   vacacionesGoce?: number,
   vacacionesVendidas?: number,
+  diasIngresoPendientes?: number,
 ): ResultadoNomina {
   const params: ParametrosNomina = {
     ...ajustesToParams(ajustes),
     ...(diasOverride ? { diasTrabajados: diasOverride.diasTrabajados, diasLaborablesMes: diasOverride.diasLaborablesMes } : {}),
     ...(vacacionesGoce ? { vacacionesGoce } : {}),
     ...(vacacionesVendidas ? { vacacionesVendidas } : {}),
+    ...(diasIngresoPendientes ? { diasIngresoPendientes } : {}),
   }
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
@@ -446,31 +449,70 @@ export function diasVacacionEnPeriodo(
   }
 }
 
-// ── Ingreso a mitad de período ──────────────────────────────────────────────
-// Un empleado cuya fechaIngreso cae DENTRO del rango del período (no antes)
-// solo trabajó una parte de esos días — sin este prorrateo, el primer
-// período de un empleado nuevo se pagaba completo desde el día 1, aunque
-// hubiera entrado a mitad de quincena/mes. Mismo mecanismo exacto que
-// diasCorteEnPeriodo (suspensión/salida), pero mirando hacia el otro lado:
-// el "corte" es el INICIO de la relación laboral, no el fin.
+// ── Ingreso a mitad de período — se excluye ese período y se arrastra al siguiente ──
+// Un empleado cuya fechaIngreso cae DENTRO de un período (no en su primer
+// día) NUNCA se prorratea DENTRO de ese período — empleadosDelPeriodo
+// (nomina/page.tsx) lo excluye por completo de ese período, sin importar
+// cuántos días haya trabajado ahí. En vez de eso, esos días laborables se
+// valoran a la tarifa diaria LEGAL (salarioBase ÷ 23.83/26, Art. 177) y se
+// suman como línea aparte en el período SIGUIENTE — decisión explícita del
+// usuario: prorratear DENTRO de un período con la tarifa diaria legal puede
+// dar montos negativos en nómina quincenal (una quincena real tiene más de
+// la mitad de 23.83 días laborables, así que "días perdidos × tarifa" puede
+// superar el propio salario de esa quincena) — ver CLAUDE.md. Mismo mecanismo
+// ya usado por la empresa al DAR DE BAJA a un empleado con días sueltos
+// (pagoDiasTrabajadosPendiente), aplicado aquí simétricamente al INGRESO.
 //
-// Si fechaIngreso cae DESPUÉS de que el período completo ya terminó, el
-// empleado ni siquiera debería aparecer en este período — ver el filtro
-// correspondiente en empleadosDelPeriodo (nomina/page.tsx), que excluye a
-// estos casos de la lista antes de llegar aquí. Esta función solo maneja el
-// caso intermedio (ingreso DENTRO del rango); si por algún camino se llama
-// con una fecha de ingreso posterior al fin del período, clampa a 0 días
-// trabajados en vez de un valor negativo.
-export function diasIngresoEnPeriodo(
-  empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
-): { diasTrabajados: number; diasLaborablesMes: number } | null {
-  const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
+// Acotado a la ventana del período INMEDIATAMENTE anterior (mismo tipo/
+// cadencia) — sin este límite, cualquier empleado con historial (Carga
+// Inicial, saldos migrados) generaría un "hueco pendiente" de años cada vez
+// que se crea el primer período de la empresa. Solo aplica a un ingreso
+// genuinamente reciente relativo al período que se está calculando.
+function periodoAnteriorDeSerie(
+  mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { mes: number; anio: number; quincena: 1 | 2 } {
+  if (tipo === 'mensual') {
+    return mes === 1 ? { mes: 12, anio: anio - 1, quincena: 1 } : { mes: mes - 1, anio, quincena: 1 }
+  }
+  if (quincena === 2) return { mes, anio, quincena: 1 }
+  const mesAnt  = mes === 1 ? 12 : mes - 1
+  const anioAnt = mes === 1 ? anio - 1 : anio
+  return { mes: mesAnt, anio: anioAnt, quincena: 2 }
+}
+
+export function diasIngresoPendientes(
+  empleado: Empleado, periodos: PeriodoNomina[],
+  mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
+): { diasLaborables: number; monto: number } | null {
+  const { inicio: inicioActual } = rangoPeriodo(mes, anio, tipo, quincena)
   const fechaIngreso = new Date(empleado.fechaIngreso)
-  if (fechaIngreso <= inicio) return null
+  if (fechaIngreso >= inicioActual) return null  // ingresa en/después de este período — nada pendiente de antes
+
+  const anterior = periodoAnteriorDeSerie(mes, anio, tipo, quincena)
+  const { inicio: inicioAnterior } = rangoPeriodo(anterior.mes, anterior.anio, tipo, anterior.quincena)
+  if (fechaIngreso < inicioAnterior) return null  // ingreso ya antiguo — no es un hueco reciente, es un empleado con historial
+
+  // Punto de partida del hueco: el día después del último período en que el
+  // empleado SÍ fue procesado (mismo criterio de calcularDiasTrabajadosPendientes,
+  // el mecanismo simétrico ya usado al dar de baja); si nunca se le procesó
+  // ninguno, el hueco arranca en su propia fecha de ingreso.
   const msPorDia = 24 * 3600 * 1000
-  const diasLaborablesMes = Math.floor((fin.getTime() - inicio.getTime()) / msPorDia) + 1
-  const diasTrabajados = Math.max(0, Math.floor((fin.getTime() - fechaIngreso.getTime()) / msPorDia) + 1)
-  return { diasTrabajados, diasLaborablesMes }
+  const procesados = periodos
+    .filter(p => (p.estado === 'procesada' || p.estado === 'cerrada') &&
+      (p.empleadosProcesados ? p.empleadosProcesados.includes(empleado.id) : true))
+    .sort((a, b) => (b.anio - a.anio) || (b.mes - a.mes) || ((b.quincena ?? 1) - (a.quincena ?? 1)))
+  const ultimoFin = procesados.length
+    ? rangoPeriodo(procesados[0].mes, procesados[0].anio, procesados[0].tipo, procesados[0].quincena ?? 1).fin
+    : new Date(fechaIngreso.getTime() - msPorDia)
+  const fechaInicioGap = new Date(Math.max(ultimoFin.getTime() + msPorDia, fechaIngreso.getTime()))
+  const fechaFinGap = new Date(inicioActual.getTime() - msPorDia)
+  if (fechaInicioGap > fechaFinGap) return null
+
+  const diasLaborables = contarDiasLaborables(fechaInicioGap, fechaFinGap)
+  if (diasLaborables <= 0) return null
+  const tarifaDiaria = empleado.salarioBase / getDivisorSalarioDiario(empleado)
+  const factor = tipo === 'quincenal' ? 2 : 1
+  return { diasLaborables, monto: diasLaborables * tarifaDiaria * factor }
 }
 
 // ── Licencia sin sueldo dentro de un período ────────────────────────────────
@@ -607,29 +649,36 @@ export function calcularParaPeriodo(
   disfrutes: DisfruteVacaciones[] = [],
   licencias: Licencia[] = [],
   aumentos: RegistroAumento[] = [],
+  periodos: PeriodoNomina[] = [],
 ): ResultadoNomina {
   const quincena = periodo.quincena ?? 1
   const salarioEfectivo = salarioEfectivoEnPeriodo(empleado.id, aumentos, periodo.mes, periodo.anio, periodo.tipo, quincena)
   const empleadoCalculo = salarioEfectivo !== null ? { ...empleado, salarioBase: salarioEfectivo } : empleado
 
+  // Días arrastrados de un ingreso a mitad del período ANTERIOR (ver
+  // diasIngresoPendientes) — se suman aparte, encima de cualquiera de los
+  // demás mecanismos, porque son un pago adicional sobre este período, no
+  // un prorrateo de él.
+  const pendientes = diasIngresoPendientes(empleadoCalculo, periodos, periodo.mes, periodo.anio, periodo.tipo, quincena)
+
   const dias = diasSuspensionEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasSalidaEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
     ?? diasLicenciaSinSueldoEnPeriodo(empleadoCalculo, licencias, periodo.mes, periodo.anio, periodo.tipo, quincena)
-    ?? diasIngresoEnPeriodo(empleadoCalculo, periodo.mes, periodo.anio, periodo.tipo, quincena)
-  // Suspensión/salida/licencia sin sueldo/ingreso tardío tienen prioridad
-  // sobre vacaciones — un empleado no debería tener a la vez un disfrute de
-  // vacaciones vigente en la práctica; si ambos existieran por error de
-  // captura, se respeta el prorrateo por el primer mecanismo que aplique (ya
-  // excluye al empleado de nómina normal) y se ignora el disfrute para ese
-  // período. El salario ponderado por reajuste, en cambio, SÍ compone con
-  // cualquiera de los otros mecanismos (se aplica primero, como base, antes
-  // de cualquier prorrateo de días encima).
-  if (dias) return calcularConAjustes(empleadoCalculo, ajustes, periodo.tipo, quincena, dias)
+  // Suspensión/salida/licencia sin sueldo tienen prioridad sobre vacaciones
+  // — un empleado no debería tener a la vez un disfrute de vacaciones
+  // vigente en la práctica; si ambos existieran por error de captura, se
+  // respeta el prorrateo por el primer mecanismo que aplique (ya excluye al
+  // empleado de nómina normal) y se ignora el disfrute para ese período. El
+  // salario ponderado por reajuste, en cambio, SÍ compone con cualquiera de
+  // los otros mecanismos (se aplica primero, como base, antes de cualquier
+  // prorrateo de días encima).
+  if (dias) return calcularConAjustes(empleadoCalculo, ajustes, periodo.tipo, quincena, dias, undefined, undefined, pendientes?.monto)
   const vac = diasVacacionEnPeriodo(empleadoCalculo, disfrutes, periodo.mes, periodo.anio, periodo.tipo, quincena)
   return calcularConAjustes(
     empleadoCalculo, ajustes, periodo.tipo, quincena,
     vac ? { diasTrabajados: vac.diasTrabajados, diasLaborablesMes: vac.diasLaborablesMes } : null,
     vac?.vacacionesGoce,
     vac?.vacacionesVendidas,
+    pendientes?.monto,
   )
 }

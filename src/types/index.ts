@@ -222,6 +222,7 @@ export interface ResultadoNomina {
   aporteVoluntarioAFPEmpleado: number  // no reduce la base imponible del ISR (post-retención)
   vacacionesGoce: number  // valor de los días de vacaciones tomados (disfrute) dentro de este período (ya incluido en totalBruto)
   vacacionesVendidas: number  // pago extra por venta de vacaciones dentro de este período (ya incluido en totalBruto)
+  diasIngresoPendientes: number  // días laborables de un ingreso a mitad del período ANTERIOR, arrastrados y pagados en este (tarifa diaria legal ÷23.83/÷26)
   totalDescuentos: number
 
   // Grossing-up (empresa asume ISR/TSS) — se reembolsa al empleado vía el neto
@@ -289,6 +290,16 @@ export interface ParametrosNomina {
   // futuro por dinero ahora. Mismo tratamiento fiscal (cotizable/gravable),
   // pero se muestra como línea propia para no confundir "goce" con "venta".
   vacacionesVendidas?: number
+  // ─── Días pendientes de un ingreso a mitad del período anterior ───────────
+  // Cuando un empleado nuevo entra a mitad de un período (ej. día 15 de una
+  // quincena 1-15), ESE período no le paga nada — se excluye por completo
+  // (empleadosDelPeriodo) — y los días laborables que sí trabajó se valoran
+  // a la tarifa diaria legal (salarioBase ÷ 23.83/÷26, Art. 177) y se suman
+  // aquí, en el período SIGUIENTE, como una línea aparte sobre su sueldo
+  // normal completo de ese período. Evita el problema de prorratear DENTRO
+  // de un período parcial (que puede dar montos negativos en nómina
+  // quincenal — ver CLAUDE.md) sin dejar de usar la tarifa diaria legal.
+  diasIngresoPendientes?: number
 }
 
 // Registro de auditoría cada vez que se reabre (desposteo) un período que ya

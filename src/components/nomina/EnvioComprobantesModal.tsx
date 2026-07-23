@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Mail, X, Send, Download, CheckCircle2 } from 'lucide-react'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
+import { usePeriodos } from '@/lib/periodos-context'
 import {
   enviarComprobante, plantillaComprobanteDeEmpresa, resolverPlantilla, PLACEHOLDERS_COMPROBANTE,
 } from '@/lib/comprobante-email'
@@ -32,7 +33,7 @@ import type { Empleado, PeriodoNomina, ResultadoNomina, DisfruteVacaciones, Lice
 // los empleados en nómina.
 function filasComprobante(
   periodo: PeriodoNomina, empleados: Empleado[], empleadosEnNomina: Empleado[],
-  disfrutes: DisfruteVacaciones[], licencias: Licencia[], aumentos: RegistroAumento[],
+  disfrutes: DisfruteVacaciones[], licencias: Licencia[], aumentos: RegistroAumento[], periodos: PeriodoNomina[],
 ): { empleado: Empleado; resultado: ResultadoNomina }[] {
   const snapshots = periodo.resultadosPorEmpleado
   if (snapshots && Object.keys(snapshots).length > 0) {
@@ -69,7 +70,7 @@ function filasComprobante(
   // Cálculo de Nómina reportaba como pagado para el mismo período.
   return roster.map(e => ({
     empleado: e,
-    resultado: calcularParaPeriodo(e, ajustesPeriodo[e.id] ?? [], periodo, disfrutes, licencias, aumentos),
+    resultado: calcularParaPeriodo(e, ajustesPeriodo[e.id] ?? [], periodo, disfrutes, licencias, aumentos, periodos),
   }))
 }
 
@@ -85,6 +86,7 @@ export function EnvioComprobantesModal({
   const { disfrutes } = useVacaciones()
   const { licencias } = useLicencias()
   const { aumentos } = useAumentos()
+  const { periodos } = usePeriodos()
   const [plantillaComprobante, setPlantillaComprobante] = useState<PlantillaComprobante>(plantillaComprobanteDeEmpresa(empresa))
   const [enviadosComprobante, setEnviadosComprobante] = useState<Set<string>>(new Set())
 
@@ -96,7 +98,7 @@ export function EnvioComprobantesModal({
       : periodo.tipo === 'quincenal'
         ? `Nómina Quincenal (${periodo.quincena}ª quincena)`
         : 'Nómina Mensual'
-  const filas = filasComprobante(periodo, empleados, empleadosEnNomina, disfrutes, licencias, aumentos)
+  const filas = filasComprobante(periodo, empleados, empleadosEnNomina, disfrutes, licencias, aumentos, periodos)
   const fechaPagoTexto = periodo.fechaPago ? formatDate(periodo.fechaPago) : ''
 
   // Intenta abrir la ventana de correo para un empleado; devuelve si se logró.

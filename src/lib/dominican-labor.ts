@@ -180,6 +180,7 @@ export function calcularNomina(
     ingresosPersonalizadosCotizablesTSS = 0,
     vacacionesGoce      = 0,
     vacacionesVendidas  = 0,
+    diasIngresoPendientes = 0,
   } = params
 
   // Salario proporcional a días trabajados
@@ -203,7 +204,11 @@ export function calcularNomina(
   // gravable ISR (Art. 178). vacacionesVendidas es un pago EXTRA sobre el
   // salario normal completo (el empleado sigue trabajando), a diferencia de
   // vacacionesGoce que sustituye el salario de días no trabajados.
-  const totalBrutoLegado = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones + vacacionesGoce + vacacionesVendidas
+  // diasIngresoPendientes (días arrastrados de un ingreso a mitad del
+  // período ANTERIOR, valorados a la tarifa diaria legal) es igualmente un
+  // pago EXTRA sobre el sueldo normal completo de este período — mismo
+  // tratamiento que vacacionesVendidas.
+  const totalBrutoLegado = salarioBruto + totalHorasExtras + importeNocturno + bonificaciones + comisiones + vacacionesGoce + vacacionesVendidas + diasIngresoPendientes
   const ingresosPersonalizados = ingresosPersonalizadosTotal
   const totalBruto = totalBrutoLegado + ingresosPersonalizados
 
@@ -315,6 +320,7 @@ export function calcularNomina(
     aporteVoluntarioAFPEmpleado,
     vacacionesGoce,
     vacacionesVendidas,
+    diasIngresoPendientes,
     totalDescuentos,
     grossingUpEmpresa,
     saldoISRAplicado: 0,  // se aplica después, vía aplicarSaldoISRFavor() — no depende del empleado/empresa
@@ -380,6 +386,7 @@ export function calcularNominaQuincenal(
     // aplica automáticamente a bonificaciones/comisiones).
     vacacionesGoce:           m.vacacionesGoce / 2,
     vacacionesVendidas:       m.vacacionesVendidas / 2,
+    diasIngresoPendientes:    m.diasIngresoPendientes / 2,
     totalDescuentos:          totalDesc,
     grossingUpEmpresa:        grossingUp,
     salarioNeto:              bruto - totalDesc + grossingUp,
@@ -682,7 +689,7 @@ function resultadoVacio(empleadoId: string): ResultadoNomina {
     bonificaciones: 0, comisiones: 0, ingresosPersonalizados: 0, totalBruto: 0,
     salarioCotizable: 0,
     afpEmpleado: 0, sfsEmpleado: 0, isrMensual: 0, sfsDependientes: 0, otrosDescuentos: 0,
-    aporteVoluntarioAFPEmpleado: 0, vacacionesGoce: 0, vacacionesVendidas: 0, totalDescuentos: 0,
+    aporteVoluntarioAFPEmpleado: 0, vacacionesGoce: 0, vacacionesVendidas: 0, diasIngresoPendientes: 0, totalDescuentos: 0,
     grossingUpEmpresa: 0, saldoISRAplicado: 0,
     salarioNeto: 0,
     afpEmpleador: 0, sfsEmpleador: 0, srlEmpleador: 0, infotepEmpleador: 0,

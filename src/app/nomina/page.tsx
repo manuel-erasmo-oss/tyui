@@ -50,7 +50,7 @@ import { formatRD, fullName, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
 import {
   labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF,
   diasSuspensionEnPeriodo, diasSalidaEnPeriodo,
-  diasVacacionEnPeriodo, diasLicenciaSinSueldoEnPeriodo, diasIngresoEnPeriodo, salarioEfectivoEnPeriodo, calcularParaPeriodo, rangoPeriodo,
+  diasVacacionEnPeriodo, diasLicenciaSinSueldoEnPeriodo, diasIngresoPendientes, salarioEfectivoEnPeriodo, calcularParaPeriodo, rangoPeriodo,
 } from '@/lib/nomina-shared'
 import type {
   Empleado,
@@ -130,15 +130,18 @@ function isHorasConcepto(concepto: ConceptoAjuste): boolean {
 // trabajados, correctamente excluido).
 //
 // También excluye de "normales" a cualquier empleado cuya fechaIngreso caiga
-// DESPUÉS de que este período ya terminó — todavía no existía en la empresa
-// durante ese rango de fechas, así que no debe aparecer en absoluto (ni
-// siquiera con RD$0). Un ingreso DENTRO del período sí se conserva: se
-// prorratea vía diasIngresoEnPeriodo en calcularParaPeriodo, no se excluye.
+// DESPUÉS del inicio de este período (no solo después de que termine) —
+// decisión explícita del usuario: un ingreso a mitad de período NUNCA se
+// prorratea dentro de ese mismo período (ver diasIngresoPendientes en
+// nomina-shared.ts — hacerlo con la tarifa diaria legal puede dar montos
+// negativos en nómina quincenal). El período parcial simplemente no le
+// paga nada; esos días laborables se valoran a la tarifa legal y se suman
+// como línea aparte en el período SIGUIENTE, vía calcularParaPeriodo.
 function empleadosDelPeriodo(
   todos: Empleado[], normales: Empleado[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): Empleado[] {
-  const { fin } = rangoPeriodo(mes, anio, tipo, quincena)
-  const normalesVigentes = normales.filter(e => new Date(e.fechaIngreso) <= fin)
+  const { inicio } = rangoPeriodo(mes, anio, tipo, quincena)
+  const normalesVigentes = normales.filter(e => new Date(e.fechaIngreso) <= inicio)
   const extra = todos.filter(e =>
     e.activo && !normalesVigentes.some(n => n.id === e.id) && (
       (e.suspendido && diasSuspensionEnPeriodo(e, mes, anio, tipo, quincena) !== null) ||
@@ -220,6 +223,7 @@ function DetalleNomina({
                 { label: 'Comisiones',           value: nomina.comisiones,     hide: nomina.comisiones === 0 },
                 { label: 'Vacaciones (Goce)',     value: nomina.vacacionesGoce, hide: nomina.vacacionesGoce === 0 },
                 { label: 'Vacaciones Vendidas',   value: nomina.vacacionesVendidas, hide: nomina.vacacionesVendidas === 0 },
+                { label: 'Días Pendientes (Ingreso)', value: nomina.diasIngresoPendientes, hide: nomina.diasIngresoPendientes === 0 },
                 { label: 'Otros Ingresos',       value: nomina.ingresosPersonalizados, hide: nomina.ingresosPersonalizados === 0 },
               ].filter(r => !r.hide).map(row => (
                 <div key={row.label} className="flex justify-between text-sm">
@@ -235,6 +239,11 @@ function DetalleNomina({
               {nomina.vacacionesVendidas > 0 && (
                 <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
                   Incluye venta de vacaciones — pago extra sobre el salario normal completo, con AFP/SFS/ISR (Art. 178)
+                </p>
+              )}
+              {nomina.diasIngresoPendientes > 0 && (
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500 italic">
+                  Días laborables de un ingreso a mitad del período anterior, arrastrados y pagados aquí a la tarifa diaria legal
                 </p>
               )}
               <div className="border-t border-zinc-100 dark:border-[#1d2035] pt-2 flex justify-between font-semibold text-sm">
@@ -391,7 +400,7 @@ export default function NominaPage() {
   function resultadoDePeriodo(empleado: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
     const snapshot = periodo.resultadosPorEmpleado?.[empleado.id]
     if (snapshot) return snapshot
-    return conSaldoISR(empleado, calcularParaPeriodo(empleado, ajustes, periodo, disfrutes, licencias, aumentos), periodo)
+    return conSaldoISR(empleado, calcularParaPeriodo(empleado, ajustes, periodo, disfrutes, licencias, aumentos, periodos), periodo)
   }
 
   // View state
@@ -512,7 +521,7 @@ export default function NominaPage() {
     if (!periodoActual || periodoActual.estado !== 'en_proceso' || periodoActual.tipo === 'regalia' || periodoActual.tipo === 'bonificacion') return
     const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
     const rs = empleadosPeriodo.map(e =>
-      conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual, disfrutes, licencias, aumentos), periodoActual)
+      conSaldoISR(e, calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], periodoActual, disfrutes, licencias, aumentos, periodos), periodoActual)
     )
     const round = (n: number) => Math.round(n * 100) / 100
     const nuevos = {
@@ -532,7 +541,7 @@ export default function NominaPage() {
   function calcularTotalesRapido(ajustesPorEmp: Record<string, AjusteLinea[]> = {}) {
     const empleadosNuevoPeriodo = empleadosDelPeriodo(empleados, empleadosEnNomina, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
     const rs = empleadosNuevoPeriodo.map(e =>
-      calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], { mes: nuevoMes, anio: nuevoAnio, tipo: nuevoTipo, quincena: nuevaQuincena }, disfrutes, licencias, aumentos)
+      calcularParaPeriodo(e, ajustesPorEmp[e.id] ?? [], { mes: nuevoMes, anio: nuevoAnio, tipo: nuevoTipo, quincena: nuevaQuincena }, disfrutes, licencias, aumentos, periodos)
     )
     return {
       bruto:      rs.reduce((s, r) => s + r.totalBruto, 0),
@@ -622,14 +631,24 @@ export default function NominaPage() {
       const efectivo = salarioEfectivoEnPeriodo(e.id, aumentos, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
       return efectivo !== null && Math.abs(efectivo - e.salarioBase) > 0.005
     }).length
-    const conIngresoTardio = empleadosNuevoPeriodo.filter(e =>
-      diasIngresoEnPeriodo(e, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
+    const conDiasPendientes = empleadosNuevoPeriodo.filter(e =>
+      diasIngresoPendientes(e, periodos, nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena) !== null
     ).length
+    // Empleados excluidos por completo de ESTE período por ingresar a mitad
+    // de él (no en su primer día) — sus días se sumarán al próximo período
+    // vía diasIngresoPendientes. Se avisa aparte para que no parezca que el
+    // empleado "desapareció" del período recién creado.
+    const { inicio: inicioNuevo, fin: finNuevo } = rangoPeriodo(nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
+    const conIngresoExcluido = empleadosEnNomina.filter(e => {
+      const fi = new Date(e.fechaIngreso)
+      return fi > inicioNuevo && fi <= finNuevo
+    }).length
     const avisos = [
       conVacaciones > 0 ? `${conVacaciones} empleado(s) con vacaciones` : null,
       conLicenciaSinSueldo > 0 ? `${conLicenciaSinSueldo} empleado(s) con licencia sin sueldo` : null,
       conReajusteSalarial > 0 ? `${conReajusteSalarial} empleado(s) con reajuste salarial` : null,
-      conIngresoTardio > 0 ? `${conIngresoTardio} empleado(s) con ingreso a mitad de período (prorrateado)` : null,
+      conDiasPendientes > 0 ? `${conDiasPendientes} empleado(s) con días pendientes de un ingreso reciente` : null,
+      conIngresoExcluido > 0 ? `${conIngresoExcluido} empleado(s) recién ingresados no cobran este período (sus días se suman al próximo)` : null,
     ].filter(Boolean)
     setToast(avisos.length > 0
       ? `Período creado · Cuotas de préstamos pre-cargadas · ${avisos.join(' · ')} en este período`
@@ -894,7 +913,7 @@ export default function NominaPage() {
     if (!periodoActual) return null
     const emp = empleadosPeriodo.find(e => e.id === empId)
     if (!emp) return null
-    const base = calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes, licencias, aumentos)
+    const base = calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes, licencias, aumentos, periodos)
     // Encadena TODOS los saldos activos del empleado (FIFO — el más antiguo
     // primero), no solo el primero: si el crédito más antiguo no alcanza a
     // cubrir el ISR de este período, el excedente se consume del siguiente
@@ -929,14 +948,14 @@ export default function NominaPage() {
     if (!periodoActual) return { ajustesFinales: ajustes, omitido: null }
     const emp = empleadosPeriodo.find(e => e.id === empId)
     if (!emp) return { ajustesFinales: ajustes, omitido: null }
-    const resultado = conSaldoISR(emp, calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes, licencias, aumentos), periodoActual)
+    const resultado = conSaldoISR(emp, calcularParaPeriodo(emp, ajustes, periodoActual, disfrutes, licencias, aumentos, periodos), periodoActual)
     if (resultado.salarioNeto >= 0) return { ajustesFinales: ajustes, omitido: null }
 
     const ajustesPrestamo = ajustes.filter(a => a.concepto === 'prestamo' && a.prestamoId)
     if (ajustesPrestamo.length === 0) return { ajustesFinales: ajustes, omitido: null }
 
     const ajustesSinPrestamo = ajustes.filter(a => !(a.concepto === 'prestamo' && a.prestamoId))
-    const resultadoSinPrestamo = conSaldoISR(emp, calcularParaPeriodo(emp, ajustesSinPrestamo, periodoActual, disfrutes, licencias, aumentos), periodoActual)
+    const resultadoSinPrestamo = conSaldoISR(emp, calcularParaPeriodo(emp, ajustesSinPrestamo, periodoActual, disfrutes, licencias, aumentos, periodos), periodoActual)
     if (resultadoSinPrestamo.salarioNeto < 0) return { ajustesFinales: ajustes, omitido: null } // no es solo el préstamo — se deja para la auditoría
 
     actualizarAjustes(periodoActual.id, empId, ajustesSinPrestamo)
