@@ -1339,7 +1339,21 @@ export default function NominaPage() {
                                     if (!confirm(
                                       `¿Reabrir "${labelPeriodo(p)}"? Los empleados procesados volverán a marcarse como pendientes y deberás reprocesarlos. Esta acción queda registrada con tu usuario y fecha.`
                                     )) return
+                                    const procesadosAntes = p.empleadosProcesados ?? []
                                     const ok = reabrir(p.id, user?.email ?? 'desconocido')
+                                    // Reabrir un período de Regalía Pascual debe revertir el "reinicio"
+                                    // de acumulado que handleProcesarRegalia estampó en cada empleado
+                                    // procesado — de lo contrario, regalia-pascual/page.tsx sigue
+                                    // mostrando "ya pagado / RD$0 pendiente" para un período que en
+                                    // realidad quedó vacío (0 procesados) tras el desposteo. Como
+                                    // reabrir() solo permite el período MÁS RECIENTE de su serie, este
+                                    // campo nunca contiene el rastro de un pago histórico más antiguo
+                                    // que estemos pisando por error — siempre es seguro limpiarlo.
+                                    if (ok && p.tipo === 'regalia') {
+                                      procesadosAntes.forEach(empId => {
+                                        actualizarEmpleado(empId, { regaliaPagadaEsteAnio: undefined, regaliaPagadaAnio: undefined })
+                                      })
+                                    }
                                     setToast(ok ? 'Período reabierto — vuelve a En Proceso' : 'No se pudo reabrir el período')
                                   }}
                                   title="Reabrir período (desposteo)"

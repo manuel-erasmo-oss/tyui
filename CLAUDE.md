@@ -4007,6 +4007,64 @@ cambio de conteo); re-ejecutadas las suites de verificación de sesiones
 anteriores (corte de cierre, seguridad de períodos cerrados, QA de 7 años)
 sin regresiones.
 
+## QA dirigida a estados de período (en_proceso → procesada → cerrada → pagada)
+
+A petición del usuario ("Vamos con la QA de los estados de periodo"),
+tras cerrar la seguridad de períodos cerrados de la sesión anterior — un
+barrido más chico y dirigido a la máquina de estados, en vez de otro
+barrido masivo de 7 agentes.
+
+### 🔴 Hallazgo corregido — reabrir Regalía Pascual dejaba el acumulado del empleado "atascado" en cero
+
+`handleProcesarRegalia` estampa `Empleado.regaliaPagadaEsteAnio`/
+`regaliaPagadaAnio` al procesar cada empleado (así `regalia-pascual/page.tsx`
+muestra RD$0 acumulado — "ya se pagó, empieza a acumular de nuevo"). Pero
+`reabrir()` (desposteo) solo limpiaba `PeriodoNomina.empleadosProcesados`/
+`resultadosPorEmpleado` — nunca revertía ese campo en el propio `Empleado`.
+Resultado: reabrir un período de Regalía lo dejaba vacío (0 procesados) en
+Nómina, pero `regalia-pascual/page.tsx` seguía mostrando "RD$0.00
+pendiente" para esos empleados — como si ya estuvieran pagados, aunque en
+realidad nadie recibió nada en ese período reabierto. Si el departamento no
+notaba la discrepancia y no reprocesaba, el empleado se quedaba sin cobrar
+su regalía ese año sin ninguna alerta.
+
+**Fix**: el `onClick` del botón "Reabrir" (`nomina/page.tsx`), cuando
+`p.tipo === 'regalia'` y el desposteo tiene éxito, limpia
+`regaliaPagadaEsteAnio`/`regaliaPagadaAnio` (`actualizarEmpleado`) para cada
+ID que estaba en `empleadosProcesados` ANTES de reabrir (capturado previo a
+la llamada, ya que `reabrir()` lo vacía). Siempre seguro limpiarlo sin más
+lógica: `reabrir()` ya está restringido al período MÁS RECIENTE de su
+serie, así que este campo nunca contiene el rastro de un pago histórico más
+antiguo que se esté pisando por error — solo puede reflejar el pago que se
+acaba de deshacer. Bonificación no necesitó el mismo fix — no tiene ningún
+acumulado en `Empleado` que reiniciar (se calcula una sola vez al año desde
+la utilidad neta capturada en `/bonificacion`, no se acumula mes a mes).
+
+Verificado en navegador: período de Regalía 2026 cerrado con Ana ya
+procesada (`regaliaPagadaEsteAnio: 40000`, acumulado mostrado RD$0.00) →
+Reabrir → el acumulado de Ana vuelve a un valor real y distinto de cero
+(RD$23,333.33, proporcional a sus meses de servicio) en vez de quedar
+atascado en RD$0.00.
+
+### 🟡 Hallazgo reportado, pendiente de decisión — Regalía/Bonificación se pueden reabrir aunque su propio dominio ya las trate como "pagadas"
+
+`regalia-pascual/page.tsx` y `bonificacion/page.tsx` tratan
+`estado === 'cerrada'` como "ya se distribuyó" (bloquean una segunda
+solicitud con el banner correspondiente) — es su propia noción de "pagado",
+independiente del campo `pagada` (pensado para la confirmación ACH de
+nómina mensual/quincenal vía Gestión de Envíos). El guard de `reabrir()`
+agregado en la sesión anterior ("no se puede reabrir un período pagado")
+solo verifica ese campo `pagada` — que Regalía/Bonificación nunca estampan
+por su cuenta. Confirmado en navegador: un período de Regalía Pascual
+`cerrada` (sin `pagada` marcado) SÍ se puede reabrir sin ninguna
+restricción hoy, aunque `regalia-pascual/page.tsx` ya lo trate como
+completamente distribuido.
+
+Presentada la disyuntiva al usuario (bloquear reabrir por completo en
+cuanto Regalía/Bonificación cierra, vs. extender el mecanismo de
+"Marcar/Deshacer Pagada" de Gestión de Envíos a estos dos tipos) — sin
+resolver todavía, pendiente de confirmación antes de implementar.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
