@@ -4208,6 +4208,89 @@ cerrados, días pendientes por ingreso a mitad de período, corte de cierre
 ningún hallazgo nuevo. `npx tsc --noEmit` y `npm run build` limpios (19
 rutas, sin cambio de conteo).
 
+## Fix — cuota de préstamo con frecuencia QUINCENAL se partía a la mitad (y el saldo no coincidía con lo realmente pagado)
+
+Aviso de seguimiento del usuario, mismo día de los dos fixes anteriores de
+`ajustesToParams`: "Recuerda que en el módulo de préstamos se le da la
+posibilidad al empleado de que el descuento por el préstamo sea quincenal
+o mensual." Señaló correctamente que el fix anterior (`prestamoId` presente
+→ nunca se dobla, siempre se asume mensual) era incompleto — `Prestamo.frecuencia`
+(`'mensual' | 'quincenal'`, elegible libremente al otorgar un préstamo en
+`/prestamos`) determina la escala real de `cuotaBase`: si la frecuencia es
+`'quincenal'`, `cuotaBase` YA es el monto de UNA quincena (`cuotas` cuenta
+quincenas, no meses — ver `cuotasFromDates`), no un total mensual.
+
+**Bug 1 — comprobante de nómina**: `handleCrearPeriodo` precarga la cuota
+de CUALQUIER préstamo activo en TODO período creado (mensual o quincenal),
+sin importar su frecuencia — y el fix anterior de `ajustesToParams` trataba
+todo ajuste con `prestamoId` como "mensual, debe repartirse 50/50 vía el
+halving automático". Para un préstamo con frecuencia quincenal, esto partía
+la cuota real a la mitad en el comprobante (ej. cuota de RD$1,000/quincena
+mostrada como solo RD$500).
+
+**Bug 2 — saldo del préstamo, más grave, preexistía incluso antes de esta
+sesión**: al cerrar un período, `handleCerrarPeriodo` registraba
+`montoPagado: ajuste.valor` (el valor CRUDO precargado, `cuotaBase`) contra
+`registrarPago()`, sin ajustar por la frecuencia real ni por si el período
+era mensual o quincenal. Para un préstamo MENSUAL (el caso más común) bajo
+nómina QUINCENAL — el escenario típico de una pyme dominicana — esto
+significaba registrar la cuota mensual COMPLETA dos veces por mes (una vez
+por cada quincena cerrada), agotando el saldo al DOBLE de la velocidad real
+de lo que el empleado efectivamente pagó (el comprobante sí mostraba solo
+la mitad por quincena, correctamente, vía el halving automático — pero el
+saldo del préstamo no coincidía con eso). Verificado empíricamente antes
+del fix: préstamo de RD$12,000/12 cuotas de RD$1,000 mensual, bajo nómina
+quincenal, cerrando ambas quincenas de un mes → saldo caía a RD$10,000
+(2×RD$1,000), cuando el empleado solo había pagado RD$1,000 real (RD$500 +
+RD$500) ese mes.
+
+**Fix — `AjusteLinea.prestamoFrecuencia`** (nuevo campo, snapshot de
+`Prestamo.frecuencia` al precargar la cuota en `handleCrearPeriodo`, igual
+patrón que otros snapshots-at-creation-time de este archivo):
+- **`ajustesToParams`** (`dominican-labor.ts`): 3 buckets para el concepto
+  `prestamo` — sin `prestamoId` (ad-hoc manual, ya cubierto por el fix
+  anterior); con `prestamoId` y `prestamoFrecuencia !== 'quincenal'`
+  (mensual, o sin el campo — retrocompatible con ajustes de sesiones
+  anteriores a su creación, comportamiento sin cambios); con `prestamoId`
+  y `prestamoFrecuencia === 'quincenal'` (nuevo bucket, se pre-dobla ×2
+  SIEMPRE — en un período quincenal el ×2 sobrevive el halving automático
+  y neta la cuota íntegra de esa quincena; en un período mensual, sin
+  ninguna división automática, el ×2 representa las 2 quincenas de cuota
+  acumuladas ese mes).
+- **`montoRealPrestamoEnPeriodo(ajuste, tipoPeriodo)`** (nuevo,
+  `nomina/page.tsx`): calcula el monto REALMENTE deducido en ESE período
+  específico (no el valor crudo) — mismo cuota si `frecuencia === tipo`;
+  `cuotaBase / 2` si es mensual bajo un período quincenal; `cuotaBase × 2`
+  si es quincenal bajo un período mensual (2 quincenas acumuladas). Usado
+  por la nueva función compartida `registrarPagosPrestamos(periodo)`, que
+  reemplaza el loop inline que antes vivía solo en `handleCerrarPeriodo` —
+  y que ahora también se invoca desde el botón de cierre rápido de la
+  LISTA de períodos (`cerrar(p.id)`), que antes NO registraba ningún pago
+  de préstamo en absoluto (bug adicional encontrado durante esta
+  investigación: cerrar un período procesada desde la lista, sin pasar por
+  la vista de detalle, dejaba el saldo del préstamo completamente
+  desactualizado) — un préstamo ahora se paga igual sin importar desde
+  cuál de los dos botones se cierre el período.
+
+Verificado en navegador con Playwright, matemática exacta en ambos
+escenarios: (1) préstamo MENSUAL (cuota RD$1,000) bajo nómina quincenal,
+cerrando 1ra y 2da quincena de julio por separado → saldo tras la 1ra
+quincena exacto RD$11,500.00 (mitad de la cuota, no RD$11,000 que hubiera
+dado el bug), saldo final tras ambas RD$11,000.00 exacto (UNA cuota mensual
+completa para el mes, 2 pagos de RD$500.00 cada uno registrados); (2)
+préstamo QUINCENAL (cuota RD$1,000/quincena) bajo la misma nómina
+quincenal → comprobante muestra la cuota íntegra RD$1,000.00 en cada
+quincena (no RD$500.00), saldo tras ambas quincenas exacto RD$22,000.00
+(DOS cuotas quincenales completas, 2 pagos de RD$1,000.00 cada uno
+registrados). Sin regresión en el caso ya cubierto por el fix anterior
+(ajuste manual "Préstamo" sin registro real, RD$3,000 completo) ni en los
+demás ajustes (bono/otro_descuento RD$1,000 completo, Dep. SFS
+RD$959.89/quincena fijo). Re-ejecutada la suite completa de regresión
+(seguridad de períodos cerrados, días pendientes por ingreso a mitad de
+período, corte de cierre 15/30/31, cierre anticipado, y los 5 escenarios
+de la QA de 7 años) sin ningún hallazgo nuevo. `npx tsc --noEmit` y
+`npm run build` limpios (19 rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
