@@ -17,7 +17,7 @@ import {
   calcularAmortizacionFrancesa, calcularAmortizacionSimple,
 } from '@/lib/prestamos-context'
 import type { FilaAmortizacion } from '@/lib/prestamos-context'
-import { formatRD, fullName, formatDate, BTN_PRIMARY } from '@/lib/utils'
+import { formatRD, fullName, formatDate, BTN_PRIMARY, hoyLocalISO, parseFechaLocal } from '@/lib/utils'
 import type { Prestamo, EstadoPrestamo } from '@/types'
 // Default de referencia para la alerta de Capacidad de Pago — ver
 // PanelCapacidadPago. Configurable por empresa (Configuración → Reglas de
@@ -56,8 +56,8 @@ function frecuenciaLabel(f: 'mensual' | 'quincenal'): string {
 
 // ── Cuotas from date range ────────────────────────────────────────────────────
 function cuotasFromDates(inicio: string, fin: string, frecuencia: 'mensual' | 'quincenal'): number {
-  const s = new Date(inicio)
-  const e = new Date(fin)
+  const s = parseFechaLocal(inicio)
+  const e = parseFechaLocal(fin)
   if (e <= s) return 1
   if (frecuencia === 'mensual') {
     return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()))
@@ -652,7 +652,7 @@ export default function PrestamosPage() {
   const thisYear            = now.getFullYear()
   const pagadosEsteMes      = prestamos.filter(p => {
     if (p.estado !== 'pagado') return false
-    const d = new Date(p.fechaOtorgamiento)
+    const d = parseFechaLocal(p.fechaOtorgamiento)
     return d.getMonth() === thisMonth && d.getFullYear() === thisYear
   }).length
 
@@ -751,7 +751,7 @@ export default function PrestamosPage() {
       cuotas,
       cuotaBase:           esAvance ? previewMonto : previewCuota,
       frecuencia:          fFrecuencia,
-      fechaOtorgamiento:   new Date().toISOString().split('T')[0],
+      fechaOtorgamiento:   hoyLocalISO(),
       fechaFin:            esAvance ? undefined : (fFechaFin || undefined),
       notas:               fNotas.trim() || undefined,
       documentoSolicitud:  esAvance ? undefined : (fDocBase64 ?? undefined),

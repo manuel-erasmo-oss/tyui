@@ -49,9 +49,43 @@ export function fullName(emp: { nombre: string; apellido: string }): string {
   return `${emp.nombre} ${emp.apellido}`
 }
 
+// Parsea una fecha SOLO-FECHA ("YYYY-MM-DD", como la que produce cualquier
+// <input type="date">) como MEDIANOCHE LOCAL, no UTC. `new Date("2026-06-17")`
+// nativo la interpreta como medianoche UTC — en cualquier zona horaria detrás
+// de UTC (Rep. Dominicana, UTC-4, siempre) eso cae en el día calendario
+// ANTERIOR (16 de junio, 8pm) tan pronto se le pide cualquier componente
+// local (getDate/getMonth/getFullYear/getDay, o toLocaleDateString) — bug
+// real reportado por el usuario: un empleado creado con fecha de ingreso
+// "17 de junio" se mostraba y calculaba como "16 de junio". Si el string
+// trae componente de hora (timestamp completo, ej. fechaGeneracion,
+// CuotaPago.fecha), se deja el parseo nativo intacto — esos SÍ representan
+// un instante real, no una fecha ambigua.
+export function parseFechaLocal(iso: string): Date {
+  if (!iso) return new Date(NaN)
+  if (iso.includes('T')) return new Date(iso)
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return new Date(iso)
+  return new Date(y, m - 1, d)
+}
+
+// "Hoy" como "YYYY-MM-DD" en hora LOCAL — para prellenar <input type="date">
+// o comparar contra otras fechas solo-fecha. `new Date().toISOString().split('T')[0]`
+// (patrón usado antes en varios formularios) tiene el mismo bug pero al
+// revés: convierte el instante actual a UTC antes de cortar la fecha — en
+// Rep. Dominicana (UTC-4), cualquier hora local desde las 8pm en adelante ya
+// es "mañana" en UTC, así que un formulario abierto de noche prellenaba la
+// fecha de MAÑANA en vez de hoy.
+export function hoyLocalISO(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 // Format date as "15 jun 2024"
 export function formatDate(isoDate: string): string {
-  return new Date(isoDate).toLocaleDateString('es-DO', {
+  return parseFechaLocal(isoDate).toLocaleDateString('es-DO', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',

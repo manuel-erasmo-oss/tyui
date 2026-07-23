@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import type { Licencia, TipoLicencia, Empleado } from '@/types'
 import { useUserScopedKey } from './user-scoped-key'
 import { getDivisorSalarioDiario } from './dominican-labor'
+import { parseFechaLocal } from './utils'
 
 const KEY = 'cielo-licencias'
 
@@ -118,7 +119,7 @@ export function LicenciasProvider({ children }: { children: ReactNode }) {
       ? Math.max(1, opciones.dias ?? DIAS_SUGERIDOS_SUBSIDIO[tipo as 'enfermedad_comun' | 'accidente_laboral' | 'maternidad'])
       : DIAS_LICENCIA[tipo as 'matrimonial' | 'fallecimiento' | 'alumbramiento']
 
-    const inicio = new Date(fechaInicio)
+    const inicio = parseFechaLocal(fechaInicio)
     const fin = new Date(inicio)
     fin.setDate(fin.getDate() + (dias - 1))
 
@@ -183,8 +184,8 @@ export function LicenciasProvider({ children }: { children: ReactNode }) {
     const f = fecha.getTime()
     return licencias.find(l =>
       l.empleadoId === empleadoId &&
-      new Date(l.fechaInicio).getTime() <= f &&
-      new Date(l.fechaFin).getTime() >= f
+      parseFechaLocal(l.fechaInicio).getTime() <= f &&
+      parseFechaLocal(l.fechaFin).getTime() >= f
     ) ?? null
   }
 

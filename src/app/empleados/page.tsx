@@ -15,7 +15,7 @@ import { useRouter } from 'next/navigation'
 import { calcularCesantia, calcularPreaviso, getAnosServicio, calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, getDivisorSalarioDiario, aplicarSaldoISRFavor, ajustesToParams, MOTIVO_LIQUIDACION_LABELS } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatAnosServicio,
-  fullName, contratoBadgeClass, contratoLabel, BTN_PRIMARY,
+  fullName, contratoBadgeClass, contratoLabel, BTN_PRIMARY, parseFechaLocal, hoyLocalISO,
 } from '@/lib/utils'
 import { usePeriodos } from '@/lib/periodos-context'
 import { useEmpresa } from '@/lib/empresa-context'
@@ -260,9 +260,9 @@ function EmpleadoDrawer({
   const [winState, setWinState] = useState<WindowState>('normal')
   const [mostrarSuspension, setMostrarSuspension] = useState(false)
   const [motivoSusp, setMotivoSusp] = useState('')
-  const [fechaSusp, setFechaSusp] = useState(() => new Date().toISOString().slice(0, 10))
+  const [fechaSusp, setFechaSusp] = useState(() => hoyLocalISO())
   const [mostrarSalida, setMostrarSalida] = useState(false)
-  const [fechaSalida, setFechaSalida] = useState(() => new Date().toISOString().slice(0, 10))
+  const [fechaSalida, setFechaSalida] = useState(() => hoyLocalISO())
   const [motivoSalida, setMotivoSalida] = useState<MotivoLiquidacion | ''>('')
   const [pagoDiasSalida, setPagoDiasSalida] = useState<'nomina' | 'liquidacion' | ''>('')
   const [tabActivo, setTabActivo] = useState<'info' | 'dependientes' | 'historial'>('info')
@@ -664,7 +664,7 @@ function EmpleadoDrawer({
                             motivo: saldoISRMotivo.trim() || 'Sin especificar',
                             tipo: saldoISRTipo,
                             anio: saldoISRAnio,
-                            fechaRegistro: new Date().toISOString().slice(0, 10),
+                            fechaRegistro: hoyLocalISO(),
                           })
                           setShowSaldoISRForm(false)
                           setSaldoISRMonto('')
@@ -831,7 +831,7 @@ function EmpleadoDrawer({
                             madre_titular:               'Madre del Titular',
                             padre_conyuge:               'Padre del Cónyuge',
                             madre_conyuge:               'Madre del Cónyuge',
-                          } as Record<ParentescoDependiente, string>)[dep.parentesco]}{dep.cedula ? ` · ${dep.cedula}` : ''}{dep.fechaNacimiento ? ` · ${new Date(dep.fechaNacimiento).toLocaleDateString('es-DO')}` : ''}
+                          } as Record<ParentescoDependiente, string>)[dep.parentesco]}{dep.cedula ? ` · ${dep.cedula}` : ''}{dep.fechaNacimiento ? ` · ${parseFechaLocal(dep.fechaNacimiento).toLocaleDateString('es-DO')}` : ''}
                         </p>
                       </div>
                     </div>
@@ -870,7 +870,7 @@ function EmpleadoDrawer({
           const historial = periodos
             .filter(p => {
               const fechaPeriodo = new Date(p.fechaGeneracion)
-              const fechaIngreso = new Date(empleado.fechaIngreso)
+              const fechaIngreso = parseFechaLocal(empleado.fechaIngreso)
               if (fechaIngreso > fechaPeriodo || p.estado === 'en_proceso') return false
               // Un período de Regalía Pascual o Bonificación por Utilidades sin
               // snapshot para este empleado significa que nunca formó parte

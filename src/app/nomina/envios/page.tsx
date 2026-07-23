@@ -8,7 +8,7 @@ import { Toast } from '@/components/ui/Toast'
 import { usePeriodos } from '@/lib/periodos-context'
 import { EnvioComprobantesModal } from '@/components/nomina/EnvioComprobantesModal'
 import { labelPeriodo } from '@/lib/nomina-shared'
-import { formatRD, formatDate, cn, BTN_PRIMARY } from '@/lib/utils'
+import { formatRD, formatDate, cn, BTN_PRIMARY, hoyLocalISO } from '@/lib/utils'
 import type { PeriodoNomina } from '@/types'
 
 // Gestión de Envíos — separado de Cálculo de Nómina: aquí se marca como
@@ -35,7 +35,7 @@ export default function GestionEnviosPage() {
   const hayFiltros = busqueda.trim() !== '' || filtroAnio !== 'todos'
 
   function handleMarcarPagada(p: PeriodoNomina) {
-    const hoy = new Date().toISOString().slice(0, 10)
+    const hoy = hoyLocalISO()
     if (!confirm(`¿Confirmar que "${labelPeriodo(p)}" ya fue pagado (transferencia ACH enviada) el ${formatDate(hoy)}?`)) return
     marcarPagada(p.id, hoy)
     setEnvioPeriodoId(p.id)

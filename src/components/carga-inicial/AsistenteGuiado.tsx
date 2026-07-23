@@ -16,7 +16,7 @@ import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { getAnosServicio } from '@/lib/dominican-labor'
-import { formatAnosServicio, formatDate, fullName } from '@/lib/utils'
+import { formatAnosServicio, formatDate, fullName, hoyLocalISO } from '@/lib/utils'
 import { EmpleadoFormFields } from '@/components/empleados/EmpleadoFormFields'
 import { EMPTY_EMP_FORM, formToEmpleado, validateEmpForm, DOC_TIPOS, PAISES, BANCOS, TIPO_CONTRATO_OPTIONS } from '@/lib/empleado-form'
 import type { EmpForm } from '@/lib/empleado-form'
@@ -158,7 +158,7 @@ export function AsistenteGuiado({ onFinish }: Props) {
         motivo: 'Saldo migrado en Carga Inicial',
         tipo: 'retencion_excesiva',
         anio: new Date().getFullYear(),
-        fechaRegistro: new Date().toISOString().slice(0, 10),
+        fechaRegistro: hoyLocalISO(),
       })
     }
     setForm(EMPTY_FORM)

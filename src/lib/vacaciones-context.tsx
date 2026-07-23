@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import type { DisfruteVacaciones } from '@/types'
 import { useUserScopedKey } from './user-scoped-key'
 import { contarDiasLaborables } from './dominican-labor'
+import { parseFechaLocal } from './utils'
 
 const KEY = 'cielo-disfrutes-vacaciones'
 
@@ -54,7 +55,7 @@ export function VacacionesProvider({ children }: { children: ReactNode }) {
   }
 
   function registrarDisfrute(empleadoId: string, fechaInicio: string, fechaFin: string, notas?: string): DisfruteVacaciones {
-    const diasLaborables = contarDiasLaborables(new Date(fechaInicio), new Date(fechaFin))
+    const diasLaborables = contarDiasLaborables(parseFechaLocal(fechaInicio), parseFechaLocal(fechaFin))
     const nuevo: DisfruteVacaciones = {
       id: `disfrute-${Date.now().toString(36)}`,
       empleadoId,
@@ -110,8 +111,8 @@ export function VacacionesProvider({ children }: { children: ReactNode }) {
     return disfrutes.find(d =>
       d.empleadoId === empleadoId &&
       d.tipo !== 'venta' &&
-      new Date(d.fechaInicio).getTime() <= f &&
-      new Date(d.fechaFin).getTime() >= f
+      parseFechaLocal(d.fechaInicio).getTime() <= f &&
+      parseFechaLocal(d.fechaFin).getTime() >= f
     ) ?? null
   }
 

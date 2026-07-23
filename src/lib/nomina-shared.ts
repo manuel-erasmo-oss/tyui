@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import { formatRD, fullName, formatCedula, formatDate } from '@/lib/utils'
+import { formatRD, fullName, formatCedula, formatDate, parseFechaLocal } from '@/lib/utils'
 import { calcularNomina, calcularNominaQuincenal, ajustesToParams, getDivisorSalarioDiario, contarDiasLaborables } from '@/lib/dominican-labor'
 import type {
   Empleado, Empresa, PeriodoNomina, ResultadoNomina, ParametrosNomina, TipoPeriodo,
@@ -377,7 +377,7 @@ export function diasSuspensionEnPeriodo(
   empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): { diasTrabajados: number; diasLaborablesMes: number } | null {
   if (!empleado.suspendido || !empleado.fechaSuspension) return null
-  return diasCorteEnPeriodo(new Date(empleado.fechaSuspension), mes, anio, tipo, quincena)
+  return diasCorteEnPeriodo(parseFechaLocal(empleado.fechaSuspension), mes, anio, tipo, quincena)
 }
 
 // Igual que diasSuspensionEnPeriodo, pero para un empleado marcado con
@@ -387,7 +387,7 @@ export function diasSalidaEnPeriodo(
   empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): { diasTrabajados: number; diasLaborablesMes: number } | null {
   if (!empleado.salidaPendiente || empleado.pagoDiasTrabajadosPendiente !== 'nomina' || !empleado.fechaSalidaPendiente) return null
-  return diasCorteEnPeriodo(new Date(empleado.fechaSalidaPendiente), mes, anio, tipo, quincena)
+  return diasCorteEnPeriodo(parseFechaLocal(empleado.fechaSalidaPendiente), mes, anio, tipo, quincena)
 }
 
 // ── Goce de vacaciones dentro de un período ────────────────────────────────
@@ -425,8 +425,8 @@ export function diasVacacionEnPeriodo(
   let goceRealDisfrute  = 0
   let goceRealVenta     = 0
   for (const d of propios) {
-    const dInicio = new Date(d.fechaInicio)
-    const dFin    = new Date(d.fechaFin)
+    const dInicio = parseFechaLocal(d.fechaInicio)
+    const dFin    = parseFechaLocal(d.fechaFin)
     const solapInicio = dInicio < inicio ? inicio : dInicio
     const solapFin    = dFin > fin ? fin : dFin
     if (solapInicio > solapFin) continue
@@ -466,7 +466,7 @@ export function diasIngresoEnPeriodo(
   empleado: Empleado, mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): { diasTrabajados: number; diasLaborablesMes: number } | null {
   const { inicio, fin } = rangoPeriodo(mes, anio, tipo, quincena)
-  const fechaIngreso = new Date(empleado.fechaIngreso)
+  const fechaIngreso = parseFechaLocal(empleado.fechaIngreso)
   if (fechaIngreso <= inicio) return null  // ingresó desde el día 1 — período completo, sin prorrateo
   if (fechaIngreso >= fin) return null     // cae en el corte de cierre (o después) — se excluye del todo, ver empleadosDelPeriodo/diasIngresoPendientes
   const msPorDia = 24 * 3600 * 1000
@@ -512,7 +512,7 @@ export function diasIngresoPendientes(
   mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): { diasLaborables: number; monto: number } | null {
   const { inicio: inicioActual } = rangoPeriodo(mes, anio, tipo, quincena)
-  const fechaIngreso = new Date(empleado.fechaIngreso)
+  const fechaIngreso = parseFechaLocal(empleado.fechaIngreso)
   if (fechaIngreso >= inicioActual) return null  // ingresa en/después de este período — nada pendiente de antes
 
   const anterior = periodoAnteriorDeSerie(mes, anio, tipo, quincena)
@@ -571,8 +571,8 @@ export function diasLicenciaSinSueldoEnPeriodo(
 
   let diasLicenciaCalendario = 0
   for (const l of propias) {
-    const lInicio = new Date(l.fechaInicio)
-    const lFin    = new Date(l.fechaFin)
+    const lInicio = parseFechaLocal(l.fechaInicio)
+    const lFin    = parseFechaLocal(l.fechaFin)
     const solapInicio = lInicio < inicio ? inicio : lInicio
     const solapFin    = lFin > fin ? fin : lFin
     if (solapInicio > solapFin) continue
@@ -614,7 +614,7 @@ export function salarioEfectivoEnPeriodo(
   const msPorDia = 24 * 3600 * 1000
   const aplicados = aumentos
     .filter(a => a.empleadoId === empleadoId && a.estado === 'aplicado' && a.fechaEfectiva)
-    .map(a => ({ ...a, fechaEfectivaDate: new Date(a.fechaEfectiva!) }))
+    .map(a => ({ ...a, fechaEfectivaDate: parseFechaLocal(a.fechaEfectiva!) }))
     .sort((a, b) => a.fechaEfectivaDate.getTime() - b.fechaEfectivaDate.getTime())
   if (aplicados.length === 0) return null
 

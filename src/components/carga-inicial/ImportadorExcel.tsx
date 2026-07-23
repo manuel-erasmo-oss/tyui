@@ -11,7 +11,7 @@ import { useEmpresa } from '@/lib/empresa-context'
 import { useSaldoISR } from '@/lib/saldo-isr-context'
 import { getCategoriaSRLPorSector } from '@/lib/dominican-labor'
 import { DOC_TIPOS, PAISES, BANCOS, TIPO_CONTRATO_OPTIONS, cedulasCoinciden } from '@/lib/empleado-form'
-import { formatRD } from '@/lib/utils'
+import { formatRD, hoyLocalISO } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import type { Empleado, TipoDocumento, TipoContrato, Banco } from '@/types'
 
@@ -493,7 +493,7 @@ export function ImportadorExcel({ onFinish }: Props) {
           motivo: 'Saldo migrado en Carga Inicial (Importador Excel)',
           tipo: 'retencion_excesiva',
           anio: new Date().getFullYear(),
-          fechaRegistro: new Date().toISOString().slice(0, 10),
+          fechaRegistro: hoyLocalISO(),
         })
       }
     }

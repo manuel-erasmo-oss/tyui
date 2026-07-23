@@ -10,7 +10,7 @@ import { useEmpresa } from '@/lib/empresa-context'
 import {
   useLicencias, DIAS_LICENCIA, DIAS_SUGERIDOS_SUBSIDIO, labelLicencia, esLicenciaConSubsidio,
 } from '@/lib/licencias-context'
-import { formatRD, formatDate, fullName, BTN_PRIMARY } from '@/lib/utils'
+import { formatRD, formatDate, fullName, BTN_PRIMARY, parseFechaLocal } from '@/lib/utils'
 import { downloadBase64 } from '@/lib/empleado-form'
 import type { TipoLicencia, EstadoReclamoSubsidio } from '@/types'
 import {
@@ -111,7 +111,7 @@ export default function LicenciasPage() {
 
   const hoy = new Date()
   const licenciasMes = licencias.filter(l => {
-    const f = new Date(l.fechaInicio)
+    const f = parseFechaLocal(l.fechaInicio)
     return f.getMonth() === hoy.getMonth() && f.getFullYear() === hoy.getFullYear()
   })
   const totalPagadoMes = licenciasMes.reduce((s, l) => s + l.montoPagado, 0)

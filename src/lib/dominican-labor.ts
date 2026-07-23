@@ -1,4 +1,5 @@
 import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, CierreFiscal, ConceptoAjuste, Empleado, Empresa, MotivoLiquidacion, ParametrosNomina, PeriodoNomina, ResultadoNomina, RetribucionComplementaria, SectorEmpresa, TipoPeriodo } from '@/types'
+import { parseFechaLocal } from './utils'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
 // Source: DGII, Ley 11-92 art. 296 según modificaciones vigentes
@@ -290,7 +291,7 @@ export function calcularNomina(
 
   // Vacaciones acumuladas por mes
   const hoy = new Date()
-  const fechaIngreso = new Date(empleado.fechaIngreso)
+  const fechaIngreso = parseFechaLocal(empleado.fechaIngreso)
   const anosServicio = (hoy.getTime() - fechaIngreso.getTime()) / (365.25 * 24 * 3600 * 1000)
   const diasVacacionesAnuales = anosServicio >= 5
     ? DIAS_VACACIONES_MAS_5_ANOS
@@ -557,7 +558,7 @@ export function calcularDiasTrabajadosPendientes(
 
   const ultimoFin = procesados.length
     ? rangoPeriodo(procesados[0].mes, procesados[0].anio, procesados[0].tipo, procesados[0].quincena ?? 1).fin
-    : new Date(new Date(empleado.fechaIngreso).getTime() - msPorDia)
+    : new Date(parseFechaLocal(empleado.fechaIngreso).getTime() - msPorDia)
 
   const fechaInicio = new Date(ultimoFin.getTime() + msPorDia)
   if (fechaInicio > fechaTerminacion) return null
@@ -572,7 +573,7 @@ export function calcularDiasTrabajadosPendientes(
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 export function getAnosServicio(fechaIngreso: string): number {
   const hoy = new Date()
-  const fi  = new Date(fechaIngreso)
+  const fi  = parseFechaLocal(fechaIngreso)
   return (hoy.getTime() - fi.getTime()) / (365.25 * 24 * 3600 * 1000)
 }
 
@@ -922,7 +923,7 @@ export function getBonificacionesPendientes(
   if (empleados.length === 0) return []
 
   const hoy = new Date()
-  const primerIngresoConocido = new Date(Math.min(...empleados.map(e => new Date(e.fechaIngreso).getTime())))
+  const primerIngresoConocido = new Date(Math.min(...empleados.map(e => parseFechaLocal(e.fechaIngreso).getTime())))
 
   return aniosCandidatos
     .map(a => {
@@ -961,7 +962,7 @@ export function getRegaliaPendientes(
   if (empleados.length === 0) return []
 
   const hoy = new Date()
-  const primerIngresoConocido = new Date(Math.min(...empleados.map(e => new Date(e.fechaIngreso).getTime())))
+  const primerIngresoConocido = new Date(Math.min(...empleados.map(e => parseFechaLocal(e.fechaIngreso).getTime())))
 
   return aniosCandidatos
     .map(anio => {

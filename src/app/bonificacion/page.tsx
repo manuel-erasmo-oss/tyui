@@ -12,7 +12,7 @@ import { usePeriodos } from '@/lib/periodos-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { rangoEjercicioFiscal, mesesEnEjercicioFiscal, getBonificacionesPendientes } from '@/lib/dominican-labor'
 import { resultadoBonificacion } from '@/lib/nomina-shared'
-import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
+import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY, cn, parseFechaLocal } from '@/lib/utils'
 import {
   Percent, Users, Banknote, Info, Download, Send, Pencil, Check, X,
   ArrowRight, CheckCircle2, History, Bell, Layers, ExternalLink, Search, RotateCcw,
@@ -109,10 +109,10 @@ export default function BonificacionPage() {
         if (!e.activo) {
           const liq = liquidaciones.find(l => l.empleadoId === e.id)
           if (!liq) return null   // inactivo sin registro de liquidación — no hay fecha de salida confiable
-          fechaSalida = new Date(liq.fechaTerminacion)
+          fechaSalida = parseFechaLocal(liq.fechaTerminacion)
           liquidado = true
         }
-        const fechaIngreso = new Date(e.fechaIngreso)
+        const fechaIngreso = parseFechaLocal(e.fechaIngreso)
         const mesesTrabajados = mesesEnEjercicioFiscal(fechaIngreso, fechaSalida, inicioEjercicio, finEjercicio)
         if (mesesTrabajados <= 0) return null
         // Antigüedad evaluada a la fecha de salida (empleado liquidado) o al

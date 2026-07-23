@@ -1,5 +1,6 @@
 import type { Empleado, TipoDocumento, TipoContrato, Banco, SectorEmpresa } from '@/types'
 import { getCategoriaSRLPorSector } from './dominican-labor'
+import { parseFechaLocal } from './utils'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const BANCOS: Banco[] = ['Banco Popular', 'BanReservas', 'Scotiabank', 'BHD León', 'Banistmo', 'Otro']
@@ -179,7 +180,7 @@ export function cedulasCoinciden(cedulaA: string, cedulaB: string): boolean {
 
 export function calcularEdad(fechaNacimiento: string): number {
   const hoy = new Date()
-  const nac = new Date(fechaNacimiento)
+  const nac = parseFechaLocal(fechaNacimiento)
   let edad = hoy.getFullYear() - nac.getFullYear()
   const m = hoy.getMonth() - nac.getMonth()
   if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--

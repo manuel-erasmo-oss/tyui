@@ -18,7 +18,7 @@ import {
   DIAS_VACACIONES_MAS_5_ANOS,
 } from '@/lib/dominican-labor'
 import { useEmpresa } from '@/lib/empresa-context'
-import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY } from '@/lib/utils'
+import { formatRD, formatDate, formatAnosServicio, fullName, BTN_PRIMARY, parseFechaLocal } from '@/lib/utils'
 import { CalendarDays, Users, Wallet, AlertCircle, Download, Plane, Plus, X, Trash2, Banknote, Search, RotateCcw } from 'lucide-react'
 
 export default function VacacionesPage() {
@@ -93,7 +93,7 @@ export default function VacacionesPage() {
   // Preview en vivo del registro que se está armando en el modal
   const empSeleccionado = empleadosEnNomina.find(e => e.id === empId) ?? null
   const diasLaborablesPreview = (empSeleccionado && fechaInicio && fechaFin && fechaFin >= fechaInicio)
-    ? contarDiasLaborables(new Date(fechaInicio), new Date(fechaFin))
+    ? contarDiasLaborables(parseFechaLocal(fechaInicio), parseFechaLocal(fechaFin))
     : 0
   const disponiblesSeleccionado = empSeleccionado
     ? filas.find(f => f.empleado.id === empSeleccionado.id)?.diasDisponibles ?? 0

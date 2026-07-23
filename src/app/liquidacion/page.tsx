@@ -17,7 +17,7 @@ import {
   calcularDiasTrabajadosPendientes, calcularNomina, MOTIVO_LIQUIDACION_LABELS, regaliaPagadaVigente,
   calcularDiasVacacionesAcumulados,
 } from '@/lib/dominican-labor'
-import { formatRD, formatNum, formatDate, formatAnosServicio, formatCedula, fullName, BTN_PRIMARY } from '@/lib/utils'
+import { formatRD, formatNum, formatDate, formatAnosServicio, formatCedula, fullName, BTN_PRIMARY, parseFechaLocal, hoyLocalISO } from '@/lib/utils'
 import type { Empleado, Empresa, MotivoLiquidacion, ConceptoLiquidacion, DesgloseConceptoLiquidacion, RegistroLiquidacion } from '@/types'
 import {
   Download, FileText, UserMinus, CalendarDays, Banknote, HandCoins,
@@ -424,7 +424,7 @@ export default function LiquidacionPage() {
   const [empleadoId, setEmpleadoId] = useState<string>('')
   const [motivo, setMotivo] = useState<Motivo | ''>('')
   const [fechaTerminacion, setFechaTerminacion] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    hoyLocalISO()
   )
   const [fechaNotificacionRenuncia, setFechaNotificacionRenuncia] = useState<string>('')
   const [prestamosADescontar, setPrestamosADescontar] = useState<string[]>([])
@@ -478,8 +478,8 @@ export default function LiquidacionPage() {
   const resultado = (() => {
     if (!emp || !motivo) return null
 
-    const fechaHire = new Date(emp.fechaIngreso)
-    const fechaTerm = new Date(fechaTerminacion)
+    const fechaHire = parseFechaLocal(emp.fechaIngreso)
+    const fechaTerm = parseFechaLocal(fechaTerminacion)
     const anosServicio = (fechaTerm.getTime() - fechaHire.getTime()) / (365.25 * 24 * 3600 * 1000)
 
     const inicioAnio = new Date(fechaTerm.getFullYear(), 0, 1)
@@ -556,7 +556,7 @@ export default function LiquidacionPage() {
 
     const diasPreavisoRequeridos = motivo === 'renuncia' ? getDiasPreavisoRequeridos(anosServicio) : null
     const diasAnticipacionReal = (motivo === 'renuncia' && fechaNotificacionRenuncia)
-      ? Math.round((fechaTerm.getTime() - new Date(fechaNotificacionRenuncia).getTime()) / (24 * 3600 * 1000))
+      ? Math.round((fechaTerm.getTime() - parseFechaLocal(fechaNotificacionRenuncia).getTime()) / (24 * 3600 * 1000))
       : null
     const cumplioPreaviso = (diasAnticipacionReal !== null && diasPreavisoRequeridos !== null)
       ? diasAnticipacionReal >= diasPreavisoRequeridos
@@ -580,7 +580,7 @@ export default function LiquidacionPage() {
   })()
 
   const diasSinCubrirPorNomina = (emp?.pagoDiasTrabajadosPendiente === 'nomina' && motivo)
-    ? calcularDiasTrabajadosPendientes(emp, periodos, new Date(fechaTerminacion))
+    ? calcularDiasTrabajadosPendientes(emp, periodos, parseFechaLocal(fechaTerminacion))
     : null
 
   // ── Metadata por concepto: título, colores, fórmula ya formateada ─────────
@@ -654,8 +654,8 @@ export default function LiquidacionPage() {
         montoAuto: resultado.regalia,
         detalle: [
           `Salario base ÷ 12 × ${resultado.mesesCalendario} mes(es) del año en curso = ${formatRD(resultado.regaliaBruta, 2)}`,
-          ...(regaliaPagadaVigente(emp, new Date(fechaTerminacion).getFullYear()) > 0
-            ? [`Menos ${formatRD(regaliaPagadaVigente(emp, new Date(fechaTerminacion).getFullYear()), 2)} ya pagados este año (migración o liquidación previa de Regalía Pascual)`]
+          ...(regaliaPagadaVigente(emp, parseFechaLocal(fechaTerminacion).getFullYear()) > 0
+            ? [`Menos ${formatRD(regaliaPagadaVigente(emp, parseFechaLocal(fechaTerminacion).getFullYear()), 2)} ya pagados este año (migración o liquidación previa de Regalía Pascual)`]
             : []),
         ],
       },

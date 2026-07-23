@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import type { Empleado, MotivoLiquidacion } from '@/types'
 import { useUserScopedKey } from './user-scoped-key'
+import { hoyLocalISO } from './utils'
 
 const KEY = 'cielo-empleados'
 
@@ -108,7 +109,7 @@ export function EmpleadosProvider({ children }: { children: ReactNode }) {
   }
 
   function reactivar(id: string) {
-    const hoy = new Date().toISOString().split('T')[0]
+    const hoy = hoyLocalISO()
     setEmpleados(prev => {
       const next = prev.map(e => {
         if (e.id !== id) return e

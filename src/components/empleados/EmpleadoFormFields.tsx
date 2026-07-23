@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Globe, X, Upload, Download, FileText, Camera, User, Info } from 'lucide-react'
-import { CONTRATO_DGT_INFO } from '@/lib/utils'
+import { CONTRATO_DGT_INFO, parseFechaLocal, hoyLocalISO } from '@/lib/utils'
 import {
   BANCOS, AVATAR_COLORS, DOC_TIPOS, PAISES, getPais, formatDocNumber, calcularEdad,
   downloadBase64,
@@ -325,7 +325,7 @@ export function EmpleadoFormFields({
   const initials = `${form.nombre[0] ?? '?'}${form.apellido[0] ?? ''}`
 
   const diasDesdeIngreso = form.fechaIngreso
-    ? (Date.now() - new Date(form.fechaIngreso).getTime()) / (1000 * 3600 * 24)
+    ? (Date.now() - parseFechaLocal(form.fechaIngreso).getTime()) / (1000 * 3600 * 24)
     : 0
   const pareceMigracion = diasDesdeIngreso > 45
 
@@ -392,7 +392,7 @@ export function EmpleadoFormFields({
                 <label className={labelCls}>Fecha de Nacimiento</label>
                 <input type="date" className={inputCls} value={form.fechaNacimiento}
                   onChange={e => set('fechaNacimiento', e.target.value)}
-                  max={new Date().toISOString().split('T')[0]} />
+                  max={hoyLocalISO()} />
                 {form.fechaNacimiento && (
                   <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">{calcularEdad(form.fechaNacimiento)} años</p>
                 )}
@@ -420,7 +420,7 @@ export function EmpleadoFormFields({
               <label className={labelCls}>Fecha de Nacimiento</label>
               <input type="date" className={inputCls} value={form.fechaNacimiento}
                 onChange={e => set('fechaNacimiento', e.target.value)}
-                max={new Date().toISOString().split('T')[0]} />
+                max={hoyLocalISO()} />
               {form.fechaNacimiento && (
                 <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">{calcularEdad(form.fechaNacimiento)} años</p>
               )}

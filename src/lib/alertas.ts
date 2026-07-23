@@ -12,7 +12,7 @@ import { useLiquidaciones } from './liquidaciones-context'
 import { useBandasSalariales, normalizarPosicion } from './bandas-salariales-context'
 import { useRetribuciones } from './retribuciones-context'
 import { getSalarioMinimoAplicable, getBonificacionesPendientes, getRetribucionesPendientes, getRegaliaPendientes } from './dominican-labor'
-import { fullName, formatRD } from './utils'
+import { fullName, formatRD, parseFechaLocal } from './utils'
 
 const MESES_CORTO = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 
@@ -236,17 +236,17 @@ export function useAlertas(): AlertaItem[] {
         // suspensión vigente (sin historial) para registros previos a este
         // campo.
         const suspendidoEseMes = (e.historialSuspensiones ?? []).some(r => {
-          const inicio = new Date(r.fechaInicio)
-          const fin = r.fechaFin ? new Date(r.fechaFin) : hoy
+          const inicio = parseFechaLocal(r.fechaInicio)
+          const fin = r.fechaFin ? parseFechaLocal(r.fechaFin) : hoy
           return inicio <= finMes && fin >= inicioMes
-        }) || (!!e.suspendido && !!e.fechaSuspension && new Date(e.fechaSuspension) <= finMes && (!e.historialSuspensiones || e.historialSuspensiones.length === 0))
+        }) || (!!e.suspendido && !!e.fechaSuspension && parseFechaLocal(e.fechaSuspension) <= finMes && (!e.historialSuspensiones || e.historialSuspensiones.length === 0))
         if (suspendidoEseMes) continue
-        const ingreso = new Date(e.fechaIngreso)
+        const ingreso = parseFechaLocal(e.fechaIngreso)
         if (ingreso > finMes) continue
         let elegible = e.activo
         if (!elegible) {
           const liq = liquidaciones.find(l => l.empleadoId === e.id)
-          elegible = !!liq && new Date(liq.fechaTerminacion) > finMes
+          elegible = !!liq && parseFechaLocal(liq.fechaTerminacion) > finMes
         }
         if (!elegible) continue
         const faltaEnTodos = gruposDelMes.every(p => !p.empleadosProcesados!.includes(e.id))

@@ -23,7 +23,7 @@ import { useRetribuciones } from '@/lib/retribuciones-context'
 import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo, getDiasPreavisoRequeridos, getAnosServicio, TASAS_TSS, TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatCedula, fullName,
-  formatAnosServicio, contratoLabel, contratoBadgeClass, BTN_PRIMARY,
+  formatAnosServicio, contratoLabel, contratoBadgeClass, BTN_PRIMARY, parseFechaLocal,
 } from '@/lib/utils'
 import { exportarExcel } from '@/lib/excel-export'
 import type { AjusteLinea, PeriodoNomina, Empresa, RegistroLiquidacion, CategoriaRiesgoSRL, Licencia, TipoLicencia, Empleado, ResultadoNomina } from '@/types'
@@ -809,7 +809,7 @@ function ReporteEmpleados({
       body: filas.map(e => [
         fullName(e), e.cedula, e.cargo, e.departamento,
         contratoLabel(e.tipoContrato), formatDate(e.fechaIngreso),
-        formatAnosServicio((Date.now() - new Date(e.fechaIngreso).getTime()) / (365.25*24*3600*1000)),
+        formatAnosServicio((Date.now() - parseFechaLocal(e.fechaIngreso).getTime()) / (365.25*24*3600*1000)),
         e.salarioBase.toFixed(2), e.banco ?? '—',
       ]),
       theme: 'striped',
@@ -839,7 +839,7 @@ function ReporteEmpleados({
         filas: filas.map(e => [
           fullName(e), e.cedula, e.cargo, e.departamento,
           contratoLabel(e.tipoContrato), formatDate(e.fechaIngreso),
-          formatAnosServicio((Date.now() - new Date(e.fechaIngreso).getTime()) / (365.25*24*3600*1000)),
+          formatAnosServicio((Date.now() - parseFechaLocal(e.fechaIngreso).getTime()) / (365.25*24*3600*1000)),
           e.salarioBase, e.banco ?? '—',
         ]),
         anchos: [30, 18, 24, 22, 18, 14, 18, 16, 16],
@@ -912,7 +912,7 @@ function ReporteEmpleados({
               </thead>
               <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
                 {filasVisible.map(e => {
-                  const anos = (Date.now() - new Date(e.fechaIngreso).getTime()) / (365.25*24*3600*1000)
+                  const anos = (Date.now() - parseFechaLocal(e.fechaIngreso).getTime()) / (365.25*24*3600*1000)
                   return (
                     <tr key={e.id} className="hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors">
                       <td className="px-5 py-3">
@@ -2833,7 +2833,7 @@ function ReportePreaviso({
       .map(l => {
         const diasRequeridos = getDiasPreavisoRequeridos(l.anosServicio)
         const diasReales = Math.round(
-          (new Date(l.fechaTerminacion).getTime() - new Date(l.fechaNotificacionRenuncia!).getTime())
+          (parseFechaLocal(l.fechaTerminacion).getTime() - parseFechaLocal(l.fechaNotificacionRenuncia!).getTime())
           / (24 * 3600 * 1000)
         )
         const diferencia = diasReales - diasRequeridos
@@ -3426,12 +3426,12 @@ function ReporteSinIngresos({
     const finMes = finDeMes(periodo.mes, periodo.anio)
     return empleados.filter(e => {
       if (e.suspendido) return false // suspendido legítimamente no cobra (Arts. 51-53 CT)
-      const ingreso = new Date(e.fechaIngreso)
+      const ingreso = parseFechaLocal(e.fechaIngreso)
       if (ingreso > finMes) return false // aún no había ingresado ese mes
       if (e.activo) return true
       const liq = liquidaciones.find(l => l.empleadoId === e.id)
       if (!liq) return false
-      return new Date(liq.fechaTerminacion) > finMes
+      return parseFechaLocal(liq.fechaTerminacion) > finMes
     })
   }, [periodo, empleados, liquidaciones])
 
@@ -3669,7 +3669,7 @@ function ReporteLicencias({
   ]
 
   const anios = useMemo(() => {
-    const years = new Set(licencias.map(l => new Date(l.fechaInicio).getFullYear()))
+    const years = new Set(licencias.map(l => parseFechaLocal(l.fechaInicio).getFullYear()))
     years.add(currentYear)
     return [...years].sort((a, b) => b - a)
   }, [licencias, currentYear])
@@ -3682,8 +3682,8 @@ function ReporteLicencias({
   const filas = useMemo(() => {
     if (!generado) return []
     return licencias
-      .filter(l => new Date(l.fechaInicio).getFullYear() === anioFiltro)
-      .map(l => ({ l, emp: empMap[l.empleadoId], mes: MESES[new Date(l.fechaInicio).getMonth()] }))
+      .filter(l => parseFechaLocal(l.fechaInicio).getFullYear() === anioFiltro)
+      .map(l => ({ l, emp: empMap[l.empleadoId], mes: MESES[parseFechaLocal(l.fechaInicio).getMonth()] }))
       .sort((a, b) => a.l.fechaInicio.localeCompare(b.l.fechaInicio))
   }, [generado, licencias, anioFiltro, empMap])
 

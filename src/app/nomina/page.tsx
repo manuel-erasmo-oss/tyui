@@ -46,7 +46,7 @@ import { useAumentos } from '@/lib/aumentos-context'
 import { useAuth } from '@/lib/auth-context'
 import { calcularNomina, calcularNominaQuincenal, cuotaDependienteSFS, aplicarSaldoISRFavor, prorratearMontoFijo, ajustesToParams, getAnosServicio, getDivisorSalarioDiario, contarDiasLaborables } from '@/lib/dominican-labor'
 import { useConceptosPersonalizados } from '@/lib/conceptos-personalizados-context'
-import { formatRD, fullName, formatDate, BTN_PRIMARY, cn } from '@/lib/utils'
+import { formatRD, fullName, formatDate, BTN_PRIMARY, cn, parseFechaLocal } from '@/lib/utils'
 import {
   labelPeriodo, resultadoRegalia, resultadoBonificacion, descargarComprobantePDF,
   diasSuspensionEnPeriodo, diasSalidaEnPeriodo,
@@ -142,7 +142,7 @@ function empleadosDelPeriodo(
   todos: Empleado[], normales: Empleado[], mes: number, anio: number, tipo: TipoPeriodo, quincena: 1 | 2,
 ): Empleado[] {
   const { fin } = rangoPeriodo(mes, anio, tipo, quincena)
-  const normalesVigentes = normales.filter(e => new Date(e.fechaIngreso) < fin)
+  const normalesVigentes = normales.filter(e => parseFechaLocal(e.fechaIngreso) < fin)
   const extra = todos.filter(e =>
     e.activo && !normalesVigentes.some(n => n.id === e.id) && (
       (e.suspendido && diasSuspensionEnPeriodo(e, mes, anio, tipo, quincena) !== null) ||
@@ -667,7 +667,7 @@ export default function NominaPage() {
     // diasIngresoPendientes. Se avisa aparte para que no parezca que el
     // empleado "desapareció" del período recién creado.
     const { fin: finNuevo } = rangoPeriodo(nuevoMes, nuevoAnio, nuevoTipo, nuevaQuincena)
-    const conIngresoExcluido = empleadosEnNomina.filter(e => new Date(e.fechaIngreso).getTime() === finNuevo.getTime()).length
+    const conIngresoExcluido = empleadosEnNomina.filter(e => parseFechaLocal(e.fechaIngreso).getTime() === finNuevo.getTime()).length
     const avisos = [
       conVacaciones > 0 ? `${conVacaciones} empleado(s) con vacaciones` : null,
       conLicenciaSinSueldo > 0 ? `${conLicenciaSinSueldo} empleado(s) con licencia sin sueldo` : null,
@@ -2467,7 +2467,7 @@ export default function NominaPage() {
                 }
               }
             }
-            const fi = new Date(e.fechaIngreso)
+            const fi = parseFechaLocal(e.fechaIngreso)
             const esNuevo = fi.getFullYear() === periodoActual.anio && (fi.getMonth() + 1) === periodoActual.mes
             const descuentoDiscrecional = (ajustesPorEmp[e.id] ?? [])
               .filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento')
@@ -2492,7 +2492,7 @@ export default function NominaPage() {
 
         const salientes = anterior
           ? liquidaciones.filter(l => {
-              const ft = new Date(l.fechaTerminacion)
+              const ft = parseFechaLocal(l.fechaTerminacion)
               const enAnterior = ft.getFullYear() === anterior.anio && (ft.getMonth() + 1) === anterior.mes
               const enActual   = ft.getFullYear() === periodoActual.anio && (ft.getMonth() + 1) === periodoActual.mes
               return enAnterior || enActual
