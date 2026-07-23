@@ -3810,6 +3810,83 @@ hueco de años queda correctamente fuera del período inmediato anterior).
 conteo); re-ejecutado también el script de verificación de la QA de 7 años
 completa sin regresiones.
 
+## Seguridad de períodos cerrados — inmutabilidad real, no solo de UI
+
+Pedido explícito del usuario, con contexto de práctica real de nómina: los
+departamentos de nómina cierran el período días antes de la fecha de pago
+(ej. paga el 15, corte el 12 — quien ingresa el 13 se va a la próxima
+quincena), lo cual ya coincidía con el diseño de `diasIngresoPendientes`
+de la sesión anterior (cualquier ingreso después del día 1 del período ya
+se excluye por completo de ese período, sin importar qué tan cerca esté
+del corte real — más estricto que "solo después del corte", así que ya
+cumplía esto sin cambios). El pedido central y explícito, en mayúsculas de
+énfasis: **"un periodo de nómina cerrado no lo abre nadie... el periodo
+cerrado no puede ser alterado jamás... si el periodo fue pagado, no lo
+abre nadie, solo borrando el pago de ese periodo."**
+
+**Auditoría previa a codificar**: `reabrir()` (desposteo) solo validaba
+"¿es el período más reciente de su serie?" — nunca revisaba si el período
+ya estaba `pagada`. La UI mostraba el botón "Reabrir" para CUALQUIER
+período cerrado/procesado más reciente, pagado o no. Peor aún:
+`actualizarAjustes`/`actualizarTotales`/`marcarProcesados` (las tres
+funciones que mutan los datos de un período) no tenían NINGÚN guard a
+nivel de datos — confiaban por completo en que la UI no las llamara fuera
+de contexto (`esEnProceso`), sin ninguna segunda línea de defensa. Y
+`eliminar()` no distinguía el estado del período en absoluto — se podía
+borrar un período `cerrada` y hasta pagado con un solo click + confirm.
+
+**Fix — `periodos-context.tsx`, guards a nivel de datos (no solo UI):**
+- `actualizarAjustes`, `actualizarTotales`, `marcarProcesados`: ahora
+  verifican `periodo.estado === 'en_proceso'` ANTES de mutar — si el
+  período ya es `procesada` o `cerrada`, la función es un no-op silencioso.
+  Aunque la UI de hoy ya solo ofrece estos controles durante `en_proceso`,
+  el guard vive aquí como última línea de defensa real, no dependiente de
+  que ningún futuro cambio de UI se le olvide revisar el estado.
+- `cerrar`: solo transiciona `procesada → cerrada` — no-op si el período no
+  está en `procesada`.
+- `eliminar`: ahora devuelve `boolean` y es un no-op si `estado === 'cerrada'`
+  — un período cerrado es un registro histórico, nunca se borra
+  directamente. Para poder eliminarlo hay que reabrirlo primero (con lo
+  que vuelve a `en_proceso`), igual que para poder editarlo.
+- `reabrir`: nuevo guard — `if (periodo.pagada) return false`. Un período
+  ya pagado NO se puede reabrir bajo ninguna circunstancia, sin importar
+  si es el más reciente de su serie.
+- Nueva función `desmarcarPagada(id)` — el ÚNICO camino para volver a
+  habilitar `reabrir()` en un período pagado: limpia `pagada`/`fechaPago`
+  SIN cambiar `estado` (el período sigue `cerrada`, esta acción por sí sola
+  no lo reabre — son dos pasos deliberadamente separados). No revierte
+  ninguna transferencia bancaria real, es un reconocimiento explícito en
+  el sistema de que ese registro de pago ya no aplica.
+
+**UI — `nomina/page.tsx` (lista de períodos):**
+- Botón "Reabrir": si `p.pagada` es `true`, se muestra deshabilitado
+  (`disabled`, gris, `cursor-not-allowed`) con tooltip "Período ya pagado
+  — no se puede reabrir. Deshaz el pago primero en Gestión de Envíos." —
+  visible pero inerte, no oculto (mismo principio ya usado en
+  `ReportHeader` para botones bloqueados por validación).
+- Botón "Eliminar": deshabilitado con el mismo tratamiento visual cuando
+  `p.estado === 'cerrada'`, con tooltip "Un período cerrado es un registro
+  histórico — no se puede eliminar. Reábrelo primero si necesitas
+  corregirlo."
+
+**UI — `nomina/envios/page.tsx` (Gestión de Envíos):** nuevo botón
+"Deshacer Pago" (ícono `Undo2`, ámbar) junto a "Comprobantes" para
+cualquier período ya `pagada` — con una confirmación más severa que la de
+"Marcar como Pagada" (aclara explícitamente que NO revierte ninguna
+transferencia bancaria real, solo el registro en el sistema). Tras
+deshacer, el período vuelve a "Pendiente de pago" y el botón "Reabrir" en
+Cálculo de Nómina se habilita — dos pasos deliberados, nunca uno solo.
+
+Verificado en navegador con Playwright: período cerrado y marcado como
+pagado → botones "Reabrir" y "Eliminar" ambos deshabilitados
+(`disabled === true`, no solo estilo) con sus tooltips correctos; "Deshacer
+Pago" en Gestión de Envíos → el período vuelve a "Pendiente de pago"; de
+vuelta en Cálculo de Nómina, "Reabrir" ya está habilitado → al reabrirlo,
+el período vuelve a "En Proceso" correctamente. Sin errores de consola.
+`npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de
+conteo); re-ejecutada también la suite de verificación de ingreso a mitad
+de período (sección anterior) y la de la QA de 7 años, sin regresiones.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
@@ -3818,6 +3895,7 @@ completa sin regresiones.
 
 | Hash | Descripción |
 |---|---|
+| `d7d339d` | feat: ningún período cerrado se altera jamás — guard de datos + bloqueo de reabrir pagados |
 | `851ec56` | fix: ingreso a mitad de período se excluye y se paga en el siguiente a tarifa diaria legal |
 | `040d12d` | fix: prorratear salario de empleado nuevo cuando su ingreso cae a mitad de período |
 | `01202c1` | fix: QA de 7 años — 13 bugs críticos y 6 medios en Nómina, Vacaciones, Regalía, Bonificación, Reportería y Alertas |
