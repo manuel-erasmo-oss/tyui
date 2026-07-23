@@ -38,6 +38,11 @@ export interface AjusteLinea {
   descripcion: string
   valor: number
   prestamoId?: string
+  // Snapshot de Prestamo.frecuencia AL MOMENTO de precargar la cuota (solo
+  // presente cuando prestamoId también lo está — ver ajustesToParams en
+  // dominican-labor.ts). Sin este campo (ajustes de sesiones anteriores a su
+  // creación) se asume 'mensual', el comportamiento que ya existía.
+  prestamoFrecuencia?: 'mensual' | 'quincenal'
   // ─── Solo presentes cuando concepto === 'personalizado' ────────────────────
   // Snapshot del concepto del catálogo AL MOMENTO de agregar el ajuste (no una
   // referencia viva) — así, editar o desactivar el concepto después nunca

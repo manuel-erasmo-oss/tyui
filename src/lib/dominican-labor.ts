@@ -631,16 +631,27 @@ export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio
 // diasIngresoPendientes (nomina-shared.ts): se pre-dobla aquí para que
 // sobreviva esa división automática.
 //
-// Dos excepciones que NO se pre-doblan porque ya están en la escala
-// correcta por diseño:
-// - `prestamo` con `prestamoId` (cuotaBase real de Préstamos): es un monto
-//   MENSUAL que se pre-carga íntegro en AMBAS quincenas del mes al crear
-//   cada período — la división automática es justo lo que reparte la cuota
-//   mensual 50/50 entre ambas quincenas. Un ajuste `prestamo` SIN
-//   `prestamoId` (el usuario lo agregó a mano vía "+ Ajuste" para un
-//   préstamo que no está registrado en el módulo de Préstamos) es
-//   exactamente igual de ad-hoc que "Otro Desc." — el monto capturado es
-//   el de ESA quincena específica, así que SÍ se pre-dobla (bug real
+// Dos excepciones que NO se pre-doblan por el factor genérico porque tienen
+// su propia regla de escala:
+// - `prestamo` con `prestamoId` y `prestamoFrecuencia !== 'quincenal'`
+//   (cuota MENSUAL real de Préstamos, el caso más común — incluye registros
+//   sin este campo, de sesiones anteriores a su creación): se pre-carga
+//   íntegra en AMBAS quincenas del mes al crear cada período — la división
+//   automática es justo lo que reparte la cuota mensual 50/50 entre ambas.
+// - `prestamo` con `prestamoId` y `prestamoFrecuencia === 'quincenal'`
+//   (el préstamo se otorgó con descuento QUINCENAL — Préstamos permite
+//   elegir esa frecuencia por empleado): `cuotaBase` ya es el monto de UNA
+//   quincena, no de un mes — aplicarlo con la división automática lo
+//   partiría otra vez a la mitad (bug real reportado por el usuario, quien
+//   recordó que la frecuencia del descuento es configurable). Se pre-dobla
+//   ×2 SIEMPRE (sin importar el tipo del período): en un período quincenal
+//   el ×2 sobrevive la división automática y neta la cuota íntegra de esa
+//   quincena; en un período mensual (sin ninguna división automática) el ×2
+//   representa las 2 quincenas de cuota que se acumularon ese mes.
+// - `prestamo` SIN `prestamoId` (ajuste manual "+ Ajuste" para un préstamo
+//   que no está registrado en el módulo de Préstamos) es exactamente igual
+//   de ad-hoc que "Otro Desc." — el monto capturado es el de ESA quincena
+//   específica, así que SÍ se pre-dobla con el factor genérico (bug real
 //   reportado por el usuario: un descuento manual de RD$3,000 con concepto
 //   "Préstamo" para un empleado sin préstamo registrado se aplicaba como
 //   solo RD$1,500 en la quincena).
@@ -650,7 +661,7 @@ export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio
 export function ajustesToParams(ajustes: AjusteLinea[], tipo: TipoPeriodo): ParametrosNomina {
   let horasExtras35 = 0, horasExtras100 = 0, horasNocturnas = 0, bonificaciones = 0
   let comisiones = 0, sfsDependientes = 0
-  let otrosDescuentosPrestamo = 0, otrosDescuentosManual = 0
+  let otrosDescuentosPrestamoMensual = 0, otrosDescuentosPrestamoQuincenal = 0, otrosDescuentosManual = 0
   let ingresosPersonalizadosTotal = 0, ingresosPersonalizadosGravablesISR = 0, ingresosPersonalizadosCotizablesTSS = 0
 
   for (const a of ajustes) {
@@ -661,8 +672,9 @@ export function ajustesToParams(ajustes: AjusteLinea[], tipo: TipoPeriodo): Para
     if (a.concepto === 'comision')         comisiones      += a.valor
     if (a.concepto === 'dependiente_sfs')  sfsDependientes += a.valor
     if (a.concepto === 'prestamo') {
-      if (a.prestamoId) otrosDescuentosPrestamo += a.valor
-      else otrosDescuentosManual += a.valor
+      if (!a.prestamoId) otrosDescuentosManual += a.valor
+      else if (a.prestamoFrecuencia === 'quincenal') otrosDescuentosPrestamoQuincenal += a.valor
+      else otrosDescuentosPrestamoMensual += a.valor
     }
     if (a.concepto === 'otro_descuento')   otrosDescuentosManual += a.valor
     // Concepto del catálogo configurable (Configuración → Ingresos y
@@ -686,7 +698,7 @@ export function ajustesToParams(ajustes: AjusteLinea[], tipo: TipoPeriodo): Para
     bonificaciones: bonificaciones * factor,
     comisiones: comisiones * factor,
     sfsDependientes,
-    otrosDescuentos: otrosDescuentosPrestamo + otrosDescuentosManual * factor,
+    otrosDescuentos: otrosDescuentosPrestamoMensual + otrosDescuentosPrestamoQuincenal * 2 + otrosDescuentosManual * factor,
     ingresosPersonalizadosTotal: ingresosPersonalizadosTotal * factor,
     ingresosPersonalizadosGravablesISR: ingresosPersonalizadosGravablesISR * factor,
     ingresosPersonalizadosCotizablesTSS: ingresosPersonalizadosCotizablesTSS * factor,

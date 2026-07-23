@@ -603,6 +603,7 @@ export default function NominaPage() {
             descripcion: p.notas ? `${etiqueta} — ${p.notas}` : etiqueta,
             valor: p.cuotaBase,
             prestamoId: p.id,
+            prestamoFrecuencia: p.frecuencia,
           }
         })
       }
@@ -680,22 +681,48 @@ export default function NominaPage() {
       : 'Período creado · Cuotas de préstamos pre-cargadas')
   }
 
-  function handleCerrarPeriodo() {
-    if (!periodoActual) return
-    // Register actual paid amounts against each loan
-    const ajustesPorEmp = periodoActual.ajustesPorEmpleado ?? {}
+  // El valor crudo pre-cargado en el ajuste (AjusteLinea.valor = cuotaBase)
+  // no siempre coincide con lo que el empleado realmente pagó EN ESTE
+  // período específico — depende de si la frecuencia de descuento del
+  // préstamo (Préstamos permite elegir mensual o quincenal por empleado)
+  // coincide con el tipo del período que se está cerrando. Misma regla que
+  // ya aplica ajustesToParams al calcular el comprobante, ahora usada
+  // también para registrar el pago real contra el saldo del préstamo — sin
+  // esto, un préstamo mensual bajo nómina quincenal registraría la cuota
+  // completa DOS veces por mes (una por cada quincena cerrada), agotando el
+  // saldo al doble de velocidad de lo que el empleado realmente pagó.
+  function montoRealPrestamoEnPeriodo(ajuste: AjusteLinea, tipoPeriodo: TipoPeriodo): number {
+    const freq = ajuste.prestamoFrecuencia ?? 'mensual'
+    if (freq === tipoPeriodo) return ajuste.valor
+    if (freq === 'mensual' && tipoPeriodo === 'quincenal') return Math.round((ajuste.valor / 2) * 100) / 100
+    return ajuste.valor * 2 // freq === 'quincenal' && tipoPeriodo === 'mensual' — 2 quincenas acumuladas
+  }
+
+  // Registra contra cada préstamo real el monto EFECTIVAMENTE deducido en
+  // este período — compartido entre el cierre desde el detalle
+  // (handleCerrarPeriodo) y el botón de cierre rápido de la lista de
+  // períodos, para que un préstamo se pague igual sin importar desde dónde
+  // se cierre el período.
+  function registrarPagosPrestamos(periodo: PeriodoNomina) {
+    const ajustesPorEmp = periodo.ajustesPorEmpleado ?? {}
     for (const ajustes of Object.values(ajustesPorEmp)) {
       for (const ajuste of ajustes) {
-        if (ajuste.concepto === 'prestamo' && ajuste.prestamoId && ajuste.valor > 0) {
-          registrarPago(ajuste.prestamoId, {
-            periodoId: periodoActual.id,
-            fecha: new Date().toISOString(),
-            montoPagado: ajuste.valor,
-            esLiquidacion: false,
-          })
-        }
+        if (ajuste.concepto !== 'prestamo' || !ajuste.prestamoId || ajuste.valor <= 0) continue
+        const monto = montoRealPrestamoEnPeriodo(ajuste, periodo.tipo)
+        if (monto <= 0) continue
+        registrarPago(ajuste.prestamoId, {
+          periodoId: periodo.id,
+          fecha: new Date().toISOString(),
+          montoPagado: monto,
+          esLiquidacion: false,
+        })
       }
     }
+  }
+
+  function handleCerrarPeriodo() {
+    if (!periodoActual) return
+    registrarPagosPrestamos(periodoActual)
     cerrar(periodoActual.id)
     setToast('Período cerrado · Pagos de préstamos registrados')
   }
@@ -1316,7 +1343,7 @@ export default function NominaPage() {
                             </button>
                             {p.estado === 'procesada' && (
                               <button
-                                onClick={e => { e.stopPropagation(); cerrar(p.id) }}
+                                onClick={e => { e.stopPropagation(); registrarPagosPrestamos(p); cerrar(p.id) }}
                                 title="Cerrar período"
                                 className="rounded-lg border border-zinc-200 dark:border-[#252840] p-1.5 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-[#252840] hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
                               >
