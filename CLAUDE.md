@@ -4160,6 +4160,54 @@ mitad de período, corte de cierre 15/30/31, cierre anticipado, y los 5
 escenarios de la QA de 7 años) sin ningún hallazgo nuevo. `npx tsc --noEmit`
 y `npm run build` limpios (19 rutas, sin cambio de conteo).
 
+## Fix — ajuste manual con concepto "Préstamo" (sin registro real) también se partía a la mitad
+
+Reporte de seguimiento del usuario, mismo día del fix anterior: "acabo de
+agregar de forma manual un descuento de préstamo a un empleado, ese
+préstamo no está registrado en el módulo de préstamo pero yo manualmente
+puse un descuento de 3000 pesos a un empleado x y en la ficha del cálculo
+solo descontó 1500." Mismo bug de fondo (halving quincenal) resurgiendo en
+un caso que el fix anterior había excluido a propósito por error de
+alcance.
+
+**Causa raíz**: el fix anterior (`a5206bc`) dejó el concepto `prestamo`
+deliberadamente FUERA de la pre-duplicación, asumiendo que todo ajuste con
+`concepto === 'prestamo'` viene del mecanismo automático de precarga de
+cuotas (`handleCrearPeriodo`, que sí es un monto mensual repartido 50/50 a
+propósito). Pero el formulario manual "+ Ajuste" también permite elegir
+"Préstamo" como concepto para un empleado SIN ningún préstamo registrado en
+el módulo de Préstamos — un uso legítimo para descuentos de préstamos
+informales/externos al sistema. Ese ajuste manual es exactamente tan
+ad-hoc y específico de esa quincena como "Otro Desc.", pero compartía el
+mismo `concepto` que la precarga automática, así que `ajustesToParams` no
+podía distinguir los dos casos y trataba ambos como "ya en escala mensual"
+(sin doblar).
+
+**La distinción real ya existía en el modelo de datos**: `AjusteLinea.prestamoId`
+(opcional) solo se estampa cuando el ajuste proviene de la precarga
+automática de un préstamo real (`handleCrearPeriodo`, línea con
+`prestamoId: p.id`) — el formulario manual `handleAgregarAjuste` nunca lo
+asigna. `ajustesToParams` ahora usa esa presencia/ausencia para decidir:
+con `prestamoId` → cuota real, mantiene el comportamiento sin doblar
+(halving automático hace su trabajo, 50/50 entre ambas quincenas); sin
+`prestamoId` → ajuste manual ad-hoc, se suma al mismo bucket que "Otro
+Desc." (`otrosDescuentosManual`), que sí se pre-dobla para sobrevivir la
+división automática.
+
+Verificado en navegador con Playwright, reproduciendo exacto el reporte del
+usuario (empresa quincenal, salarioBase RD$40,000, 1ª quincena, sin ningún
+préstamo registrado en el módulo): ajuste manual "Préstamo" de RD$3,000 →
+"Otros Descuentos (RD$3,000.00)" completo en el comprobante, S. Neto exacto
+RD$15,818.00 (no RD$17,318.00 que hubiera dado el bug de RD$1,500).
+Confirmado sin regresión en el caso real de préstamo registrado (con
+`prestamoId`): cuota RD$1,000/mes sigue mostrando exacto RD$500.00/quincena
+vía el halving automático correcto. Re-ejecutada la suite completa de
+regresión (bono/otro_descuento del fix anterior, seguridad de períodos
+cerrados, días pendientes por ingreso a mitad de período, corte de cierre
+15/30/31, cierre anticipado, y los 5 escenarios de la QA de 7 años) sin
+ningún hallazgo nuevo. `npx tsc --noEmit` y `npm run build` limpios (19
+rutas, sin cambio de conteo).
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
