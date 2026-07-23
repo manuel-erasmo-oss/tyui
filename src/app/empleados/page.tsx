@@ -228,7 +228,7 @@ function calcNominaConAjustes(
   tipo: TipoPeriodo,
   quincena: 1 | 2,
 ): ResultadoNomina {
-  const params = ajustesToParams(ajustes)
+  const params = ajustesToParams(ajustes, tipo)
   return tipo === 'quincenal'
     ? calcularNominaQuincenal(empleado, quincena, params)
     : calcularNomina(empleado, params)

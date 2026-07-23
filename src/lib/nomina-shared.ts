@@ -330,7 +330,7 @@ export function calcularConAjustes(
   diasIngresoPendientes?: number,
 ): ResultadoNomina {
   const params: ParametrosNomina = {
-    ...ajustesToParams(ajustes),
+    ...ajustesToParams(ajustes, tipo),
     ...(diasOverride ? { diasTrabajados: diasOverride.diasTrabajados, diasLaborablesMes: diasOverride.diasLaborablesMes } : {}),
     ...(vacacionesGoce ? { vacacionesGoce } : {}),
     ...(vacacionesVendidas ? { vacacionesVendidas } : {}),

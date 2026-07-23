@@ -619,19 +619,41 @@ export function calcularAsistenciaEconomica(salarioMensual: number, anosServicio
 }
 
 // ─── Helpers de agregación de períodos (compartidos entre Reportería y Liquidación) ─
-export function ajustesToParams(ajustes: AjusteLinea[]): ParametrosNomina {
+// `tipo` decide si hay que PRE-DOBLAR los ajustes manuales antes de que
+// calcularNominaQuincenal divida TODO el bruto/descuentos entre 2 (ver
+// CLAUDE.md "Quincenal"). Bug real encontrado por el usuario: un ajuste de
+// bono/otro ingreso/comisión/horas extra/otro descuento de RD$1,000
+// agregado a un período QUINCENAL aparecía como solo RD$500 — porque el
+// usuario captura ese monto como EXACTAMENTE lo que corresponde a ESA
+// quincena específica, nunca como un total mensual, pero el motor lo
+// trataba como si fuera mensual y lo partía a la mitad sin que nada lo
+// compensara. Mismo mecanismo ya usado para vacacionesGoce/vacacionesVendidas/
+// diasIngresoPendientes (nomina-shared.ts): se pre-dobla aquí para que
+// sobreviva esa división automática.
+//
+// Dos excepciones que NO se pre-doblan porque ya están en la escala
+// correcta por diseño:
+// - `prestamo` (cuotaBase): es un monto MENSUAL que se pre-carga íntegro en
+//   AMBAS quincenas del mes al crear cada período — la división automática
+//   es justo lo que reparte la cuota mensual 50/50 entre ambas quincenas.
+// - `dependiente_sfs`: ya se pre-divide en `prorratearMontoFijo` al crear
+//   el período (RD$1,919.78 → RD$959.89/quincena), así que ajustesToParams
+//   ya recibe el monto correcto por quincena, sin nada que doblar.
+export function ajustesToParams(ajustes: AjusteLinea[], tipo: TipoPeriodo): ParametrosNomina {
   let horasExtras35 = 0, horasExtras100 = 0, horasNocturnas = 0, bonificaciones = 0
-  let comisiones = 0, sfsDependientes = 0, otrosDescuentos = 0
+  let comisiones = 0, sfsDependientes = 0
+  let otrosDescuentosPrestamo = 0, otrosDescuentosManual = 0
   let ingresosPersonalizadosTotal = 0, ingresosPersonalizadosGravablesISR = 0, ingresosPersonalizadosCotizablesTSS = 0
 
   for (const a of ajustes) {
-    if (a.concepto === 'horas_extras_35')                             horasExtras35   += a.valor
-    if (a.concepto === 'horas_extras_100')                            horasExtras100  += a.valor
-    if (a.concepto === 'recargo_nocturno')                            horasNocturnas  += a.valor
-    if (a.concepto === 'bono' || a.concepto === 'otro_ingreso')       bonificaciones  += a.valor
-    if (a.concepto === 'comision')                                    comisiones      += a.valor
-    if (a.concepto === 'dependiente_sfs')                             sfsDependientes += a.valor
-    if (a.concepto === 'prestamo' || a.concepto === 'otro_descuento') otrosDescuentos += a.valor
+    if (a.concepto === 'horas_extras_35')  horasExtras35   += a.valor
+    if (a.concepto === 'horas_extras_100') horasExtras100  += a.valor
+    if (a.concepto === 'recargo_nocturno') horasNocturnas  += a.valor
+    if (a.concepto === 'bono' || a.concepto === 'otro_ingreso') bonificaciones += a.valor
+    if (a.concepto === 'comision')         comisiones      += a.valor
+    if (a.concepto === 'dependiente_sfs')  sfsDependientes += a.valor
+    if (a.concepto === 'prestamo')         otrosDescuentosPrestamo += a.valor
+    if (a.concepto === 'otro_descuento')   otrosDescuentosManual += a.valor
     // Concepto del catálogo configurable (Configuración → Ingresos y
     // Deducciones). Los ingresos personalizados siempre suman a totalBruto;
     // solo la porción con el flag correspondiente activo entra a la base de
@@ -642,12 +664,21 @@ export function ajustesToParams(ajustes: AjusteLinea[]): ParametrosNomina {
       if (a.afectaISR) ingresosPersonalizadosGravablesISR += a.valor
       if (a.afectaTSS) ingresosPersonalizadosCotizablesTSS += a.valor
     }
-    if (a.concepto === 'personalizado' && a.tipo === 'deduccion') otrosDescuentos += a.valor
+    if (a.concepto === 'personalizado' && a.tipo === 'deduccion') otrosDescuentosManual += a.valor
   }
 
+  const factor = tipo === 'quincenal' ? 2 : 1
   return {
-    horasExtras35, horasExtras100, horasNocturnas, bonificaciones, comisiones, sfsDependientes, otrosDescuentos,
-    ingresosPersonalizadosTotal, ingresosPersonalizadosGravablesISR, ingresosPersonalizadosCotizablesTSS,
+    horasExtras35: horasExtras35 * factor,
+    horasExtras100: horasExtras100 * factor,
+    horasNocturnas: horasNocturnas * factor,
+    bonificaciones: bonificaciones * factor,
+    comisiones: comisiones * factor,
+    sfsDependientes,
+    otrosDescuentos: otrosDescuentosPrestamo + otrosDescuentosManual * factor,
+    ingresosPersonalizadosTotal: ingresosPersonalizadosTotal * factor,
+    ingresosPersonalizadosGravablesISR: ingresosPersonalizadosGravablesISR * factor,
+    ingresosPersonalizadosCotizablesTSS: ingresosPersonalizadosCotizablesTSS * factor,
   }
 }
 
@@ -702,7 +733,7 @@ function resultadoVacio(empleadoId: string): ResultadoNomina {
 
 export function calcularConPeriodo(emp: Empleado, ajustes: AjusteLinea[], periodo: PeriodoNomina): ResultadoNomina {
   if (periodo.tipo === 'regalia' || periodo.tipo === 'bonificacion') return resultadoVacio(emp.id)
-  const params = ajustesToParams(ajustes)
+  const params = ajustesToParams(ajustes, periodo.tipo)
   return periodo.tipo === 'quincenal'
     ? calcularNominaQuincenal(emp, periodo.quincena ?? 1, params)
     : calcularNomina(emp, params)
