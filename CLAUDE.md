@@ -4396,6 +4396,138 @@ mensual/quincenal, y los 5 escenarios de la QA de 7 años) sin ningún
 hallazgo nuevo. `npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin
 cambio de conteo).
 
+## Cierre de 3 brechas del backlog — auditoría pre-cierre, suspensión y Retribuciones Complementarias
+
+Pedido explícito del usuario: "Vamos con la auditoría pre-cierre, suspensión
+del contrato y retribuciones complementarias" — 3 brechas que quedaban
+documentadas como "no implementado todavía" en secciones ya cerradas del
+backlog. Dado el tamaño y bajo solapamiento entre las 3, se ejecutaron en
+paralelo como 3 agentes en worktrees aislados (mismo patrón ya usado varias
+veces en este repo), cada uno implementando + verificando + commiteando en
+su propia rama sin pushear — la fusión, verificación del conjunto y
+documentación se hicieron centralizadas al final.
+
+Dos decisiones de diseño reales se confirmaron con el usuario ANTES de
+implementar (ambas con la opción recomendada):
+
+### 1. Auditoría pre-cierre — detecta cambios de cuenta bancaria
+
+Nuevo snapshot `PeriodoNomina.cuentasBancariasPorEmpleado` (paralelo a
+`resultadosPorEmpleado`, mismo criterio de inmutabilidad), capturado en el
+mismo instante que `congelarYCalcular` congela el resultado de cada
+empleado (`snapshotCuentas()` en `nomina/page.tsx`, pasado como tercer
+argumento de `marcarProcesados()`). La auditoría pre-cierre compara ese
+snapshot histórico del período anterior contra el `banco`/`numeroCuenta`
+ACTUAL del empleado — solo alerta si AMBOS existen (sin falsos positivos
+con períodos anteriores a este campo o empleados sin cuenta configurada).
+Nuevo badge ámbar con ícono de banco: "Cambió de cuenta bancaria: {banco
+antes} ...{últimos 4 dígitos} → {banco ahora} ...{últimos 4 dígitos}".
+`reabrir()` limpia el snapshot junto con `resultadosPorEmpleado`, ya que
+ambos quedan obsoletos al desposteo.
+
+Verificado en navegador: empleado con Banco Popular ...3334, período de
+julio cerrado → cambia a BHD León ...7778 → al procesar agosto, la
+auditoría pre-cierre muestra exacto "Ana Perez — Cambió de cuenta
+bancaria: Banco Popular ...3334 → BHD León ...7778"; un empleado control
+sin cambio de banco no dispara la alerta.
+
+### 2. Suspensión de contrato — pausa la acumulación de Regalía y vacaciones
+
+**Decisión confirmada con el usuario**: durante los meses suspendidos, la
+acumulación de Regalía Pascual Y de vacaciones se PAUSA (no se devenga
+salario, no se genera el derecho) — pero la antigüedad legal que gobierna
+Cesantía/Preaviso/Asistencia Económica sigue siendo continua, sin tocar
+(`getAnosServicio` no cambió).
+
+Dos funciones nuevas en `dominican-labor.ts`: `mesesSuspendidosEnAnio(empleado,
+anio)` (solapamiento en meses fraccionales entre cada intervalo de
+`historialSuspensiones` y el año calendario dado) y `aniosSuspendidosTotal(empleado)`
+(todo el tiempo suspendido histórico, en años). La suspensión VIGENTE
+(mientras `suspendido === true`) ya vive como el último elemento de
+`historialSuspensiones` sin `fechaFin` — no hay doble conteo.
+
+- **Regalía Pascual** (`regalia-pascual/page.tsx`): `mesesAcumulados` resta
+  `mesesSuspendidosEnAnio(e, anioActual)` (piso en 0).
+- **Vacaciones** (`vacaciones/page.tsx` y `liquidacion/page.tsx`, los dos
+  call sites de `calcularDiasVacacionesAcumulados`): se pasa
+  `anosServicioEfectivosVacaciones = max(0, getAnosServicio(...) -
+  aniosSuspendidosTotal(e))` en vez de la antigüedad real — desplaza TODO
+  el reloj de acumulación de vacaciones (incluido cuándo se alcanza el
+  tramo de 18 días/año) por el tiempo total suspendido. Es una
+  interpretación específica para vacaciones, distinta de la antigüedad
+  legal que gobierna cesantía/preaviso (que sigue intacta) — documentada
+  así explícitamente en el código para que una sesión futura no la
+  confunda con un descuido.
+- La regalía proporcional en Liquidación también se corrigió con el mismo
+  mecanismo (hallazgo del propio agente, no estaba en el pedido original,
+  pero es la misma brecha exacta aplicada a un tercer lugar).
+
+Verificado en navegador (horario Santo Domingo): empleado con 1 año 11
+meses de antigüedad, suspendido 3 meses completos (ene-abr 2026) ya
+reactivado, vs. un control idéntico sin suspensión — Regalía: 7/12 meses
+(RD$35,000.00) vs. 10/12 (RD$50,000.00), exactamente 3 meses menos;
+Vacaciones: 24.53 días vs. 27.98 días; antigüedad mostrada idéntica en
+ambos ("1 año y 11 meses"), confirmando que la antigüedad legal no se tocó.
+
+### 3. Retribuciones Complementarias — diferencial de préstamos (Art. 318) + desglose vivienda/vehículo
+
+**Decisión confirmada con el usuario**: sí implementar ambas, incluida la
+tasa de referencia configurable (el sistema no tiene forma de consultar
+una tasa de mercado real sin backend).
+
+**A — Diferencial de interés de préstamos**: nuevo campo
+`Empresa.tasaInteresReferenciaPrestamos?: number` (% anual), configurable
+en Configuración → Reglas de Negocio (slider, mismo patrón que los
+umbrales ya existentes) con nota explícita de que es una tasa manual, sin
+fuente de mercado real. `calcularDiferencialesInteresPrestamos()` (nuevo,
+`dominican-labor.ts`) recorre los préstamos activos (excluye `tipo:
+'avance'` — un adelanto de un solo período, no una línea de crédito
+sostenida), anualiza la tasa MENSUAL real de cada préstamo (`×12` — en
+Cielo Cloud `Prestamo.tasaInteres` siempre es mensual) y, si es menor a la
+referencia, calcula el diferencial mensual no cobrado =
+`saldoPendiente × (tasaReferenciaAnual − tasaAnualPrestamo) / 100 / 12`.
+En `/retribuciones-complementarias`, un panel "Préstamos a tasa
+preferencial (Art. 318)" con botón "Detectar diferenciales" muestra una
+vista previa por préstamo y permite agregar cada uno (o todos) como
+`RetribucionComplementaria` con `prestamoId` seteado (nuevo campo,
+evita duplicar la misma línea el mismo mes) y badge "Art. 318". Sin tasa
+de referencia configurada, el panel lo dice explícitamente en vez de
+sugerir con un default arbitrario. Al no existir snapshot histórico de
+saldo de préstamo por mes, la detección para meses pasados usa el saldo
+pendiente ACTUAL — limitación documentada en la propia UI.
+
+**B — Desglose detallado de Vivienda y Vehículo**: `RetribucionComplementaria`
+gana campos opcionales — Vivienda: `viviendaDepreciacionAlquiler`/
+`viviendaMantenimiento`/`viviendaServicios` (su suma reemplaza el monto
+único); Vehículo: `vehiculoValorMensual`/`vehiculoEsEmpleadoDeOficina`/
+`vehiculoPropiedadDe`/`vehiculoPorcentajeAplicado`. La matriz de % de uso
+personal presunto (40% si el vehículo es de la empresa y el empleado no es
+de oficina, 20% en cualquier otro caso) es **interpretación propia de
+Cielo Cloud, no la tabla oficial completa de la Guía DGII** — rotulado así
+explícitamente en una nota siempre visible en el formulario, con el %
+editable a mano. Regla especial implementada: cuando un mismo empleado
+tiene varias líneas de "Vehículo de la empresa" el mismo mes, solo la de
+`vehiculoValorMensual` MÁS BAJO recibe la reducción proporcional — las
+demás gravan al 100%, recalculado dinámicamente cada vez que cambian las
+líneas de ese empleado/mes. El cálculo de la base gravable del Impuesto
+Sustitutivo (27%, `TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES`, sin cambios)
+se extrajo a una función compartida, usada también por el bloque IR-17 de
+Cumplimiento Fiscal (Reportería) y por la alerta de vencimiento — los tres
+lugares ahora muestran siempre el mismo número.
+
+Verificado en navegador: diferencial de préstamo con tasa 0.4167%
+mensual (5.0004% anual) vs. referencia 15% anual, saldo RD$60,000 →
+diferencial exacto RD$499.98/mes; línea de Vivienda con RD$15,000 +
+RD$2,000 + RD$1,000 → total exacto RD$18,000.00, impuesto RD$4,860.00;
+2 vehículos de empresa del mismo empleado/mes (RD$20,000 y RD$12,000,
+empleado no de oficina) → el de RD$12,000 (más barato) recibe el 40%
+(RD$4,800 gravable), el de RD$20,000 grava al 100% (RD$20,000 gravable),
+confirmado que se recalcula dinámicamente al agregar la segunda línea.
+
+`npx tsc --noEmit` y `npm run build` limpios (19 rutas, sin cambio de
+conteo) tras fusionar los 3 worktrees sobre la rama principal. Sin
+errores de consola en ninguno de los escenarios verificados.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
