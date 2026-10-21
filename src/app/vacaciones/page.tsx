@@ -14,6 +14,7 @@ import {
   calcularNomina,
   contarDiasLaborables,
   calcularDiasVacacionesAcumulados,
+  aniosSuspendidosTotal,
   DIAS_VACACIONES_HASTA_5_ANOS,
   DIAS_VACACIONES_MAS_5_ANOS,
 } from '@/lib/dominican-labor'
@@ -43,12 +44,16 @@ export default function VacacionesPage() {
 
   const filas = empleadosEnNomina.map(e => {
     const anos            = getAnosServicio(e.fechaIngreso)
-    const diasAnuales     = anos >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
+    // Reloj de vacaciones ≠ antigüedad legal: el tiempo suspendido no genera
+    // derecho a vacaciones (ni monto, ni cuándo se alcanza la tasa de 18
+    // días), pero sí cuenta para cesantía/preaviso, que siguen usando `anos`.
+    const anosServicioEfectivosVacaciones = Math.max(0, anos - aniosSuspendidosTotal(e))
+    const diasAnuales     = anosServicioEfectivosVacaciones >= 5 ? DIAS_VACACIONES_MAS_5_ANOS : DIAS_VACACIONES_HASTA_5_ANOS
     // Compone TODOS los años completos de servicio (a la tasa vigente en cada
     // uno) + la fracción del año en curso — no solo el ciclo actual, que
     // descartaría años completos nunca disfrutados. + saldo inicial:
     // empleados con historial previo a Cielo Cloud (migración).
-    const diasAcumulados  = calcularDiasVacacionesAcumulados(anos, e.saldoVacacionesInicial ?? 0)
+    const diasAcumulados  = calcularDiasVacacionesAcumulados(anosServicioEfectivosVacaciones, e.saldoVacacionesInicial ?? 0)
     const tomados         = diasTomados(e.id)
     const diasDisponibles = Math.max(0, diasAcumulados - tomados)
     const valorDiario     = e.salarioBase / getDivisorSalarioDiario(e)
