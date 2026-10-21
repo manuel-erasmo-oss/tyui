@@ -4,13 +4,20 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import type { RetribucionComplementaria } from '@/types'
 import { useUserScopedKey } from './user-scoped-key'
 
+// Campos opcionales de desglose (vivienda/vehículo) y de origen (préstamo,
+// Art. 318) — todo lo de RetribucionComplementaria que no es el núcleo.
+export type RetribucionExtra = Partial<Omit<
+  RetribucionComplementaria,
+  'id' | 'mes' | 'anio' | 'concepto' | 'valorMensual' | 'empleadoId' | 'notas' | 'declarada' | 'fechaDeclaracion'
+>>
+
 const KEY = 'cielo-retribuciones-complementarias'
 
 interface RetribucionesCtx {
   retribuciones: RetribucionComplementaria[]
   agregar: (
     mes: number, anio: number, concepto: string, valorMensual: number,
-    empleadoId?: string, notas?: string,
+    empleadoId?: string, notas?: string, extra?: RetribucionExtra,
   ) => RetribucionComplementaria
   eliminar: (id: string) => void
   marcarDeclarado: (mes: number, anio: number, fecha: string) => void
@@ -45,11 +52,12 @@ export function RetribucionesProvider({ children }: { children: ReactNode }) {
 
   function agregar(
     mes: number, anio: number, concepto: string, valorMensual: number,
-    empleadoId?: string, notas?: string,
+    empleadoId?: string, notas?: string, extra?: RetribucionExtra,
   ): RetribucionComplementaria {
     const nueva: RetribucionComplementaria = {
       id: `retribucion-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       mes, anio, concepto, valorMensual, empleadoId, notas,
+      ...extra,
       declarada: false,
     }
     setRetribuciones(prev => {

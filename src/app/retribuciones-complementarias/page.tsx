@@ -8,11 +8,20 @@ import { Toast } from '@/components/ui/Toast'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { useRetribuciones } from '@/lib/retribuciones-context'
-import { TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES, fechaLimiteIR17 } from '@/lib/dominican-labor'
-import { formatRD, formatDate, fullName } from '@/lib/utils'
+import { usePrestamos } from '@/lib/prestamos-context'
+import {
+  TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES, fechaLimiteIR17,
+  CONCEPTO_RETRIB_VEHICULO, CONCEPTO_RETRIB_VIVIENDA, CONCEPTO_RETRIB_DIFERENCIAL_INTERES,
+  porcentajeUsoPersonalVehiculoSugerido, resolverBaseGravableRetribuciones,
+  calcularDiferencialesInteresPrestamos,
+} from '@/lib/dominican-labor'
+import { formatRD, formatDate, fullName, parseFechaLocal, hoyLocalISO } from '@/lib/utils'
+import type { RetribucionComplementaria } from '@/types'
+import Link from 'next/link'
 import {
   Landmark, Percent, CalendarClock, Plus, Trash2, Info, Download,
   ChevronLeft, ChevronRight, CheckCircle2, Undo2, History, Users, FileDown,
+  HandCoins,
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -30,12 +39,35 @@ const MESES = [
 ]
 
 // Categorías genéricas de beneficios en especie más comunes en la práctica dominicana
+// (El "Diferencial de Interés (Art. 318)" no aparece aquí: solo se genera
+// desde la detección automática de préstamos, nunca a mano.)
 const CATEGORIAS_RETRIBUCION = [
-  'Vehículo de la empresa',
-  'Vivienda',
+  CONCEPTO_RETRIB_VEHICULO,
+  CONCEPTO_RETRIB_VIVIENDA,
   'Colegios / Educación',
   'Otros beneficios en especie',
 ] as const
+
+const fmtTasa = (t: number) => t.toLocaleString('es-DO', { maximumFractionDigits: 4 })
+
+const num = (v: string) =>{ const n = parseFloat(v); return Number.isFinite(n) && n > 0 ? n : 0 }
+
+// Texto corto del desglose de una línea — compartido entre tabla, Excel y PDF.
+function textoDesglose(l: RetribucionComplementaria, info?: { reduccionVehiculo: boolean; excedenteVehiculo: boolean }): string {
+  if (l.prestamoId) return 'Diferencial de interés de préstamo (Art. 318)'
+  if (l.concepto === CONCEPTO_RETRIB_VEHICULO && typeof l.vehiculoValorMensual === 'number') {
+    const prop = l.vehiculoPropiedadDe === 'empleado' ? 'del empleado' : 'de la empresa'
+    const ofi = l.vehiculoEsEmpleadoDeOficina ? 'empleado de oficina' : 'empleado no de oficina'
+    if (info?.excedenteVehiculo) {
+      return `Valor ${formatRD(l.vehiculoValorMensual)} × 100% — vehículo adicional (solo el menos costoso recibe el %)`
+    }
+    return `Valor ${formatRD(l.vehiculoValorMensual)} × ${l.vehiculoPorcentajeAplicado ?? '—'}% uso personal · vehículo ${prop}, ${ofi}`
+  }
+  if (l.viviendaDepreciacionAlquiler != null || l.viviendaMantenimiento != null || l.viviendaServicios != null) {
+    return `Depreciación/alquiler ${formatRD(l.viviendaDepreciacionAlquiler ?? 0)} + mantenimiento ${formatRD(l.viviendaMantenimiento ?? 0)} + servicios ${formatRD(l.viviendaServicios ?? 0)}`
+  }
+  return ''
+}
 
 const INPUT_CLASS =
   'w-full rounded-lg border border-zinc-200 dark:border-[#252840] bg-zinc-50 dark:bg-[#1a1d2e] px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 tabular-nums focus:border-[#1B2980] dark:focus:border-indigo-500 focus:outline-none'
@@ -46,6 +78,7 @@ export default function RetribucionesComplementariasPage() {
   const { empleadosActivos, empleados } = useEmpleados()
   const { empresa } = useEmpresa()
   const { retribuciones, agregar, eliminar, marcarDeclarado, desmarcarDeclarado } = useRetribuciones()
+  const { prestamos } = usePrestamos()
 
   const [mesSel, setMesSel] = useState(hoy.getMonth() + 1)
   const [anioSel, setAnioSel] = useState(hoy.getFullYear())
@@ -53,7 +86,17 @@ export default function RetribucionesComplementariasPage() {
   const [empleadoId, setEmpleadoId] = useState<string>('')
   const [concepto, setConcepto] = useState<string>(CATEGORIAS_RETRIBUCION[0])
   const [valorMensual, setValorMensual] = useState<string>('')
+  // Desglose de Vivienda
+  const [vivDep, setVivDep] = useState('')
+  const [vivMant, setVivMant] = useState('')
+  const [vivServ, setVivServ] = useState('')
+  // Desglose de Vehículo
+  const [vehValor, setVehValor] = useState('')
+  const [vehOficina, setVehOficina] = useState(false)
+  const [vehPropiedad, setVehPropiedad] = useState<'empresa' | 'empleado'>('empresa')
+  const [vehPct, setVehPct] = useState(String(porcentajeUsoPersonalVehiculoSugerido(false, 'empresa')))
   const [toast, setToast] = useState<string | null>(null)
+  const [mostrarDetector, setMostrarDetector] = useState(false)
 
   const empMap = useMemo(() => Object.fromEntries(empleados.map(e => [e.id, e])), [empleados])
 
@@ -66,12 +109,100 @@ export default function RetribucionesComplementariasPage() {
     setAnioSel(a)
   }
 
+  const esVivienda = concepto === CONCEPTO_RETRIB_VIVIENDA
+  const esVehiculo = concepto === CONCEPTO_RETRIB_VEHICULO
+  const vehPctSugerido = porcentajeUsoPersonalVehiculoSugerido(vehOficina, vehPropiedad)
+
+  // Al cambiar los factores de la matriz se re-sugiere el %; el usuario puede
+  // sobrescribirlo a mano después (queda guardado como vehiculoPorcentajeAplicado).
+  function cambiarFactoresVehiculo(oficina: boolean, propiedad: 'empresa' | 'empleado') {
+    setVehOficina(oficina)
+    setVehPropiedad(propiedad)
+    setVehPct(String(porcentajeUsoPersonalVehiculoSugerido(oficina, propiedad)))
+  }
+
+  const totalVivienda = num(vivDep) + num(vivMant) + num(vivServ)
+  const vehPctNum = Math.min(100, Math.max(0, parseFloat(vehPct) || 0))
+
+  // Vista previa del vehículo con la regla del menos costoso aplicada contra
+  // los vehículos ya registrados de ese mismo empleado/mes.
+  const previewVehiculo = useMemo(() => {
+    if (!esVehiculo || num(vehValor) <= 0) return null
+    const hipotetica: RetribucionComplementaria = {
+      id: '~preview', mes: mesSel, anio: anioSel, concepto: CONCEPTO_RETRIB_VEHICULO, valorMensual: 0,
+      empleadoId: empleadoId || undefined, vehiculoValorMensual: num(vehValor),
+      vehiculoEsEmpleadoDeOficina: vehOficina, vehiculoPropiedadDe: vehPropiedad, vehiculoPorcentajeAplicado: vehPctNum,
+    }
+    const delMes = retribuciones.filter(r => r.mes === mesSel && r.anio === anioSel)
+    const resueltas = resolverBaseGravableRetribuciones([...delMes, hipotetica])
+    const otrosVehiculosEmpresa = empleadoId && vehPropiedad === 'empresa'
+      ? delMes.filter(r => r.empleadoId === empleadoId && r.concepto === CONCEPTO_RETRIB_VEHICULO
+          && typeof r.vehiculoValorMensual === 'number' && r.vehiculoPropiedadDe === 'empresa').length
+      : 0
+    return { ...resueltas.get('~preview')!, otrosVehiculosEmpresa }
+  }, [esVehiculo, vehValor, vehOficina, vehPropiedad, vehPctNum, empleadoId, mesSel, anioSel, retribuciones])
+
+  const puedeAgregar = esVivienda ? totalVivienda > 0 : esVehiculo ? num(vehValor) > 0 : num(valorMensual) > 0
+
+  function limpiarFormulario() {
+    setValorMensual(''); setVivDep(''); setVivMant(''); setVivServ(''); setVehValor('')
+  }
+
   function handleAgregar(e: React.FormEvent) {
     e.preventDefault()
-    const valor = parseFloat(valorMensual) || 0
-    if (valor <= 0) return
-    agregar(mesSel, anioSel, concepto, valor, empleadoId || undefined)
-    setValorMensual('')
+    if (!puedeAgregar) return
+    const emp = empleadoId || undefined
+    if (esVivienda) {
+      agregar(mesSel, anioSel, concepto, totalVivienda, emp, undefined, {
+        viviendaDepreciacionAlquiler: num(vivDep),
+        viviendaMantenimiento: num(vivMant),
+        viviendaServicios: num(vivServ),
+      })
+    } else if (esVehiculo) {
+      // valorMensual guardado = base al momento de crear (referencia); la base
+      // efectiva siempre se re-resuelve con la regla del vehículo menos costoso.
+      agregar(mesSel, anioSel, concepto, previewVehiculo?.base ?? 0, emp, undefined, {
+        vehiculoValorMensual: num(vehValor),
+        vehiculoEsEmpleadoDeOficina: vehOficina,
+        vehiculoPropiedadDe: vehPropiedad,
+        vehiculoPorcentajeAplicado: vehPctNum,
+      })
+    } else {
+      agregar(mesSel, anioSel, concepto, num(valorMensual), emp)
+    }
+    limpiarFormulario()
+  }
+
+  // ── Diferenciales de interés de préstamos (Art. 318) ──────────────────────
+  const tasaReferencia = empresa.tasaInteresReferenciaPrestamos
+  const diferenciales = useMemo(() => {
+    // Solo préstamos ya otorgados al cierre del mes en vista. Usa el saldo
+    // pendiente ACTUAL (no hay snapshot del saldo de cada mes histórico).
+    const finMes = new Date(anioSel, mesSel, 0)
+    const vigentes = prestamos.filter(p => !p.fechaOtorgamiento || parseFechaLocal(p.fechaOtorgamiento) <= finMes)
+    return calcularDiferencialesInteresPrestamos(vigentes, tasaReferencia)
+  }, [prestamos, tasaReferencia, mesSel, anioSel])
+
+  const prestamosYaAgregados = useMemo(
+    () => new Set(retribuciones.filter(r => r.mes === mesSel && r.anio === anioSel && r.prestamoId).map(r => r.prestamoId!)),
+    [retribuciones, mesSel, anioSel]
+  )
+  const diferencialesPendientes = diferenciales.filter(d => !prestamosYaAgregados.has(d.prestamoId))
+
+  function agregarDiferencial(d: (typeof diferenciales)[number]) {
+    if (prestamosYaAgregados.has(d.prestamoId)) return
+    agregar(
+      mesSel, anioSel, CONCEPTO_RETRIB_DIFERENCIAL_INTERES, d.diferencialMensual, d.empleadoId,
+      `Préstamo ${d.prestamoId} — saldo ${formatRD(d.saldoPendiente)} a ${fmtTasa(d.tasaMensualPrestamo)}% mensual (${fmtTasa(d.tasaAnualPrestamo)}% anual) vs. referencia ${fmtTasa(d.tasaReferenciaAnual)}% anual`,
+      { prestamoId: d.prestamoId },
+    )
+  }
+
+  function agregarTodosDiferenciales() {
+    diferencialesPendientes.forEach(agregarDiferencial)
+    if (diferencialesPendientes.length > 0) {
+      setToast(`${diferencialesPendientes.length} diferencial(es) de interés agregado(s) — ${MESES[mesSel - 1]} ${anioSel}`)
+    }
   }
 
   function handleEliminar(id: string) {
@@ -83,7 +214,13 @@ export default function RetribucionesComplementariasPage() {
     [retribuciones, mesSel, anioSel]
   )
 
-  const totalMensual = lineasDelMes.reduce((s, l) => s + l.valorMensual, 0)
+  // Base gravable efectiva de TODAS las líneas (desglose vivienda/vehículo +
+  // regla del vehículo menos costoso) — la regla agrupa por empleado/mes, así
+  // que resolver sobre el conjunto completo da el mismo resultado por mes.
+  const bases = useMemo(() => resolverBaseGravableRetribuciones(retribuciones), [retribuciones])
+  const baseDe = (l: RetribucionComplementaria) => bases.get(l.id)?.base ?? l.valorMensual
+
+  const totalMensual = lineasDelMes.reduce((s, l) => s + baseDe(l), 0)
   const impuestoMensual = totalMensual * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES
   const impuestoAnualizado = impuestoMensual * 12
 
@@ -93,7 +230,7 @@ export default function RetribucionesComplementariasPage() {
   const diasRestantes = Math.ceil((limiteIR17.getTime() - hoy.getTime()) / (1000 * 3600 * 24))
 
   function handleMarcarDeclarado() {
-    marcarDeclarado(mesSel, anioSel, hoy.toISOString().split('T')[0])
+    marcarDeclarado(mesSel, anioSel, hoyLocalISO())
     setToast(`Declaración IR-17 de ${MESES[mesSel - 1]} ${anioSel} marcada como sometida`)
   }
 
@@ -109,13 +246,13 @@ export default function RetribucionesComplementariasPage() {
     for (const r of retribuciones) {
       const key = `${r.anio}-${r.mes}`
       const g = grupos.get(key) ?? { mes: r.mes, anio: r.anio, total: 0, declarada: true }
-      g.total += r.valorMensual
+      g.total += bases.get(r.id)?.base ?? r.valorMensual
       if (!r.declarada) g.declarada = false
       else if (!g.fecha) g.fecha = r.fechaDeclaracion
       grupos.set(key, g)
     }
     return Array.from(grupos.values()).sort((a, b) => (b.anio - a.anio) || (b.mes - a.mes))
-  }, [retribuciones])
+  }, [retribuciones, bases])
 
   // ── Acumulado por empleado — histórico completo (todos los meses), no solo
   // el mes en vista. Permite a RRHH ver de un vistazo quién ha recibido más
@@ -126,7 +263,7 @@ export default function RetribucionesComplementariasPage() {
     for (const r of retribuciones) {
       const key = r.empleadoId ?? '__general__'
       const g = grupos.get(key) ?? { empleadoId: r.empleadoId, total: 0, meses: new Set<string>(), conceptos: 0 }
-      g.total += r.valorMensual
+      g.total += bases.get(r.id)?.base ?? r.valorMensual
       g.meses.add(`${r.anio}-${r.mes}`)
       g.conceptos += 1
       grupos.set(key, g)
@@ -134,17 +271,29 @@ export default function RetribucionesComplementariasPage() {
     return Array.from(grupos.values())
       .map(g => ({ ...g, meses: g.meses.size }))
       .sort((a, b) => b.total - a.total)
-  }, [retribuciones])
+  }, [retribuciones, bases])
 
   async function handleExportarExcel() {
     if (retribuciones.length === 0) return
     const { exportarExcel } = await import('@/lib/excel-export')
-    const filasDetalle = lineasDelMes.map(l => [
-      l.concepto,
-      l.empleadoId && empMap[l.empleadoId] ? fullName(empMap[l.empleadoId]) : 'General / sin asignar',
-      l.valorMensual,
-      l.valorMensual * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES,
-    ])
+    // Columnas de desglose: celdas vacías (null) cuando no aplican a la línea,
+    // así las líneas planas (Colegios/Otros/legado) conservan el mismo formato.
+    const filasDetalle = lineasDelMes.map(l => {
+      const info = bases.get(l.id)
+      const esVeh = l.concepto === CONCEPTO_RETRIB_VEHICULO && typeof l.vehiculoValorMensual === 'number'
+      return [
+        l.concepto,
+        l.empleadoId && empMap[l.empleadoId] ? fullName(empMap[l.empleadoId]) : 'General / sin asignar',
+        l.viviendaDepreciacionAlquiler ?? null,
+        l.viviendaMantenimiento ?? null,
+        l.viviendaServicios ?? null,
+        esVeh ? l.vehiculoValorMensual! : null,
+        esVeh ? (info?.excedenteVehiculo ? 100 : (l.vehiculoPorcentajeAplicado ?? null)) : null,
+        baseDe(l),
+        baseDe(l) * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES,
+        textoDesglose(l, info),
+      ]
+    })
     const filasHistorial = historialMeses.map(g => [
       `${MESES[g.mes - 1]} ${g.anio}`,
       g.total,
@@ -167,10 +316,13 @@ export default function RetribucionesComplementariasPage() {
           nombre: 'Detalle',
           titulo: `Retribuciones Complementarias — ${MESES[mesSel - 1]} ${anioSel}`,
           subtitulo: `Impuesto Sustitutivo 27% — Formulario IR-17 — límite ${formatDate(limiteIR17.toISOString())}`,
-          encabezados: ['Concepto', 'Empleado', 'Valor Mensual (RD$)', 'Impuesto Sustitutivo 27%'],
+          encabezados: [
+            'Concepto', 'Empleado', 'Vivienda: Depreciación / Alquiler', 'Vivienda: Mantenimiento', 'Vivienda: Servicios',
+            'Vehículo: Valor Mensual', 'Vehículo: % Uso Personal', 'Base Gravable (RD$)', 'Impuesto Sustitutivo 27%', 'Detalle del Cálculo',
+          ],
           filas: filasDetalle,
-          totales: [`TOTAL — ${lineasDelMes.length} concepto(s)`, '', totalMensual, impuestoMensual],
-          anchos: [30, 26, 20, 22],
+          totales: [`TOTAL — ${lineasDelMes.length} concepto(s)`, '', null, null, null, null, null, totalMensual, impuestoMensual, ''],
+          anchos: [30, 26, 18, 16, 14, 16, 14, 20, 22, 60],
         },
         {
           nombre: 'Historial Mensual',
@@ -234,20 +386,25 @@ export default function RetribucionesComplementariasPage() {
 
     autoTable(doc, {
       startY: 44,
-      head: [['Concepto', 'Empleado', 'Valor Mensual', 'Impuesto Sustitutivo 27%']],
-      body: lineasDelMes.map(l => [
-        l.concepto,
-        l.empleadoId && empMap[l.empleadoId] ? fullName(empMap[l.empleadoId]) : 'General / sin asignar',
-        formatRD(l.valorMensual),
-        formatRD(l.valorMensual * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES),
-      ]),
+      head: [['Concepto', 'Empleado', 'Base Gravable', 'Impuesto Sustitutivo 27%']],
+      // El desglose (vivienda/vehículo/préstamo) va como segunda línea del
+      // concepto, para no romper el formato en líneas sin desglose.
+      body: lineasDelMes.map(l => {
+        const desglose = textoDesglose(l, bases.get(l.id))
+        return [
+          desglose ? `${l.concepto}\n${desglose}` : l.concepto,
+          l.empleadoId && empMap[l.empleadoId] ? fullName(empMap[l.empleadoId]) : 'General / sin asignar',
+          formatRD(baseDe(l)),
+          formatRD(baseDe(l) * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES),
+        ]
+      }),
       foot: [[`TOTAL — ${lineasDelMes.length} concepto(s)`, '', formatRD(totalMensual), formatRD(impuestoMensual)]],
       theme: 'striped',
       headStyles: { fillColor: NAVY, textColor: 255, fontStyle: 'bold', fontSize: 8 },
       footStyles: { fillColor: [240, 240, 240], textColor: NAVY, fontStyle: 'bold', fontSize: 8 },
       bodyStyles: { fontSize: 8 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' } },
+      columnStyles: { 0: { cellWidth: 82 }, 2: { halign: 'right' }, 3: { halign: 'right' } },
     })
 
     const docTyped = doc as jsPDF & { lastAutoTable: { finalY: number } }
@@ -423,22 +580,112 @@ export default function RetribucionesComplementariasPage() {
                   ))}
                 </select>
               </div>
-              <div className="flex-1 min-w-[140px] space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Valor Mensual (RD$)
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  value={valorMensual}
-                  onChange={e => setValorMensual(e.target.value)}
-                  placeholder="0.00"
-                  className={INPUT_CLASS}
-                />
-              </div>
+              {!esVivienda && !esVehiculo && (
+                <div className="flex-1 min-w-[140px] space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Valor Mensual (RD$)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={valorMensual}
+                    onChange={e => setValorMensual(e.target.value)}
+                    placeholder="0.00"
+                    className={INPUT_CLASS}
+                  />
+                </div>
+              )}
+
+              {/* ── Desglose de Vivienda: suma de gastos reales imputados ── */}
+              {esVivienda && (
+                <div className="w-full rounded-lg border border-zinc-100 dark:border-[#1d2035] bg-zinc-50/60 dark:bg-[#1a1d2e]/60 p-4 space-y-3">
+                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                    La base gravable de la vivienda es la <strong>suma de los gastos reales imputados</strong> (Guía DGII No.14).
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                    {([
+                      ['vivDep', 'Depreciación / Alquiler', vivDep, setVivDep],
+                      ['vivMant', 'Mantenimiento', vivMant, setVivMant],
+                      ['vivServ', 'Servicios', vivServ, setVivServ],
+                    ] as const).map(([id, label, val, set]) => (
+                      <div key={id} className="space-y-1.5">
+                        <label htmlFor={id} className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">{label}</label>
+                        <input id={id} type="number" min="0" value={val} onChange={e => set(e.target.value)} placeholder="0.00" className={INPUT_CLASS} />
+                      </div>
+                    ))}
+                    <div className="space-y-1.5">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Total mensual</span>
+                      <p data-testid="vivienda-total" className="rounded-lg bg-[#eef0fb] dark:bg-indigo-950/30 px-3 py-2 text-sm font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">
+                        {formatRD(totalVivienda)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Desglose de Vehículo: valor × % de uso personal presunto ── */}
+              {esVehiculo && (
+                <div className="w-full rounded-lg border border-zinc-100 dark:border-[#1d2035] bg-zinc-50/60 dark:bg-[#1a1d2e]/60 p-4 space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+                    <div className="space-y-1.5">
+                      <label htmlFor="vehValor" className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Valor mensual del vehículo</label>
+                      <input id="vehValor" type="number" min="0" value={vehValor} onChange={e => setVehValor(e.target.value)} placeholder="0.00" className={INPUT_CLASS} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="vehOficina" className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">¿Empleado de oficina?</label>
+                      <select id="vehOficina" value={vehOficina ? 'si' : 'no'} onChange={e => cambiarFactoresVehiculo(e.target.value === 'si', vehPropiedad)} className={INPUT_CLASS}>
+                        <option value="no">No</option>
+                        <option value="si">Sí</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="vehPropiedad" className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Propiedad del vehículo</label>
+                      <select id="vehPropiedad" value={vehPropiedad} onChange={e => cambiarFactoresVehiculo(vehOficina, e.target.value as 'empresa' | 'empleado')} className={INPUT_CLASS}>
+                        <option value="empresa">De la empresa</option>
+                        <option value="empleado">Del empleado</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label htmlFor="vehPct" className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        % uso personal <span className="normal-case font-normal">(sugerido {vehPctSugerido}%)</span>
+                      </label>
+                      <input id="vehPct" type="number" min="0" max="100" step="0.5" value={vehPct} onChange={e => setVehPct(e.target.value)} className={INPUT_CLASS} />
+                    </div>
+                  </div>
+                  {previewVehiculo && (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                      <span className="text-zinc-500 dark:text-zinc-400">Base gravable:</span>
+                      <span data-testid="vehiculo-preview" className="font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">
+                        {formatRD(previewVehiculo.base)}
+                      </span>
+                      <span className="text-zinc-400 dark:text-zinc-500">
+                        {previewVehiculo.excedenteVehiculo
+                          ? '(100% — este empleado ya tiene un vehículo de la empresa menos costoso este mes)'
+                          : `(${formatRD(num(vehValor))} × ${vehPctNum}%)`}
+                      </span>
+                      {previewVehiculo.otrosVehiculosEmpresa > 0 && !previewVehiculo.excedenteVehiculo && (
+                        <span className="text-amber-600 dark:text-amber-400">
+                          Este vehículo pasará a ser el menos costoso — el anterior se gravará al 100%.
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Matriz de % sugerida — interpretación propia de Cielo Cloud, pendiente de confirmar con tu asesor
+                      fiscal</strong> (no es la tabla oficial completa de la Guía DGII): 40% si el vehículo es de la empresa y el
+                      empleado no es de oficina; 20% en cualquier otro caso. Ajusta el % a mano si tu contador indica otro. Si un
+                      mismo empleado tiene varios vehículos de la empresa en el mes, solo el menos costoso recibe el %; los demás
+                      se gravan al 100%.
+                    </span>
+                  </p>
+                </div>
+              )}
+
               <button
                 type="submit"
-                disabled={!(parseFloat(valorMensual) > 0)}
+                disabled={!puedeAgregar}
                 className="flex items-center justify-center gap-1.5 rounded-lg bg-[#1B2980] px-4 py-2 text-sm font-semibold text-white hover:bg-[#151f66] disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
               >
                 <Plus className="h-4 w-4" />
@@ -453,6 +700,114 @@ export default function RetribucionesComplementariasPage() {
               </span>
             </p>
           </div>
+        </div>
+
+        {/* ── Detector de diferenciales de interés (Art. 318) ─────────────── */}
+        <div className="rounded-xl border border-zinc-200 dark:border-[#252840] bg-white dark:bg-[#141722] shadow-sm dark:shadow-none">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#eef0fb] dark:bg-indigo-950/40">
+                <HandCoins className="h-4 w-4 text-[#1B2980] dark:text-indigo-400" />
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Préstamos a tasa preferencial (Art. 318)</h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  {tasaReferencia
+                    ? `El interés no cobrado frente a la tasa de referencia (${tasaReferencia}% anual) es una retribución complementaria gravable.`
+                    : 'Configura la tasa de referencia en Configuración → Reglas de Negocio primero.'}
+                </p>
+              </div>
+            </div>
+            {tasaReferencia ? (
+              <button
+                onClick={() => setMostrarDetector(v => !v)}
+                className="flex items-center gap-1.5 rounded-lg border border-[#1B2980]/30 dark:border-indigo-500/40 px-3 py-1.5 text-xs font-semibold text-[#1B2980] dark:text-indigo-300 hover:bg-[#eef0fb] dark:hover:bg-indigo-950/30 transition-colors"
+              >
+                <HandCoins className="h-3.5 w-3.5" />
+                {mostrarDetector ? 'Ocultar' : 'Detectar diferenciales de préstamos (Art. 318)'}
+              </button>
+            ) : (
+              <Link
+                href="/configuracion"
+                className="flex items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-[#252840] px-3 py-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-[#1a1d2e] transition-colors"
+              >
+                Ir a Configuración
+              </Link>
+            )}
+          </div>
+
+          {tasaReferencia && mostrarDetector && (
+            <div className="border-t border-zinc-100 dark:border-[#1d2035]">
+              {diferenciales.length === 0 ? (
+                <p className="px-5 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                  Ningún préstamo activo está por debajo de la tasa de referencia en {MESES[mesSel - 1]} {anioSel}.
+                </p>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
+                          <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Saldo Pendiente</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Tasa Préstamo</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Referencia</th>
+                          <th className="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Diferencial Mensual</th>
+                          <th className="px-4 py-2.5 w-32" />
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-200 dark:divide-[#252840]">
+                        {diferenciales.map(d => {
+                          const emp = empMap[d.empleadoId]
+                          const yaAgregado = prestamosYaAgregados.has(d.prestamoId)
+                          return (
+                            <tr key={d.prestamoId} data-testid={`diferencial-${d.prestamoId}`}>
+                              <td className="px-5 py-3">
+                                <p className="font-medium text-[#1B2980] dark:text-indigo-400">{emp ? fullName(emp) : d.empleadoId}</p>
+                                {emp?.cedula && <p className="text-xs text-zinc-400">{emp.cedula}</p>}
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{formatRD(d.saldoPendiente)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                                {fmtTasa(d.tasaMensualPrestamo)}% mens. <span className="text-zinc-400">({fmtTasa(d.tasaAnualPrestamo)}% anual)</span>
+                              </td>
+                              <td className="px-4 py-3 text-right tabular-nums text-zinc-500 dark:text-zinc-400">{d.tasaReferenciaAnual}% anual</td>
+                              <td className="px-4 py-3 text-right tabular-nums font-semibold text-[#1B2980] dark:text-indigo-300">{formatRD(d.diferencialMensual)}</td>
+                              <td className="px-4 py-3 text-right">
+                                {yaAgregado ? (
+                                  <Badge variant="success">Ya agregada</Badge>
+                                ) : (
+                                  <button
+                                    onClick={() => { agregarDiferencial(d); setToast('Diferencial de interés agregado') }}
+                                    className="rounded-lg bg-[#1B2980] px-3 py-1 text-xs font-semibold text-white hover:bg-[#151f66] transition-colors"
+                                  >
+                                    Agregar
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 dark:border-[#1d2035] px-5 py-3">
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 max-w-xl">
+                      Diferencial = saldo pendiente × (referencia anual − tasa del préstamo × 12) ÷ 100 ÷ 12. La tasa de los
+                      préstamos se registra mensual y se anualiza de forma nominal. Usa el saldo pendiente actual. Los avances de
+                      salario no se evalúan (adelanto de un solo período, no una línea de crédito).
+                    </p>
+                    <button
+                      onClick={agregarTodosDiferenciales}
+                      disabled={diferencialesPendientes.length === 0}
+                      className="rounded-lg bg-[#1B2980] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#151f66] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Agregar todas ({diferencialesPendientes.length})
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Stat cards ───────────────────────────────────────────────── */}
@@ -493,7 +848,7 @@ export default function RetribucionesComplementariasPage() {
                 <tr className="border-b border-zinc-100 dark:border-[#1d2035] bg-zinc-50 dark:bg-[#1a1d2e]">
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Concepto</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Empleado</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Valor Mensual</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Base Gravable</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Impuesto Sustitutivo (27%)</th>
                   <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400 w-16"></th>
                 </tr>
@@ -519,19 +874,31 @@ export default function RetribucionesComplementariasPage() {
                 )}
                 {lineasDelMes.map(l => {
                   const emp = l.empleadoId ? empMap[l.empleadoId] : undefined
+                  const info = bases.get(l.id)
+                  const desglose = textoDesglose(l, info)
                   return (
-                    <tr key={l.id} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
+                    <tr key={l.id} data-testid={`linea-${l.id}`} className="hover:bg-[#eef0fb]/30 dark:hover:bg-indigo-950/20 transition-colors">
                       <td className="px-5 py-3.5">
-                        <p className="font-medium text-[#1B2980] dark:text-indigo-400">{l.concepto}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium text-[#1B2980] dark:text-indigo-400">{l.concepto}</p>
+                          {l.prestamoId && <Badge variant="info">Art. 318</Badge>}
+                          {info?.excedenteVehiculo && <Badge variant="warning">Vehículo adicional · 100%</Badge>}
+                        </div>
+                        {desglose && !l.prestamoId && (
+                          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">{desglose}</p>
+                        )}
+                        {l.prestamoId && l.notas && (
+                          <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-500">{l.notas}</p>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-xs text-zinc-500 dark:text-zinc-400">
                         {emp ? fullName(emp) : <span className="text-zinc-300 dark:text-zinc-600">General / sin asignar</span>}
                       </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                        {formatRD(l.valorMensual)}
+                      <td data-testid="base-gravable" className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {formatRD(baseDe(l))}
                       </td>
-                      <td className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
-                        {formatRD(l.valorMensual * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES)}
+                      <td data-testid="impuesto-linea" className="px-4 py-3.5 text-right tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {formatRD(baseDe(l) * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES)}
                       </td>
                       <td className="px-4 py-3.5 text-center">
                         <button

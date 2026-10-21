@@ -227,7 +227,7 @@ const SECCIONES: Seccion[] = [
     titulo: 'Reglas de Negocio',
     descripcion: 'Umbrales de alerta y plantilla de correo',
     grupo: 'negocio',
-    keywords: ['umbral', 'endeudamiento', 'variacion', 'correo', 'plantilla', 'comprobante', 'alerta'],
+    keywords: ['umbral', 'endeudamiento', 'variacion', 'correo', 'plantilla', 'comprobante', 'alerta', 'tasa', 'interes', 'prestamo', 'referencia', 'retribucion'],
   },
   {
     id: 'datos',
@@ -386,15 +386,16 @@ function FieldInput({ icon: Icon, className, ...props }: { icon?: LucideIcon } &
   )
 }
 
-function ThresholdSlider({ id, label, value, onChange, hint, min = 1, max = 100 }: {
+function ThresholdSlider({ id, label, value, onChange, hint, min = 1, max = 100, step = 1, display }: {
   id: string; label: string; value: number; onChange: (n: number) => void; hint: string; min?: number; max?: number
+  step?: number; display?: string
 }) {
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between">
         <label htmlFor={id} className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</label>
         <span className="rounded-md bg-[#eef0fb] dark:bg-indigo-950/40 px-2 py-0.5 text-xs font-bold tabular-nums text-[#1B2980] dark:text-indigo-300">
-          {value}%
+          {display ?? `${value}%`}
         </span>
       </div>
       <input
@@ -402,7 +403,7 @@ function ThresholdSlider({ id, label, value, onChange, hint, min = 1, max = 100 
         type="range"
         min={min}
         max={max}
-        step={1}
+        step={step}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
         className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-zinc-200 dark:bg-[#252840] accent-[#1B2980]
@@ -1402,6 +1403,31 @@ export default function ConfiguracionPage() {
                                 hint="Avisa en la auditoría pre-cierre cuando el bruto de un empleado varía más de este %."
                               />
                             </div>
+                          </div>
+                        </SettingsCard>
+
+                        <SettingsCard icon={Landmark} title="Préstamos a Tasa Preferencial (Art. 318)" description="Detecta el diferencial de interés no cobrado como retribución complementaria.">
+                          <div className="space-y-4">
+                            <ThresholdSlider
+                              id="tasaInteresReferenciaPrestamos"
+                              label="Tasa de interés de mercado de referencia (% anual)"
+                              value={form.tasaInteresReferenciaPrestamos ?? 0}
+                              min={0}
+                              max={40}
+                              step={0.5}
+                              display={(form.tasaInteresReferenciaPrestamos ?? 0) > 0 ? `${form.tasaInteresReferenciaPrestamos}% anual` : 'Sin configurar'}
+                              onChange={n => setForm(prev => ({ ...prev, tasaInteresReferenciaPrestamos: n > 0 ? n : undefined }))}
+                              hint="En 0 la detección queda desactivada. Se compara contra la tasa de cada préstamo anualizada (tasa mensual × 12); los avances de salario no se evalúan."
+                            />
+                            <p className="flex items-start gap-1.5 rounded-lg bg-[#eef0fb] dark:bg-indigo-950/30 px-3 py-2.5 text-[11px] leading-relaxed text-[#151f66] dark:text-indigo-200">
+                              <Info className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                              <span>
+                                Tasa de interés de mercado de referencia — usada para detectar préstamos a tasa preferencial
+                                sujetos al Impuesto Sustitutivo de Retribuciones Complementarias (Art. 318, Código de Trabajo).
+                                El sistema no tiene forma de consultar una tasa de mercado real (sin backend ni feed del Banco
+                                Central) — configúrala manualmente según el criterio de tu asesor fiscal.
+                              </span>
+                            </p>
                           </div>
                         </SettingsCard>
 

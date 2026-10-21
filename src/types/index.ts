@@ -456,6 +456,13 @@ export interface Empresa {
                                       // pre-cierre de Nómina) — mismo umbral en ambos módulos.
   umbralVariacionBrutoPct?: number   // % de variación del bruto de un empleado vs. el período
                                       // anterior que dispara la alerta en la auditoría pre-cierre.
+  // Tasa de interés de mercado de referencia (% ANUAL nominal) para detectar
+  // préstamos a tasa preferencial — el diferencial de interés no cobrado es
+  // una retribución complementaria gravable (Art. 318, Código de Trabajo).
+  // Sin valor (undefined/0) la detección queda desactivada: el sistema no
+  // tiene forma de consultar una tasa de mercado real (sin backend ni feed
+  // del Banco Central), así que nunca asume un default arbitrario.
+  tasaInteresReferenciaPrestamos?: number
 
   // ─── Plantilla de correo de comprobantes de pago ──────────────────────────
   // Si no se configura, se usa plantillaComprobanteDefault() — el mismo texto
@@ -842,4 +849,29 @@ export interface RetribucionComplementaria {
   // todos los conceptos), no por línea individual.
   declarada?: boolean
   fechaDeclaracion?: string  // ISO date string
+
+  // ─── Diferencial de interés de préstamos (Art. 318 CT) ─────────────────────
+  // Solo presente en líneas auto-generadas desde "Detectar diferenciales" —
+  // permite mostrar el badge "Art. 318" y evitar duplicar la línea del mismo
+  // préstamo en el mismo mes/año.
+  prestamoId?: string
+
+  // ─── Desglose de Vivienda (Guía DGII No.14) ────────────────────────────────
+  // Cuando están presentes, `valorMensual` = SUMA de los tres (no se captura
+  // a mano). Líneas sin desglose (registros previos) usan valorMensual plano.
+  viviendaDepreciacionAlquiler?: number
+  viviendaMantenimiento?: number
+  viviendaServicios?: number
+
+  // ─── Desglose de Vehículo (Guía DGII No.14) ────────────────────────────────
+  // Valor/depreciación mensual del vehículo ANTES de aplicar el % de uso
+  // personal presunto. La base gravable real se resuelve siempre con
+  // resolverBaseGravableRetribuciones() (dominican-labor.ts), que además
+  // aplica la regla de "solo el vehículo de la empresa menos costoso de un
+  // mismo empleado/mes recibe la proporcionalidad" — `valorMensual` guardado
+  // es solo el valor al momento de crear la línea (referencia/legado).
+  vehiculoValorMensual?: number
+  vehiculoEsEmpleadoDeOficina?: boolean
+  vehiculoPropiedadDe?: 'empresa' | 'empleado'
+  vehiculoPorcentajeAplicado?: number  // % efectivamente usado (auditable aunque cambie la matriz sugerida)
 }
