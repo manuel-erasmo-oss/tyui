@@ -20,7 +20,7 @@ import { useEmpresa } from '@/lib/empresa-context'
 import { useLiquidaciones } from '@/lib/liquidaciones-context'
 import { useLicencias, labelLicencia, esLicenciaConSubsidio } from '@/lib/licencias-context'
 import { useRetribuciones } from '@/lib/retribuciones-context'
-import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo, getDiasPreavisoRequeridos, getAnosServicio, TASAS_TSS, TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES } from '@/lib/dominican-labor'
+import { calcularNomina, calcularNominaQuincenal, ajustesToParams, calcularConPeriodo, getDiasPreavisoRequeridos, getAnosServicio, TASAS_TSS, TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES, conBaseGravableRetribuciones } from '@/lib/dominican-labor'
 import {
   formatRD, formatDate, formatCedula, fullName,
   formatAnosServicio, contratoLabel, contratoBadgeClass, BTN_PRIMARY, parseFechaLocal,
@@ -1197,7 +1197,9 @@ function ReporteTSS({
   // criterio ya usado en getRetribucionesPendientes de dominican-labor.ts).
   const { retribuciones } = useRetribuciones()
   const lineasIR17 = useMemo(
-    () => (periodo ? retribuciones.filter(r => r.mes === periodo.mes && r.anio === periodo.anio) : []),
+    // Base gravable efectiva (desglose de vivienda/vehículo + regla del
+    // vehículo menos costoso), igual que en /retribuciones-complementarias.
+    () => (periodo ? conBaseGravableRetribuciones(retribuciones.filter(r => r.mes === periodo.mes && r.anio === periodo.anio)) : []),
     [retribuciones, periodo]
   )
   const totalRetribucionesIR17 = useMemo(() => lineasIR17.reduce((s, l) => s + l.valorMensual, 0), [lineasIR17])

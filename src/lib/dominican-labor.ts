@@ -1,4 +1,4 @@
-import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, CierreFiscal, ConceptoAjuste, Empleado, Empresa, MotivoLiquidacion, ParametrosNomina, PeriodoNomina, ResultadoNomina, RetribucionComplementaria, SectorEmpresa, TipoPeriodo } from '@/types'
+import type { AjusteLinea, CategoriaEmpresa, CategoriaRiesgoSRL, CierreFiscal, ConceptoAjuste, Empleado, Empresa, MotivoLiquidacion, ParametrosNomina, PeriodoNomina, Prestamo, ResultadoNomina, RetribucionComplementaria, SectorEmpresa, TipoPeriodo } from '@/types'
 import { parseFechaLocal } from './utils'
 
 // ─── ISR Brackets 2024 (annual RD$) ──────────────────────────────────────────
@@ -1071,8 +1071,11 @@ export interface RetribucionPendiente {
 // primero). Un mes cuenta como "declarado" solo si TODAS sus líneas lo
 // están (una sola declaración mensual cubre todos los conceptos del mes).
 export function getRetribucionesPendientes(
-  lineas: Pick<RetribucionComplementaria, 'mes' | 'anio' | 'valorMensual' | 'declarada'>[],
+  lineasCrudas: RetribucionComplementaria[],
 ): RetribucionPendiente[] {
+  // Base gravable real (desglose de vivienda/vehículo + regla del vehículo
+  // menos costoso) — mismo número que muestra /retribuciones-complementarias.
+  const lineas = conBaseGravableRetribuciones(lineasCrudas)
   const grupos = new Map<string, { mes: number; anio: number; total: number; declarada: boolean }>()
   for (const l of lineas) {
     const key = `${l.anio}-${l.mes}`
@@ -1090,4 +1093,158 @@ export function getRetribucionesPendientes(
     pendientes.push({ mes: g.mes, anio: g.anio, total: g.total, impuesto: g.total * TASA_IMPUESTO_SUSTITUTIVO_RETRIBUCIONES, limite, diasRestantes })
   }
   return pendientes.sort((a, b) => a.diasRestantes - b.diasRestantes)
+}
+
+// ─── Retribuciones Complementarias — desglose de Vivienda/Vehículo ───────────
+
+export const CONCEPTO_RETRIB_VEHICULO = 'Vehículo de la empresa'
+export const CONCEPTO_RETRIB_VIVIENDA = 'Vivienda'
+export const CONCEPTO_RETRIB_DIFERENCIAL_INTERES = 'Diferencial de Interés (Art. 318)'
+
+// % de uso personal presunto de un vehículo asignado.
+// ⚠️ INTERPRETACIÓN PROPIA DE CIELO CLOUD, PENDIENTE DE CONFIRMAR CON UN
+// ASESOR FISCAL: la Guía del Contribuyente No.14 (DGII) indica que el % depende
+// de si el empleado es de oficina y de si el vehículo es propiedad de la
+// empresa o del empleado (mencionando 40%/20%), pero no se dispone aquí de la
+// tabla oficial completa. Matriz sugerida:
+//   - 40% → vehículo propiedad de la empresa Y empleado que NO es de oficina
+//           (uso más extendido / menos controlado).
+//   - 20% → cualquier otra combinación (empleado de oficina, o vehículo del
+//           propio empleado con mantenimiento/combustible pagado por la empresa).
+// El % es solo una SUGERENCIA — cada línea guarda el % realmente aplicado
+// (`vehiculoPorcentajeAplicado`), editable a mano por el contador.
+export function porcentajeUsoPersonalVehiculoSugerido(
+  esEmpleadoDeOficina: boolean,
+  propiedadDe: 'empresa' | 'empleado',
+): number {
+  return propiedadDe === 'empresa' && !esEmpleadoDeOficina ? 40 : 20
+}
+
+export interface BaseGravableRetribucion {
+  base: number                 // base gravable efectiva sobre la que se aplica el 27%
+  reduccionVehiculo: boolean   // true si esta línea de vehículo recibió el % de uso personal
+  excedenteVehiculo: boolean   // true si es un vehículo de la empresa adicional, gravado al 100%
+}
+
+function esVehiculoConDesglose(l: RetribucionComplementaria): boolean {
+  return l.concepto === CONCEPTO_RETRIB_VEHICULO && typeof l.vehiculoValorMensual === 'number'
+}
+
+// Resuelve la base gravable de cada línea (por id):
+//  - Vivienda con desglose → suma depreciación/alquiler + mantenimiento + servicios.
+//  - Vehículo con desglose → vehiculoValorMensual × % aplicado. REGLA DE VARIOS
+//    VEHÍCULOS (Guía DGII No.14): si a un mismo empleado se le asignan varios
+//    vehículos de la empresa en el mismo mes/año, solo el MENOS COSTOSO recibe
+//    la proporcionalidad; los demás se gravan al 100% de su valor. Es un cálculo
+//    derivado — se recalcula cada vez que cambian las líneas, nunca se marca a
+//    mano. Líneas de vehículo sin empleado asignado no se pueden agrupar por
+//    persona, así que cada una recibe su % de forma independiente.
+//  - Cualquier otra línea (o registros previos sin desglose) → valorMensual plano.
+export function resolverBaseGravableRetribuciones(
+  lineas: RetribucionComplementaria[],
+): Map<string, BaseGravableRetribucion> {
+  const out = new Map<string, BaseGravableRetribucion>()
+
+  // Agrupar vehículos de la EMPRESA por empleado/mes/año para la regla del
+  // menos costoso (un vehículo del propio empleado no es "vehículo asignado").
+  const gruposVehiculos = new Map<string, RetribucionComplementaria[]>()
+  for (const l of lineas) {
+    if (!esVehiculoConDesglose(l) || !l.empleadoId || l.vehiculoPropiedadDe !== 'empresa') continue
+    const key = `${l.empleadoId}|${l.anio}|${l.mes}`
+    const arr = gruposVehiculos.get(key) ?? []
+    arr.push(l)
+    gruposVehiculos.set(key, arr)
+  }
+  const excedentes = new Set<string>()
+  for (const arr of gruposVehiculos.values()) {
+    if (arr.length < 2) continue
+    // Menos costoso por valor mensual; empate → el id menor (determinístico)
+    const masBarato = [...arr].sort((a, b) =>
+      (a.vehiculoValorMensual! - b.vehiculoValorMensual!) || a.id.localeCompare(b.id))[0]
+    for (const l of arr) if (l.id !== masBarato.id) excedentes.add(l.id)
+  }
+
+  for (const l of lineas) {
+    if (esVehiculoConDesglose(l)) {
+      const valor = l.vehiculoValorMensual ?? 0
+      if (excedentes.has(l.id)) {
+        out.set(l.id, { base: valor, reduccionVehiculo: false, excedenteVehiculo: true })
+      } else {
+        const pct = l.vehiculoPorcentajeAplicado ?? porcentajeUsoPersonalVehiculoSugerido(
+          !!l.vehiculoEsEmpleadoDeOficina, l.vehiculoPropiedadDe ?? 'empresa')
+        out.set(l.id, {
+          base: Math.round(valor * pct) / 100,
+          reduccionVehiculo: pct < 100,
+          excedenteVehiculo: false,
+        })
+      }
+      continue
+    }
+    const tieneDesgloseVivienda =
+      l.viviendaDepreciacionAlquiler != null || l.viviendaMantenimiento != null || l.viviendaServicios != null
+    const base = tieneDesgloseVivienda
+      ? (l.viviendaDepreciacionAlquiler ?? 0) + (l.viviendaMantenimiento ?? 0) + (l.viviendaServicios ?? 0)
+      : l.valorMensual
+    out.set(l.id, { base, reduccionVehiculo: false, excedenteVehiculo: false })
+  }
+  return out
+}
+
+// Conveniencia: devuelve las mismas líneas con `valorMensual` reemplazado por
+// la base gravable efectiva — para consumidores (Reportería, alertas) que solo
+// suman valorMensual y no necesitan conocer el desglose.
+export function conBaseGravableRetribuciones(lineas: RetribucionComplementaria[]): RetribucionComplementaria[] {
+  const bases = resolverBaseGravableRetribuciones(lineas)
+  return lineas.map(l => ({ ...l, valorMensual: bases.get(l.id)?.base ?? l.valorMensual }))
+}
+
+// ─── Diferencial de interés de préstamos a tasa preferencial (Art. 318) ─────
+
+export interface DiferencialInteresPrestamo {
+  prestamoId: string
+  empleadoId: string
+  saldoPendiente: number
+  tasaMensualPrestamo: number   // % mensual tal cual se guarda en Prestamo.tasaInteres
+  tasaAnualPrestamo: number     // tasaMensual × 12 (nominal), comparable contra la referencia anual
+  tasaReferenciaAnual: number
+  diferencialMensual: number    // RD$ de interés no cobrado este mes → retribución complementaria
+}
+
+// Préstamos activos cuyo interés está por debajo de la tasa de mercado de
+// referencia configurada por la empresa. El diferencial no cobrado es una
+// retribución complementaria gravable (Art. 318, Código de Trabajo).
+//
+// NOTA DE UNIDADES: en Cielo Cloud `Prestamo.tasaInteres` es una tasa MENSUAL
+// (así la captura el formulario "Tasa Interés % mensual" y así la usa la
+// amortización francesa/simple), mientras la referencia es ANUAL. Para
+// compararlas se anualiza la del préstamo de forma nominal (× 12):
+//   diferencialMensual = saldoPendiente × (refAnual − tasaMensual×12) / 100 / 12
+//
+// Los AVANCES de salario (`tipo === 'avance'`) se excluyen: son un adelanto de
+// un solo período, deducido completo en la nómina siguiente — no una línea de
+// crédito sostenida mes a mes que genere un beneficio financiero recurrente.
+export function calcularDiferencialesInteresPrestamos(
+  prestamos: Pick<Prestamo, 'id' | 'empleadoId' | 'saldoPendiente' | 'tasaInteres' | 'estado' | 'tipo'>[],
+  tasaReferenciaAnual: number | undefined,
+): DiferencialInteresPrestamo[] {
+  if (!tasaReferenciaAnual || tasaReferenciaAnual <= 0) return []
+  const out: DiferencialInteresPrestamo[] = []
+  for (const p of prestamos) {
+    if (p.estado !== 'activo' || p.tipo === 'avance' || p.saldoPendiente <= 0) continue
+    const tasaMensual = Number.isFinite(p.tasaInteres) && p.tasaInteres > 0 ? p.tasaInteres : 0
+    const tasaAnual = tasaMensual * 12
+    if (tasaAnual >= tasaReferenciaAnual) continue
+    const diferencialMensual = Math.round(p.saldoPendiente * (tasaReferenciaAnual - tasaAnual) / 100 / 12 * 100) / 100
+    if (diferencialMensual <= 0) continue
+    out.push({
+      prestamoId: p.id,
+      empleadoId: p.empleadoId,
+      saldoPendiente: p.saldoPendiente,
+      tasaMensualPrestamo: tasaMensual,
+      tasaAnualPrestamo: tasaAnual,
+      tasaReferenciaAnual,
+      diferencialMensual,
+    })
+  }
+  return out
 }
