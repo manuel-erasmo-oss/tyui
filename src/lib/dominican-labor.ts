@@ -581,6 +581,65 @@ export function getMesesServicio(fechaIngreso: string): number {
   return Math.floor(getAnosServicio(fechaIngreso) * 12)
 }
 
+// ─── Tiempo suspendido (pausa de acumulación de Regalía/Vacaciones) ──────────
+// Durante una suspensión de contrato no se devenga salario, así que tampoco
+// se genera derecho a Regalía Pascual ni a vacaciones — pero la ANTIGÜEDAD
+// legal (Cesantía/Preaviso/Asistencia Económica) sigue corriendo continua,
+// por eso getAnosServicio NO se toca: estas funciones solo se restan donde
+// se calcula acumulación de derechos.
+type EmpleadoSuspensiones = Pick<Empleado, 'historialSuspensiones' | 'suspendido' | 'fechaSuspension'>
+
+// Intervalos [inicio, finExclusivo). fechaFin es el día de reactivación (ese
+// día ya se trabaja). suspender() ya agrega la suspensión vigente al
+// historial (sin fechaFin), así que fechaSuspension solo se suma aparte si
+// no aparece ahí — registros previos a la existencia de historialSuspensiones.
+function intervalosSuspension(empleado: EmpleadoSuspensiones, hasta: Date): { inicio: Date; fin: Date }[] {
+  // La suspensión vigente corre hasta `hasta` inclusive.
+  const finAbierto = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate() + 1)
+  const historial = empleado.historialSuspensiones ?? []
+  const intervalos = historial.map(r => ({
+    inicio: parseFechaLocal(r.fechaInicio),
+    fin: r.fechaFin ? parseFechaLocal(r.fechaFin) : finAbierto,
+  }))
+  if (empleado.suspendido && empleado.fechaSuspension
+      && !historial.some(r => !r.fechaFin && r.fechaInicio === empleado.fechaSuspension)) {
+    intervalos.push({ inicio: parseFechaLocal(empleado.fechaSuspension), fin: finAbierto })
+  }
+  // Nada posterior a `hasta` (ej. liquidación a una fecha pasada).
+  return intervalos
+    .map(({ inicio, fin }) => ({ inicio, fin: fin > finAbierto ? finAbierto : fin }))
+    .filter(({ inicio, fin }) => fin > inicio)
+}
+
+// Meses fraccionales suspendidos dentro del año calendario `anio`, contados
+// mes a mes como (días suspendidos ÷ días del mes) — así un tramo de meses
+// completos (ej. 1-ene → 1-abr) da exactamente 3.0, sin el error de un
+// divisor promedio de 30.44 días.
+export function mesesSuspendidosEnAnio(empleado: EmpleadoSuspensiones, anio: number, hasta: Date = new Date()): number {
+  const DIA = 24 * 3600 * 1000
+  let meses = 0
+  for (const { inicio, fin } of intervalosSuspension(empleado, hasta)) {
+    for (let m = 0; m < 12; m++) {
+      const inicioMes = new Date(anio, m, 1)
+      const finMes    = new Date(anio, m + 1, 1)
+      const desde = inicio > inicioMes ? inicio : inicioMes
+      const a     = fin < finMes ? fin : finMes
+      if (a <= desde) continue
+      // Math.round: absorbe la hora de diferencia en cambios de horario.
+      meses += Math.round((a.getTime() - desde.getTime()) / DIA) / Math.round((finMes.getTime() - inicioMes.getTime()) / DIA)
+    }
+  }
+  return Math.min(12, Math.max(0, meses))
+}
+
+// Años fraccionales suspendidos en TODO el historial (sin acotar a un año),
+// misma escala que getAnosServicio (365.25 días/año) para poder restarlos.
+export function aniosSuspendidosTotal(empleado: EmpleadoSuspensiones, hasta: Date = new Date()): number {
+  const total = intervalosSuspension(empleado, hasta)
+    .reduce((s, { inicio, fin }) => s + (fin.getTime() - inicio.getTime()), 0)
+  return Math.max(0, total / (365.25 * 24 * 3600 * 1000))
+}
+
 // Monto de Empleado.regaliaPagadaEsteAnio realmente vigente para `anio` — ver
 // el comentario del campo en types/index.ts. Sin regaliaPagadaAnio (registros
 // previos a este campo), se asume vigente solo para el año calendario actual,

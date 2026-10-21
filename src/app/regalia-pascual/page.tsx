@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/Badge'
 import { useEmpleados } from '@/lib/empleados-context'
 import { useEmpresa } from '@/lib/empresa-context'
 import { usePeriodos } from '@/lib/periodos-context'
-import { getMesesServicio, regaliaPagadaVigente } from '@/lib/dominican-labor'
+import { getMesesServicio, mesesSuspendidosEnAnio, regaliaPagadaVigente } from '@/lib/dominican-labor'
 import { formatRD, formatDate, fullName, BTN_PRIMARY, cn } from '@/lib/utils'
 import {
   Gift, Calendar, AlertTriangle, Download, Send, Pencil, Check, X, ArrowRight,
@@ -30,7 +30,11 @@ export default function RegaliaPage() {
     const mesesServicio      = Math.min(getMesesServicio(e.fechaIngreso), mesActual)
     // Math.max(0, …): protege contra fechaIngreso en el futuro (error de
     // captura), que de otro modo produciría meses/porcentaje negativos.
-    const mesesAcumulados    = Math.max(0, Math.min(mesesServicio, 12))
+    // Los meses suspendidos este año no generan regalía (no se devenga
+    // salario) — se restan aquí, no de la antigüedad, que sigue continua.
+    // Redondeado a centésimas: una suspensión parcial deja meses fraccionales.
+    const mesesSuspendidos   = mesesSuspendidosEnAnio(e, anioActual)
+    const mesesAcumulados    = Math.round(Math.max(0, Math.min(mesesServicio, 12) - mesesSuspendidos) * 100) / 100
     // Neto de lo ya pagado este año — migración previa a Cielo Cloud, o un
     // pago ya liquidado vía un período de Regalía Pascual anterior de este
     // mismo año (ver regaliaPagadaVigente en dominican-labor.ts).
