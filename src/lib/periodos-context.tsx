@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import type { PeriodoNomina, AjusteLinea, ResultadoNomina } from '@/types'
+import type { PeriodoNomina, AjusteLinea, ResultadoNomina, CuentaBancariaSnapshot } from '@/types'
 import { useUserScopedKey } from './user-scoped-key'
 
 const KEY = 'cielo-periodos'
@@ -38,7 +38,7 @@ interface PeriodosCtx {
   eliminar: (id: string) => boolean
   actualizarAjustes: (periodoId: string, empleadoId: string, ajustes: AjusteLinea[]) => void
   actualizarTotales: (periodoId: string, totales: PeriodoNomina['totales']) => void
-  marcarProcesados: (periodoId: string, resultados: Record<string, ResultadoNomina>) => void
+  marcarProcesados: (periodoId: string, resultados: Record<string, ResultadoNomina>, cuentas?: Record<string, CuentaBancariaSnapshot>) => void
   reabrir: (id: string, usuarioEmail: string) => boolean
   marcarPagada: (id: string, fechaPago: string) => void
   desmarcarPagada: (id: string) => void
@@ -162,7 +162,11 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
   // PeriodoNomina.resultadosPorEmpleado en types/index.ts. Mismo guard que
   // actualizarAjustes: solo se puede procesar un empleado mientras el
   // período está en_proceso — una vez procesada/cerrada, nadie más entra.
-  function marcarProcesados(periodoId: string, resultados: Record<string, ResultadoNomina>) {
+  // `cuentas` es el snapshot paralelo de banco/cuenta de cada empleado
+  // procesado (mismo criterio de inmutabilidad, ver
+  // PeriodoNomina.cuentasBancariasPorEmpleado) — lo usa la auditoría
+  // pre-cierre para detectar cambios de cuenta bancaria entre períodos.
+  function marcarProcesados(periodoId: string, resultados: Record<string, ResultadoNomina>, cuentas?: Record<string, CuentaBancariaSnapshot>) {
     const periodo = periodos.find(p => p.id === periodoId)
     if (!periodo || periodo.estado !== 'en_proceso') return
     setPeriodos(prev => {
@@ -176,6 +180,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
           ...p,
           empleadosProcesados: procesados,
           resultadosPorEmpleado: { ...(p.resultadosPorEmpleado ?? {}), ...resultados },
+          ...(cuentas ? { cuentasBancariasPorEmpleado: { ...(p.cuentasBancariasPorEmpleado ?? {}), ...cuentas } } : {}),
           estado: todosProcesados ? 'procesada' as const : p.estado,
         }
       })
@@ -214,6 +219,7 @@ export function PeriodosProvider({ children }: { children: ReactNode }) {
           // Los snapshots del histórico quedan obsoletos al reabrir — se
           // vuelven a capturar cuando cada empleado se reprocese.
           resultadosPorEmpleado: {},
+          cuentasBancariasPorEmpleado: {},
           bitacoraDesposteos: [...(p.bitacoraDesposteos ?? []), registro],
         }
       })

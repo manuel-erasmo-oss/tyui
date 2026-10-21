@@ -347,6 +347,12 @@ export interface PeriodoNomina {
   // antes de este campo o en empleados aún no procesados dentro de un período
   // en_proceso — esos casos deben recalcular en vivo (comportamiento anterior).
   resultadosPorEmpleado?: Record<string, ResultadoNomina>
+  // Snapshot paralelo a resultadosPorEmpleado: banco/cuenta de cada empleado
+  // en el momento exacto de procesarlo. Vive aquí (no en ResultadoNomina,
+  // que es puramente de cálculo) y es igual de inmutable — permite a la
+  // auditoría pre-cierre detectar cambios de cuenta bancaria frente al
+  // período anterior. Ausente en períodos anteriores a este campo.
+  cuentasBancariasPorEmpleado?: Record<string, CuentaBancariaSnapshot>
   bitacoraDesposteos?: BitacoraDesposteo[]
   pagada?: boolean       // true una vez confirmada la transferencia ACH del período cerrado
   fechaPago?: string     // fecha en que se confirmó el pago (ISO date), solo si pagada === true
@@ -381,6 +387,11 @@ export interface PeriodoNomina {
   // utilidad neta que el usuario captura en /bonificacion.
   montosBonificacion?: Record<string, number>
   motivosAjusteBonificacion?: Record<string, string>
+}
+
+export interface CuentaBancariaSnapshot {
+  banco?: Banco
+  numeroCuenta?: string
 }
 
 export interface ResumenNomina {

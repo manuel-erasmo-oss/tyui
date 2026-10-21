@@ -65,9 +65,10 @@ import type {
   DisfruteVacaciones,
   Licencia,
   RegistroAumento,
+  CuentaBancariaSnapshot,
 } from '@/types'
 import { UMBRAL_ENDEUDAMIENTO_DEFAULT, UMBRAL_VARIACION_BRUTO_DEFAULT } from '@/types'
-import { Wallet, TrendingUp, Receipt, BarChart3 } from 'lucide-react'
+import { Wallet, TrendingUp, Receipt, BarChart3, Landmark } from 'lucide-react'
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -985,6 +986,20 @@ export default function NominaPage() {
     return resultado
   }
 
+  // Snapshot de banco/cuenta de cada empleado procesado, capturado en el
+  // mismo instante que congelarYCalcular congela su resultado — se persiste
+  // en PeriodoNomina.cuentasBancariasPorEmpleado junto a resultadosPorEmpleado
+  // para que la auditoría pre-cierre del período SIGUIENTE pueda detectar un
+  // cambio de cuenta bancaria (el Empleado en vivo solo guarda el valor actual).
+  function snapshotCuentas(ids: string[]): Record<string, CuentaBancariaSnapshot> {
+    const out: Record<string, CuentaBancariaSnapshot> = {}
+    for (const id of ids) {
+      const emp = empleadosPeriodo.find(e => e.id === id)
+      if (emp) out[id] = { banco: emp.banco, numeroCuenta: emp.numeroCuenta }
+    }
+    return out
+  }
+
   // Reglas de manejo de insuficiencia de fondos: si el neto de un empleado no
   // alcanza para cubrir la(s) cuota(s) de préstamo/avance de este período, se
   // omiten esas cuotas en vez de dejar un neto negativo — es el único
@@ -1025,7 +1040,7 @@ export default function NominaPage() {
     }
     const { ajustesFinales, omitido } = manejarInsuficienciaFondos(empId)
     const resultado = congelarYCalcular(empId, ajustesFinales)
-    if (resultado) marcarProcesados(periodoActual.id, { [empId]: resultado })
+    if (resultado) marcarProcesados(periodoActual.id, { [empId]: resultado }, snapshotCuentas([empId]))
     setSelectedEmps(prev => { const s = new Set(prev); s.delete(empId); return s })
     setToast(omitido ? `Cuota de préstamo omitida para ${omitido} — el neto no alcanzaba` : 'Empleado procesado')
   }
@@ -1040,7 +1055,7 @@ export default function NominaPage() {
       const r = congelarYCalcular(id, ajustesFinales)
       if (r) resultados[id] = r
     }
-    marcarProcesados(periodoActual.id, resultados)
+    marcarProcesados(periodoActual.id, resultados, snapshotCuentas(Object.keys(resultados)))
     setSelectedEmps(new Set())
     setToast(omitidos.length > 0
       ? `Todos los empleados procesados — cuota de préstamo omitida para: ${omitidos.join(', ')}`
@@ -1070,7 +1085,7 @@ export default function NominaPage() {
       const r = congelarYCalcular(id, ajustesFinales)
       if (r) resultados[id] = r
     }
-    marcarProcesados(periodoActual.id, resultados)
+    marcarProcesados(periodoActual.id, resultados, snapshotCuentas(Object.keys(resultados)))
     setSelectedEmps(new Set())
     if (omitidos.length > 0) {
       setToast(`Cuota de préstamo omitida para: ${omitidos.join(', ')}`)
@@ -2473,6 +2488,17 @@ export default function NominaPage() {
               .filter(a => a.concepto === 'prestamo' || a.concepto === 'otro_descuento')
               .reduce((s, a) => s + a.valor, 0)
             const descuentoDiscrecionalPct = actual.totalBruto > 0 ? (descuentoDiscrecional / actual.totalBruto) * 100 : 0
+            // Cambio de cuenta bancaria: compara el snapshot histórico del
+            // período anterior contra el valor actual en vivo. Solo si AMBOS
+            // existen — períodos previos a este campo o empleados sin cuenta
+            // configurada no generan falsos positivos.
+            const cuentaAntes = anterior?.cuentasBancariasPorEmpleado?.[e.id]
+            const tieneAntes = !!(cuentaAntes && (cuentaAntes.banco || cuentaAntes.numeroCuenta))
+            const tieneAhora = !!(e.banco || e.numeroCuenta)
+            const cambioCuentaBancaria = tieneAntes && tieneAhora &&
+              ((cuentaAntes!.banco ?? '') !== (e.banco ?? '') || (cuentaAntes!.numeroCuenta ?? '') !== (e.numeroCuenta ?? ''))
+              ? { antes: cuentaAntes!, ahora: { banco: e.banco, numeroCuenta: e.numeroCuenta } as CuentaBancariaSnapshot }
+              : null
             return {
               empleado: e,
               neto: actual.salarioNeto,
@@ -2480,6 +2506,7 @@ export default function NominaPage() {
               netoNegativo: actual.salarioNeto < 0,
               descuentoDiscrecionalPct,
               esNuevo,
+              cambioCuentaBancaria,
             }
           })
 
@@ -2487,8 +2514,13 @@ export default function NominaPage() {
           f.netoNegativo ||
           (f.variacionBrutoPct !== null && Math.abs(f.variacionBrutoPct) > UMBRAL_VARIACION) ||
           f.descuentoDiscrecionalPct > UMBRAL_DESCUENTO ||
-          f.esNuevo
+          f.esNuevo ||
+          f.cambioCuentaBancaria !== null
         )
+        const describirCuenta = (c: CuentaBancariaSnapshot) => {
+          const ult4 = c.numeroCuenta ? c.numeroCuenta.replace(/\D/g, '').slice(-4) : ''
+          return [c.banco ?? 'Sin banco', ult4 ? `...${ult4}` : ''].filter(Boolean).join(' ')
+        }
 
         const salientes = anterior
           ? liquidaciones.filter(l => {
@@ -2562,6 +2594,14 @@ export default function NominaPage() {
                                         <Badge variant="warning">Descuentos {f.descuentoDiscrecionalPct.toFixed(0)}% del bruto</Badge>
                                       )}
                                       {f.esNuevo && <Badge variant="info">Nuevo este mes</Badge>}
+                                      {f.cambioCuentaBancaria && (
+                                        <Badge variant="warning" className="!rounded-md">
+                                          <span className="inline-flex items-start gap-1">
+                                            <Landmark className="mt-0.5 h-3 w-3 shrink-0" />
+                                            Cambió de cuenta bancaria: {describirCuenta(f.cambioCuentaBancaria.antes)} → {describirCuenta(f.cambioCuentaBancaria.ahora)}
+                                          </span>
+                                        </Badge>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
