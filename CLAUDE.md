@@ -4528,6 +4528,83 @@ confirmado que se recalcula dinámicamente al agregar la segunda línea.
 conteo) tras fusionar los 3 worktrees sobre la rama principal. Sin
 errores de consola en ninguno de los escenarios verificados.
 
+## Parcheo de vulnerabilidades de dependencias (pre-backend)
+
+El usuario pidió parchear todas las vulnerabilidades posibles antes de la
+migración a backend ya planeada ("pronto subiré Cielo Nómina a una base de
+datos... dejará de ser estático"). Auditoría con `npm audit` antes de tocar
+nada: 24 vulnerabilidades (2 críticas, 17 altas, 5 moderadas).
+
+**Aplicado en esta sesión:**
+- `next` 14.2.5 → **15.5.29** (salto de versión mayor, confirmado
+  explícitamente con el usuario antes de aplicarse — ver abajo por qué).
+  `eslint-config-next` subido en paralelo a la misma versión.
+- `npm audit fix` (sin `--force`) resolvió de forma automática y sin
+  cambios de API: `dompurify` (crítica), `postcss-selector-parser`,
+  `protobufjs`, `source-map-js`, `nanoid`, `js-yaml`, `browserslist`,
+  `baseline-browser-mapping`.
+- Resultado: de 2 críticas a **0 críticas** (quedan 6 altas + 9 moderadas,
+  ver "Pendiente" abajo). `tsc --noEmit` y `npm run build` limpios en cada
+  paso, 19 rutas sin cambio de conteo.
+
+**Por qué el salto de Next 14→15 (y no solo 14.2.35)**: `14.2.35` (el
+último patch de la rama 14.x) ya resuelve el CVE de `postcss` empaquetado,
+pero TODA la rama 14.x — incluido ese último patch — sigue cargando varias
+vulnerabilidades críticas de RCE no autenticado (GHSA-p293-qw3h-jr36,
+GHSA-2xp9-vwfh-vxw4, GHSA-2464-fhr4-w9xw) que solo se corrigen en 15.5.28+.
+Confirmado con `npm audit` paso a paso, no asumido. Se presentó la
+disyuntiva al usuario (hacerlo ahora, aislado, vs. después junto con la
+migración a backend) — eligió ahora, para no compounder dos cambios
+grandes a la vez. **Riesgo real evaluado como bajo antes de ejecutar**: se
+auditó el código fuente buscando las APIs que sí cambiaron entre Next 14 y
+15 (`cookies()`/`headers()`, `useSearchParams`, Server Actions,
+middleware, rutas dinámicas `[param]`, API routes) — ninguna existe en
+esta app, 100% componentes cliente sobre `localStorage`, consistente con
+"`'use client'` en todas las páginas" (ver arriba). Verificado además en
+navegador (no solo `tsc`/`build`): Dashboard, Cálculo de Nómina, Empleados,
+Préstamos, Vacaciones, Liquidación, Reportería, Configuración y Login
+cargan sin errores de consola tras el salto — mismo render exacto que
+antes (gráficos, agenda, sidebar, stat cards).
+
+**Pendiente, evaluado y dejado así a propósito (no es negligencia, es
+decisión informada):**
+- **`xlsx` (alta, sin fix publicado en npm)** — prototype pollution +
+  ReDoS en el parser de Excel/CSV usado por los importadores (Carga
+  Inicial, Horas, Aumentos masivos). El mantenedor (SheetJS) solo publica
+  la versión corregida desde su propio servidor, fuera del registro oficial
+  de npm. Decisión del usuario: dejarlo así por ahora — hoy el riesgo real
+  es bajo (100% cliente, cada usuario solo procesa su propio archivo en su
+  propio navegador; un archivo malicioso como mucho afecta a quien mismo
+  lo subió). **Revisar en serio en cuanto la migración a backend toque este
+  flujo de importación** — si el parseo se mueve al servidor o empieza a
+  procesar archivos de terceros, este dejar-así deja de ser válido.
+- **`firebase`/`@grpc/grpc-js` (alta)** — la vulnerabilidad vive en
+  `@grpc/grpc-js` (transporte gRPC de Node), arrastrada por
+  `@firebase/firestore` como dependencia. Confirmado que **hoy no es
+  explotable**: el código fuente no importa `firebase/firestore` en
+  ningún lado (solo se usa `firebase/auth`), así que ese código ni
+  siquiera se empaqueta en el bundle estático. La única "corrección" que
+  ofrece `npm audit` es downgradear `firebase` a 9.14.0 — una regresión
+  real (perdería funcionalidad del SDK actual) que no se aplicó. Esto
+  **se vuelve relevante el día que la migración a backend agregue
+  Firestore o `firebase-admin`** (que sí usa gRPC en Node de verdad) — en
+  ese momento, re-auditar: a la fecha de esta sesión ni siquiera la
+  versión más reciente de `@firebase/firestore` (4.20.0) ha actualizado su
+  dependencia de `@grpc/grpc-js` más allá de la rama vulnerable, es un
+  problema de la propia librería de Firebase, no de esta app.
+- **`exceljs`/`uuid` (moderada)** — `exceljs` 4.4.0 es la última versión
+  publicada y sigue dependiendo de `uuid@8.3.x` (vulnerable). La única
+  "corrección" de `npm audit` es downgradear a `exceljs@3.4.0` — también
+  una regresión real, no un fix hacia adelante. Severidad práctica baja:
+  el advisory es sobre un buffer `buf` provisto por el llamador, y exceljs
+  solo usa `uuid` internamente para generar IDs de estructura XML, sin
+  exponer ese parámetro a datos externos. Aceptado como residual sin
+  acción, documentado aquí en vez de ignorado en silencio.
+- **`eslint-config-next`/`glob`/`minimatch`/`@typescript-eslint/*`** — solo
+  afectan `next lint` (herramienta de desarrollo, nunca se empaqueta ni se
+  sirve a un usuario real). Prioridad baja por diseño — no son superficie
+  de ataque en producción.
+
 ## Branch de trabajo
 
 `claude/accounting-app-sme-design-wqfazv` → remote: `manuel-erasmo-oss/tyui`
