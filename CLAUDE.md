@@ -2,7 +2,8 @@
 
 ## Stack y configuración
 
-- **Next.js 14.2.5** · App Router · `output: 'export'` · `basePath: '/tyui'` → GitHub Pages estático
+- **Next.js 15.5.29** · App Router · `output: 'export'` · `basePath: '/tyui'` → GitHub Pages estático
+  (actualizado desde 14.2.5 en la sesión de parcheo de vulnerabilidades — ver sección correspondiente)
 - **TypeScript 5** strict mode · `'use client'` en todas las páginas
 - **Tailwind CSS 3** · `darkMode: 'class'`
 - **lucide-react** para todos los iconos
